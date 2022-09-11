@@ -23,7 +23,7 @@ His famous 2006 TED Talk,
 has inspired millions over the world thanks to his celebrated _bubble chart_
 depicting the relationship between life expectancy and income.
 
-![Gapminder's World Health Chart. Figure from [gapminder.org](https://gapminder.org).](gapminder.png)
+![Gapminder's World Health Chart. Figure from [gapminder.org](https://gapminder.org).](gapminder.png){.external}
 
 The goal of this tutorial is to replicate this famous data visualization step by step.
 
@@ -94,9 +94,12 @@ p
 ## Theme
 
 Note that the theme is very similar to `theme_classic`, but shows the major grid.
+We also instruct the theme to remove the legend,
+because we will add a custom one later on.
 
 ```{r theme}
-p <- p + theme_classic() + theme(panel.grid.major=element_line())
+p <- p + theme_classic() +
+  theme(panel.grid.major=element_line(), legend.position="none")
 p
 ```
 
@@ -154,13 +157,12 @@ p <- p + geom_point(aes(color=continent, size=pop), alpha=0.7)
 p
 ```
 
-We are close, but several adjustments are required.
-Let's remove the legend for now, add a black line around the points (see shape 21),
+We are close, but a couple of adjustments are required.
+Let's add a black line around the points (see shape 21),
 and adjust the range of the bubbles a bit.
 
 ```{r adjustments}
-p <- p + theme(legend.position="none") +
-  geom_point(aes(size=pop), color="#333333", shape=21) +
+p <- p + geom_point(aes(size=pop), color="#333333", shape=21) +
   scale_size_area(max_size=25)
 p
 ```
@@ -227,6 +229,24 @@ legend
 
 ## Single year
 
+In summary, so far we have
+
+<aside>
+Build steps:
+
+![](`r knitr::fig_chunk("breaks", "png")`){width=100%}
+![](`r knitr::fig_chunk("theme", "png")`){width=100%}
+![](`r knitr::fig_chunk("units", "png")`){width=100%}
+![](`r knitr::fig_chunk("colors", "png")`){width=100%}
+![](`r knitr::fig_chunk("legend", "png")`){width=100%}
+</aside>
+
+1. set coordinates and axes, with custom breaks;
+2. set an appropriate theme and prevent the default legend from appearing;
+3. added several annotations, including year, income levels and axis units;
+4. added the data points and made several adjustments, including size and color;
+5. created a custom legend based on a simple colored world map.
+
 There are several ways we can merge the main plot and the legend.
 In this case, let's add it as an inset with the custom annotation function.
 Note that, in contrast to the regular annotation function,
@@ -234,14 +254,15 @@ this one doesn't seem to support logarithmic scales very well.
 As a result, the user needs to provide the transformed values directly.
 
 ```{r final}
-p <- p + annotation_custom(ggplotGrob(legend), xmin=log10(16000), ymin=10, ymax=40)
+p <- p + annotation_custom(
+  ggplotGrob(legend), xmin=log10(16000), ymin=10, ymax=40)
 p
 ```
 
 Finally, we can improve this static single-year visualization by adding some context,
 i.e. a title, a subtitle and a caption.
 
-```{r titled, fig.asp=0.75, preview=TRUE}
+```{r titled, layout="l-body-outset", fig.asp=0.75, preview=TRUE}
 p + labs(
   title = "World Life Expectancy vs. Income in 2007",
   subtitle = paste(
@@ -261,15 +282,17 @@ In the following chart,
 
 - `gginnards::delete_layers` is used to remove the background year;
 - we switch to the whole dataset using the `%+%` operator;
-- data is faceted in two columns.
+- data is faceted in two rows;
+- axis labels are slightly rotated to make space for them.
 
 Note also that we need to manually scale down a bit the range of the bubbles
 to preserve more or less the previous aspect ratio.
 
-```{r facets, fig.asp=2}
+```{r facets, layout="l-screen", fig.asp=0.28, fig.width=12}
 gginnards::delete_layers(p, match_type="GeomText") %+% gapminder +
-  facet_wrap("year", ncol=2) +
-  scale_size_area(max_size=10)
+  facet_wrap("year", nrow=2) +
+  scale_size_area(max_size=7) +
+  theme(axis.text.x=element_text(angle=45, vjust=1, hjust=1))
 ```
 
 ## Multiple years, dynamic
@@ -280,8 +303,6 @@ which produces interactive web-based charts.
 Furthermore, if we set the `frame` aesthetic, it is automatically detected,
 and an animation is added based on the corresponding variable.
 
-```{r plotly, fig.asp=0.8}
-plotly::ggplotly(
-  p %+% gapminder + aes(frame=year) + scale_size_area(max_size=18)
-)
+```{r plotly, layout="l-body-outset", fig.asp=0.9}
+plotly::ggplotly(p %+% gapminder + aes(frame=year))
 ```
