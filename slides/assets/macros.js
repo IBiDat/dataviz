@@ -2,19 +2,22 @@
 document.addEventListener('DOMContentLoaded', function(event) {
   var toc = document.getElementsByClassName('toc')[0];
   if (toc === undefined) return;
-  var intoc = document.getElementsByClassName('intoc');
-  var n = 0;
+
+  var slides = document.getElementsByClassName('remark-slide-content');
   var ul = document.createElement('ul');
-  intoc.forEach(x => {
+
+  slides.forEach(function(x, i) {
+    if (!x.classList.contains('intoc')) return;
+    if (i + 1 === slides.length) return;
+
     let a = document.createElement('a');
-    let i = parseInt(x.getElementsByClassName('remark-slide-number')[0].textContent);
-    if (i <= n) return; n = i;
-    a.href = "#" + n;
+    a.href = "#" + (i + 1);
     a.textContent = x.getElementsByTagName('h1')[0].textContent;
     let li = document.createElement('li');
     li.appendChild(a);
     ul.appendChild(li);
-  })
+  });
+
   toc.appendChild(ul);
 });
 
