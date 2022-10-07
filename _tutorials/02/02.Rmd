@@ -1,0 +1,107 @@
+---
+title: "02. Scales and Guides"
+description: |
+  Scales are responsible for turning your mapping from data to aesthetics into
+  something that you can see, and they also provide the guides that let you
+  interpret the plot: axes and legends. Scales are automatically inferred based
+  on the input data, and guides are added as well based on the layers in your
+  plot, which is convenient and saves a lot of time. However, sometimes it is
+  required to fine-tune how the mapping is performed, or how the guide should
+  look like. This tutorial explores the tools available for this.
+categories: "Chapter 2"
+author:
+  - name: Iñaki Ucar
+    affiliation: Department of Statistics
+    orcid_id: 0000-0001-6403-5550
+date: 2022-10-05
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+preview: scale-guides.png
+draft: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, eval=FALSE)
+registerS3method("knit_print", "data.frame", function(x, ...) {
+  rmarkdown:::knit_print.data.frame(rmarkdown::paged_table(x))
+}, envir = asNamespace("knitr"))
+```
+
+Source: [`_tutorials/02/02.Rmd`](https://github.com/IBiDat/dataviz/blob/main/_tutorials/02/02.Rmd)
+
+## Introduction
+
+### Scale specification
+
+While **geom**s represent visual objects (points, lines...), a **scale** is a procedure that actually *performs* the mapping of data attributes into the properties of those visual objects (position, color, size...). On the other hand, a **guide** is a visual cue that allows *us* to perform the inverse procedure: converting their properties back to data.
+
+```{r}
+library(ggplot2)
+
+# convert number of cylinders to factor (only 3 levels)
+mtcars$Cylinders <- as.factor(mtcars$cyl)
+
+ggplot(mtcars) +
+  aes(mpg, wt) +
+  geom_point(aes(color=Cylinders))
+```
+
+![Common components of axes and legends. Figure from the [ggplot2 book](https://ggplot2-book.org/scales-guides.html).](scale-guides.png){.external}
+
+In the example above, two position scales (**x** and **y**)
+
+-   detected that the data (`mpg` and `wt`) is **continuous**;
+-   set proper limits to the axes according to the range of data values;
+-   assigned a position in the chart space to each point according to such Cartesian coordinates;
+-   added the corresponding guides to the axes, including
+    -   nicely and evenly spaced breaks, with tick marks and labels,
+    -   centered axis labels with the name of the variables.
+
+Additionally, a **color** scale
+
+-   detected that the data (`Cylinders`) is **discrete** (a categorical variable, a factor);
+-   assigned a color to each category following a default hue-based scale;
+-   added the corresponding guide to the legend, including
+    -   set of keys (colors),
+    -   set of labels (categories in the data),
+    -   legend title with the name of the variable.
+
+In other words, the plot above is equivalent to the following:
+
+```{r}
+ggplot(mtcars) +
+  aes(mpg, wt) +
+  geom_point(aes(color=Cylinders)) +
+  scale_x_continuous() +
+  scale_y_continuous() +
+  scale_color_discrete()
+```
+
+The last three instructions are just inferred from the data and automatically added. We will only need to specify the scales manually whenever we want to override any of the defaults provided.
+
+### Scale naming
+
+There are three fundamental scale types:
+
+-   **continuous**, for numerical quantities;
+-   **discrete**, for categorical variables;
+-   **binned**, which is a special type for numerical quantities that first discretize the data.
+
+Based on these, the fundamental scales, in general, are constructed as follows:
+
+    scale_<aes>_<type>()
+
+For example:
+
+-   For aesthetic `x` and a continuous variable: `scale_x_continuous()`.
+-   For aesthetic `color` and a categorical variable: `scale_color_discrete()`.
+
+Then there are a bunch of special scales that are shortcuts for specific common tasks, such as `scale_x_log10()`, which is a continuous scale that also applies a logarithmic transformation, or `scale_color_brewer()`, which provides a bunch of discrete color schemes from [ColorBrewer](https://colorbrewer2.org/).
+
+### Checkpoint 1
+
+1.  Take the first example and assign the original `cyl` variable to color instead of `Cylinders`. What happens? Why? What is the scale function that is being applied here? What happens if we try to force `scale_color_discrete()` in this setting? Why?
+
+2.  Read the documentation for [`scale_x_continuous()`](https://ggplot2.tidyverse.org/reference/scale_continuous.html). How can you change the name of the axis? What happens if we manually specify the same scale twice (try adding different names)? Why?
