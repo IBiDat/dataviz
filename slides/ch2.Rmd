@@ -209,6 +209,301 @@ From `?geom_line` (required in bold):
 ]
 
 ---
+
+# Individual Geoms
+
+| Geom | Result | Details |
+|---|---|---|
+| `geom_point()`<br>`geom_text()`<br>`geom_label()` | **scatterplot** | Understands `shape`.<br>Helper for text.<br>Helper for labels. |
+| `geom_line()`<br>`geom_path()`<br>`geom_step()`<br>`geom_function()` | **line plot** | Connects points from left to right, understands `linetype`.<br>Connects points in order.<br>Produces a _stairstep_ plot.<br>Connects points of a given function of`x`. |
+| `geom_bar()`<br>`geom_col()` | **bar chart** | `stat="count"` by default!<br>Multiple bars are stacked by default. |
+| `geom_area()` | **area plot** | Line plot filled from 0 to `y`. |
+| `geom_polygon()` |  | Filled path. |
+| `geom_rect()`<br>`geom_tile()`<br>`geom_raster()` |  | Rectangle by `xmin`, `xmax`, `ymin`, `ymax`.<br>Rectangle by center (`x`, `y`) and size (`width`, `height`).<br>Faster tiles with constant size. |
+
+---
+
+# Individual Geoms
+
+- Two dimensional: require `x` and `y`, understand `color` and `size`.
+- Some of them can be `fill`ed.
+
+```{r individual, echo=FALSE, fig.asp=0.3}
+df <- data.frame(
+  x = c(3, 1, 5),
+  y = c(2, 4, 6),
+  label = c("a","b","c")
+)
+p <- ggplot(df, aes(x, y, label = label)) +
+  labs(x = NULL, y = NULL) + theme_light() +
+  theme(plot.title = element_text(size = 12))
+patchwork::wrap_plots(
+  p + geom_point() + ggtitle("geom_point()"),
+  p + geom_text() + ggtitle("geom_text()"),
+  p + geom_col() + ggtitle("geom_col()"),
+  p + geom_tile() + ggtitle("geom_tile()"),
+  nrow = 1
+)
+patchwork::wrap_plots(
+  p + geom_line() + ggtitle("geom_line()"),
+  p + geom_area() + ggtitle("geom_area()"),
+  p + geom_path() + ggtitle("geom_path()"),
+  p + geom_polygon() + ggtitle("geom_polygon()"),
+  nrow = 1
+)
+```
+
+---
+
+# Collective Geoms
+
+- Dealing with point overplotting
+
+| Geom | Result | Details |
+|---|---|------|
+| `geom_jitter()`<br>`geom_count()`<br>`geom_bin_2d()`<br>`geom_hex()` |  | `geom_point()`, but adds some jitter to each point.<br>Maps the count of overlapping points to `size`.<br>Maps the count of rectangles to `fill`.<br>Same, but using hexagons. |
+
+```{r collective-1, echo=FALSE, fig.asp=0.3}
+p <- ggplot(mpg, aes(hwy, cty)) +
+  labs(x = NULL, y = NULL) + theme_light() +
+  theme(plot.title = element_text(size = 10)) +
+  theme(legend.position="none")
+patchwork::wrap_plots(
+  p + geom_point(alpha=0.2) + ggtitle("geom_point()"),
+  p + geom_jitter(alpha=0.2) + ggtitle("geom_jitter()"),
+  p + geom_count(alpha=0.2) + ggtitle("geom_count()"),
+  p + geom_bin_2d() + ggtitle("geom_bin_2d()"),
+  p + geom_hex() + ggtitle("geom_hex()"),
+  nrow = 1
+)
+```
+
+---
+
+# Collective Geoms
+
+- Dealing with uncertainty
+
+| Geom | Result | Details |
+|---|---|------|
+| `geom_pointrange()`<br>`geom_linerange()`<br>`geom_errorbar()`<br>`geom_crossbar()` |  | Various ways of representing a vertical intervals defined by `x`, `ymin` and `ymax`. |
+| `geom_ribbon()` |  | Special case of `geom_area()` with `ymin` too. |
+
+```{r collective-2, echo=FALSE, fig.asp=0.3}
+df <- data.frame(
+  x = 1:3,
+  y = c(18, 11, 16),
+  se = c(1.2, 0.5, 1.0)
+)
+p <- ggplot(df, aes(x, y, ymin=y-se, ymax=y+se)) +
+  labs(x = NULL, y = NULL) + theme_light() +
+  theme(plot.title = element_text(size = 8))
+patchwork::wrap_plots(
+  p + geom_pointrange() + ggtitle("geom_pointrange()"),
+  p + geom_linerange() + ggtitle("geom_linerange()"),
+  p + geom_errorbar() + ggtitle("geom_errorbar()"),
+  p + geom_crossbar() + ggtitle("geom_crossbar()"),
+  p + geom_ribbon() + ggtitle("geom_ribbon()"),
+  nrow = 1
+)
+```
+
+---
+
+# Collective Geoms
+
+- Arbitrary segments
+
+| Geom | Result | Details |
+|---|---|------|
+| `geom_segment()`<br>`geom_curve()`<br>`geom_spoke()` |  | Straight line between points (`x`, `y`) and (`xend`, `yend`).<br>Same, but curved line.<br>Polar parametrization of `geom_segment()`. |
+
+```{r collective-3, echo=FALSE, fig.asp=0.35}
+set.seed(1)
+df <- expand.grid(x = 1:3, y=1:3)
+df$angle <- runif(9, 0, 2*pi)
+df$r <- runif(9, 0.2, 0.7)
+df$xend <- df$x + df$r * cos(df$angle)
+df$yend <- df$y + df$r * sin(df$angle)
+
+p <- ggplot(df, aes(x, y, xend=xend, yend=yend, angle=angle, radius=r)) +
+  geom_point() +
+  labs(x = NULL, y = NULL) + theme_light() +
+  theme(plot.title = element_text(size = 12))
+patchwork::wrap_plots(
+  p + geom_segment() + ggtitle("geom_segment()"),
+  p + geom_curve() + ggtitle("geom_curve()"),
+  p + geom_spoke() + ggtitle("geom_spoke()"),
+  nrow = 1
+)
+```
+
+---
+
+# Collective Geoms
+
+- Distributions
+
+| Geom | Result | Details |
+|---|---|------|
+| `geom_histogram()`<br>`geom_freqpoly()`<br>`geom_dotplot()` | **histogram** | Distribution of a continuous variable by bins.<br>To display the counts with lines instead.<br>Histograms of stacked dots. |
+| `geom_density()` | **density plot** | Smoothed version of the histogram. |
+| `geom_rug()` |  | Draws ticks for marginal distributions. |
+
+```{r collective-4, echo=FALSE, fig.asp=0.3}
+p <- ggplot(mtcars, aes(x = mpg)) +
+  labs(x = NULL, y = NULL) + theme_light() +
+  theme(plot.title = element_text(size = 12))
+patchwork::wrap_plots(
+  p + geom_histogram(binwidth=1.5) + ggtitle("geom_histogram()"),
+  p + geom_freqpoly(binwidth=1.5) + ggtitle("geom_freqpoly()"),
+  p + geom_dotplot(binwidth=1.5) + ggtitle("geom_dotplot()"),
+  p + geom_density() + geom_rug() +
+    ggtitle("geom_density()") + labs(caption="+ geom_rug()"),
+  nrow = 1
+)
+```
+
+---
+
+# Collective Geoms
+
+- Boxplots
+
+| Geom | Result | Details |
+|---|---|------|
+| `geom_boxplot()`<br>`geom_violin()` | **boxplot** | Compact display of the distribution of a continuous variable.<br>Mirrored density, displayed as a boxplot. |
+
+```{r collective-5, echo=FALSE, fig.asp=0.4}
+p <- ggplot(mtcars, aes(factor(cyl), mpg)) +
+  labs(x = NULL, y = NULL) + theme_light() +
+  theme(plot.title = element_text(size = 12))
+patchwork::wrap_plots(
+  p + geom_dotplot(binaxis="y", stackdir="center") +
+    ggtitle("geom_dotplot()") + labs(caption='with binaxis="y", stackdir="center"'),
+  p + geom_boxplot() + ggtitle("geom_boxplot()"),
+  p + geom_violin() + ggtitle("geom_violin()"),
+  nrow = 1
+)
+```
+
+---
+
+# Collective Geoms
+
+- Smoothing lines
+
+| Geom | Result | Details |
+|---|---|------|
+| `geom_smooth()`<br>`geom_quantile()` |  | Fits a model and draws a smoothing line.<br>Fits a quantile regression and draws the quantiles. |
+
+```{r collective-6, echo=FALSE, fig.asp=0.4}
+p <- ggplot(mpg, aes(displ, 1 / hwy)) + geom_point() +
+  labs(x = NULL, y = NULL) + theme_light() +
+  theme(plot.title = element_text(size = 12))
+patchwork::wrap_plots(
+  p + geom_smooth(method="lm") + ggtitle("geom_smooth(method=\"lm\")"),
+  p + geom_quantile() + ggtitle("geom_quantile()"),
+  nrow = 1
+)
+```
+
+---
+
+# Collective Geoms
+
+- Contours
+
+| Geom | Result | Details |
+|---|---|------|
+| `geom_contour()`<br>`geom_contour_filled()`<br>`geom_density_2d`<br>`geom_density_2d_filled()` | **contour plot** | 2D contours of 3D surfaces of regular `x`, `y`.<br>Filled version.<br>2D contours after computing the density.<br>Filled version. |
+
+```{r collective-7, echo=FALSE, fig.asp=0.3}
+p <- ggplot(faithfuld, aes(waiting, eruptions)) +
+  labs(x = NULL, y = NULL) + theme_light() +
+  theme(plot.title = element_text(size = 10)) +
+  theme(legend.position="none")
+patchwork::wrap_plots(
+  p + geom_point(aes(color=density), size=0.01, shape=".") +
+    scale_color_viridis_c() +
+    geom_contour(aes(z=density)) + ggtitle("geom_contour()"),
+  p + geom_contour_filled(aes(z=density)) + ggtitle("geom_contour_filled()"),
+  p %+% faithful + geom_point(size=0.5) +
+    scale_color_viridis_c() + geom_density2d() + ggtitle("geom_density2d()"),
+  p %+% faithful + geom_density2d_filled() + ggtitle("geom_density2d_filled()"),
+  nrow = 1
+)
+```
+
+---
+
+# Collective Geoms
+
+- Maps
+
+| Geom | Result | Details |
+|---|---|------|
+| `geom_map()`<br>`geom_sf()`<br>`geom_sf_text()`<br>`geom_sf_label()` | **map** | Old way to plot polygons as a map.<br>Current recommended way via `sf`.<br>Similar to `geom_text()` but for `sf`.<br>Similar to `geom_label()` but for `sf`. |
+
+```{r collective-8, echo=FALSE, fig.asp=0.3}
+nc <- sf::st_read(system.file("shape/nc.shp", package="sf"), quiet=TRUE)
+ggplot(nc) +
+  theme(plot.title = element_text(size = 10)) + theme_light() +
+  geom_sf(aes(fill=BIR74)) + scale_fill_viridis_c() + ggtitle("geom_sf()")
+```
+
+---
+
+# Geom vs. Stat
+
+.pull-left[
+```{r stat-identity-1}
+ggplot(mpg, aes(displ, hwy)) +
+  geom_point(stat="identity") #<<
+```
+]
+.pull-right[
+```{r stat-identity-2}
+ggplot(mpg, aes(displ, hwy)) +
+  stat_identity(geom="point") #<<
+```
+]
+
+---
+
+# Geom vs. Stat
+
+.pull-left[
+```{r stat-count-1}
+ggplot(mpg, aes(hwy)) +
+  geom_bar(stat="count") #<<
+```
+]
+.pull-right[
+```{r stat-count-2}
+ggplot(mpg, aes(hwy)) +
+  stat_count(stat="bar") #<<
+```
+]
+
+---
+
+# Geom vs. Stat
+
+.pull-left[
+```{r stat-smooth-1}
+ggplot(mpg, aes(displ, hwy)) +
+  geom_smooth(stat="smooth") #<<
+```
+]
+.pull-right[
+```{r stat-smooth-2}
+ggplot(mpg, aes(displ, hwy)) +
+  stat_smooth(geom="smooth") #<<
+```
+]
+
+---
 class: inverse, center, middle
 
 # Tutorial 01
@@ -305,13 +600,16 @@ class: base24
 
 # Other Coordinates
 
-![:vspace 120]()
+![:vspace 100]()
 
 - `coord_polar()`: `x` is the angle, `y` is the radius (can be reverted).
 
 - `coord_map()`: projections of the sphere into a plane.
   - Mercator, sinusoidal, cylindrical, rectangular...
   - Anything supported by the `mapproj` package.
+
+- `coord_sf()`: modern way to deal with maps via **simple features**<br>
+  (from `sf` package).
 
 ---
 class: inverse, center, middle
@@ -332,6 +630,44 @@ class: base24
 ![:vspace 50]()
 
 .center[![:scale 80%](assets/img/ch2/position-facets.png)]
+
+---
+
+# Facet Specification
+
+.pull-left[
+```{r facet-grid, echo=FALSE, fig.asp=1.3}
+df <- data.frame(
+  year = c(2015, 2015, 2016, 2016),
+  time = c("Day", "Night", "Day", "Night"),
+  x = 0, y = 0
+)
+df$label = with(df, paste0("Subset for\n", time, " x ", year))
+ggplot(df) + aes(x, y, label=label) + geom_text(size=6) +
+  theme_bw(base_size = 30) + theme(
+    axis.ticks = element_blank(),
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank()) +
+  facet_grid(time ~ year) + labs(title="facet_grid(time ~ year)")
+```
+]
+.pull-right[
+```{r facet-wrap, echo=FALSE, fig.asp=1.3}
+df <- data.frame(
+  season = c("Autumn", "Spring", "Summer", "Winter"),
+  x = 0, y = 0
+)
+df$label = with(df, paste0("Subset for\n", season))
+ggplot(df) + aes(x, y, label=label) + geom_text(size=6) +
+  theme_bw(base_size = 30) + theme(
+    axis.ticks = element_blank(),
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank()) +
+  facet_wrap(~ season) + labs(title="facet_wrap(~ season)")
+```
+]
 
 ---
 class: inverse, center, middle
