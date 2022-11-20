@@ -116,6 +116,72 @@ plot <- plot +
 annotate("text", label = "Countries above this line had positive growth", color = "darkgreen", x = 22000, y = 25000, angle = 45, size = 2.3,family = "serif")+
     annotate("text", label = "Countries below this line had negative growth", color = "red", x = 26000, y = 23000, angle = 45, size = 2.3,family = "serif")
 ```
+Graph enhancement: 
 
+We will use the same graph to propose some enhancements or changes in the way the data is presented in an attempt to ease reader´s comprehension. We will reload the data to our Rstudio code:
+```
+gdp <- as.data.frame(read_delim("gdp per capita.csv", 
+                                  delim = ";"))
+```
+The same technique employed before to clean and prepare our data will be recycled. Recall we are just proposing an improvement of the visualisation, an alternative graph will be proposed in the last section of the project. Once again, we categorise our countries into rich, medium and poor:
+``` 
+gdp <- gdp %>% 
+    rename(gdp_capita = gdp_per_capita) %>% 
+    select(country, year,gdp_capita, ) %>% 
+    filter(year %in% c(1950,2016)) %>% 
+    pivot_wider(names_from = "year", values_from = gdp_capita) %>% 
+    drop_na("1950", "2016") %>% 
+    rename(gdp_capita_1950 = "1950", gdp_capita_2016 = "2016") %>% 
+    mutate(type = ifelse(gdp_capita_2016<6000,
+                         "poor",
+                         ifelse(gdp_capita_2016<40000,
+                                "medium",
+                                "rich")))
+```                               
+The main difference with the first plot is that, this time, we will resort to the inclusion of a new column which will summarise the average annual growth rate that each economy has undergone since 1950.
+``` 
+gdp <- gdp %>% 
+ mutate(Growth = (((gdp_capita_2016/gdp_capita_1950)^(1/(2016-1950)))-1)*100)
+``` 
+As we mentioned previously, the plot will be the same but we will just change the way the data is presented, so the random filter to select countries will be preserved:
 
+```
+subset <- gdp %>% 
+    filter(type == "medium") %>% 
+    slice(sample(1:73,35,replace = FALSE))
+  gdp <- gdp %>% 
+    filter(type != "medium") %>% 
+    rbind(subset)
+```
+We can begin with our enhanced graph! The aesthetics provided now will be set to the gdp per capita in 1950 and the annual growth rate we computed before. We will make use of our geom_label() again but we will omit supplying R with geom_point() this time. The color of the text will be set to white in order to generate a comfortable contrast with the "filling" by type of economy we had established in our aesthetics. 
+```
+plot_1 <-gdp %>% 
+    ggplot()+
+    aes(gdp_capita_1950,Growth, fill = type)+
+    geom_label_repel(aes(label = country), size = 1.5, segment.color = 'transparent', max.overlaps = 25, force = 1, color = "white")
+```
+We will add some labels to our axis and set the title to convey the idea that we are working with convergence. The word "conditional" here refers to the fact that we are going one step further and categorizing our data between types of economies and we will finally visualize the concept of "conditional convergence" presented in the classical Solow model of growth.
+```
+plot_1 <- plot_1 +
+labs(x="GDP per capita in 1950",
+         y = "Average GDP Growth Rate",
+         title = quote(bold("GDP per capita conditional convergence")))
+```
+We will provide a continuous y scale with the percentage suffix to make it obvious that we are working with growth rates here.
+``` 
+plot_1 +
+scale_y_continuous(label = label_number(suffix = "%"), n.breaks = 6)
+``` 
+We will work on the themes by providing some font in the type of "serif" and eliminating any background grid which may distract the reader. We will not devote much effort into changing the theme appearance because we are just modifying some changes of the original plot, not changing the graph completely. The aspect ratio will be set again to 1 to keep the original proportions. 
 
+``` 
+theme(axis.text.x = element_text( size = 7),
+          axis.title.x = element_text( size = 12,family = "serif"),
+          axis.text.y = element_text(size = 7,family = "serif"),
+          axis.title.y = element_text( size = 12, family = "serif"),
+          panel.background = element_rect(fill = "white"),
+          panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_blank(),
+          plot.title = element_text(size = 15,hjust = -0.8, vjust = 1),
+          aspect.ratio = 1)
+```          
