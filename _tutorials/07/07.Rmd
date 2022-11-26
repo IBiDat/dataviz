@@ -1,0 +1,251 @@
+---
+title: "07. Arranging plots"
+description: |
+  The grammar presented so far is concerned with creating single plots. However,
+  it is often necessary to assemble several different plots together in order to
+  build a story. In this tutorial, we will learn to produce such arrangements in
+  an automated manner without requiring external graphic design tools and
+  non-reproducible manual work.
+categories: "Chapter 2"
+author:
+  - name: Iñaki Ucar
+    affiliation: Department of Statistics
+    orcid_id: 0000-0001-6403-5550
+date: 2022-10-05
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+preview: preview.png
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, eval=FALSE)
+registerS3method("knit_print", "data.frame", function(x, ...) {
+  rmarkdown:::knit_print.data.frame(rmarkdown::paged_table(x))
+}, envir = asNamespace("knitr"))
+```
+
+Source: [`_tutorials/07/07.Rmd`](https://github.com/IBiDat/dataviz/blob/main/_tutorials/07/07.Rmd)
+
+## Compositions
+
+Since the existence of the [`patchwork`](https://patchwork.data-imaginist.com/) package, it is extremely simple to compose, align and annotate different ggplot graphs, and even merge them with other arbitrary elements. To demonstrate its capabilities, we will use the following plots:
+
+```{r}
+p1 <- ggplot(mpg) +
+  aes(displ, hwy) +
+  geom_point() +
+  labs(title="Plot 1")
+
+p2 <- ggplot(mpg) +
+  aes(as.character(year), fill=drv) +
+  geom_bar(position="dodge") + 
+  labs(title="Plot 2", x="year")
+
+p3 <- ggplot(mpg) +
+  aes(hwy, fill=drv) +
+  geom_density(color=NA) + 
+  facet_grid(drv~.) +
+  labs(title="Plot 3")
+
+p4 <- ggplot(mpg) +
+  aes(drv, hwy) +
+  stat_summary(aes(fill=drv), geom="col", fun.data=mean_se) +
+  stat_summary(geom="errorbar", fun.data=mean_se, width=0.5) +
+  labs(title="Plot 4")
+```
+
+### Basic usage
+
+Once loaded, this package extends the `+` operator to add plots together in a grid:
+
+```{r}
+library(patchwork)
+
+p1 + p2
+p1 + p2 + p3
+p1 + p2 + p3 + p4
+p1 + plot_spacer() + p2 + plot_spacer() + p3 + plot_spacer()
+```
+
+For a finer control, it also provides the `|` (besides) and `/` (over) operators for plot stacking and packing:
+
+```{r}
+p1 | p2
+p1 / p2
+(p1 / p2) | p3
+p1 / (p2 | p3)
+```
+
+Note that `patchwork` automagically sets the proper margins for all the guides (axes, legends, titles...) so that all panels are perfectly aligned.
+
+### Controlling the layout
+
+For even a richer control of the layout, we can just add the plots together and then add a `plot_layout()`, which has a bunch of options (see the help page) to control the grid:
+
+```{r}
+p1 + p2 + p3 + p4 + 
+  plot_layout(ncol=3)
+p1 + p2 + p3 + p4 + 
+  plot_layout(widths=c(2, 1))
+p1 + p2 + p3 + p4 + 
+  plot_layout(widths=c(2, 1), heights=unit(c(5, 1), c('cm', 'null')))
+```
+
+Moving beyond the grid, the `design` argument allows us to define textual representations of the layout:
+
+```{r}
+layout <- "
+#BB
+ACD
+#CD
+"
+p1 + p2 + p3 + p4 +
+  plot_layout(design=layout)
+
+layout <- "
+AAB
+C#B
+CDD
+"
+p1 + p2 + p3 + p4 +
+  plot_layout(design=layout)
+```
+
+Instead, a more programmatic approach uses the `area()` function for the same purpose:
+
+```{r}
+layout <- c(
+  area(1, 1, 1, 2),
+  area(1, 3, 2, 3),
+  area(2, 1, 3, 1),
+  area(3, 2, 3, 3)
+)
+p1 + p2 + p3 + p4 +
+  plot_layout(design=layout)
+```
+
+If the number of plots is not known beforehand, the `wrap_plots()` function makes it easy to take a list of plots and add them together into one composition, along with layout specifications.
+
+```{r}
+plots <- list(p1, p2, p3, p4)
+wrap_plots(plots, design=layout)
+```
+
+### Fixed-aspect plots
+
+Plots created with `coord_fixed()`, `coord_polar()` and `coord_sf()` cannot be resized to align with other plots. By default, `patchwork` aligns the other plots to them when possible.
+
+```{r}
+p_fixed <- ggplot(mpg) +
+  aes(hwy, cty) +
+  geom_point() +
+  coord_fixed() +
+  labs(title="Fixed coords")
+
+p_fixed + p1 + p2 + p3
+```
+
+But if we try to force the width, then the plot cannot be aligned.
+
+```{r}
+p_fixed + p1 + p2 + p3 + plot_layout(widths=1)
+```
+
+### Controlling the guides
+
+When composing plots with multiple guides, it is often useful to collect all the guides and put them in the same place. Compare the following:
+
+```{r}
+p1 + p2 + p3 + p4
+p1 + p2 + p3 + p4 + plot_layout(guides="collect")
+```
+
+Note that guides were not only collected, but duplicates were removed. This option can be specified at several points for a finer control:
+
+```{r}
+p1 + p2 + (p3 + plot_layout(guides="keep")) + p4 + plot_layout(guides="collect")
+```
+
+By default, guides are collected on the right of the composition, but a `guide_area()` can be specified as a place to put them:
+
+```{r}
+layout <- "
+AAB
+CEB
+CDD
+"
+p1 + p2 + p3 + p4 + guide_area() +
+  plot_layout(design=layout, guides="collect")
+```
+
+### Adding arbitrary elements
+
+The `wrap_elements()` function can be used to wrap arbitrary grid grobs and add them to a composition.
+
+```{r}
+text <- wrap_elements(grid::textGrob("Some really important text"))
+table <- wrap_elements(gridExtra::tableGrob(mtcars[1:10, c("mpg", "disp")]))
+
+p1 + table
+text + p1
+```
+
+The [`ggplotify`](https://cran.r-project.org/package=ggplotify) package provides functions for converting different graphics (base graphics, lattice graphics and others) to grobs, so that they can be composed too with ggplot objects.
+
+### Annotating the composition
+
+The final composition can be annotated with titles, captions, tags, etc., via the `plot_annotation()` function:
+
+```{r}
+p1 + p2 + p3 + p4 +
+  plot_annotation(
+    title = "Composition title",
+    subtitle = "Composition subtitle",
+    caption = "Composition caption",
+    tag_levels = "a",
+    tag_suffix = ")",
+    theme = theme(plot.title=element_text(color="red"))
+  )
+```
+
+## Insets
+
+Insets are essentially plot annotations, i.e., a plot on top of another plot. This can be achieved with multiple overlapping `area()` specifications, but the specific function `inset_element()` makes this task much easier. It allows us to freely position the inset relative either to the panel, plot of full area of the plot by specifying the left, bottom, right and top edges of the inset:
+
+```{r}
+p1 + inset_element(p2, left=0.6, bottom=0.6, right=1, top=1, align_to="panel")
+p1 + inset_element(p2, left=0.6, bottom=0.6, right=1, top=1, align_to="plot")
+p1 + inset_element(p2, left=0.6, bottom=0.6, right=1, top=1, align_to="full")
+```
+
+And autotagging works as expected:
+
+```{r}
+p1 + inset_element(p2, left=0.6, bottom=0.6, right=1, top=1, align_to="full") +
+  plot_annotation(tag_levels="a")
+```
+
+One interesting use case of this technique is to zoom in a particular region:
+
+```{r}
+xlim <- c(2.9, 3.2)
+ylim <- c(21, 28)
+
+p_zoom <- p1 + 
+  coord_cartesian(xlim=xlim, ylim=ylim, expand=FALSE) +
+  labs(title=NULL) +
+  theme_light() +
+  theme(
+    axis.title = element_blank(),
+    plot.background = element_blank()
+  )
+
+p1 +
+  annotate("rect", xmin=xlim[1], xmax=xlim[2], ymin=ylim[1], ymax=ylim[2],
+           fill=NA, color="black") +
+  annotate("segment", x=xlim[2], xend=5.4, y=ylim[1], yend=29, linetype="dashed") +
+  annotate("segment", x=xlim[1], xend=4.5, y=ylim[2], yend=45, linetype="dashed") +
+  inset_element(p_zoom, left=0.5, bottom=0.45, right=0.7, top=1)
+```
