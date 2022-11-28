@@ -482,7 +482,7 @@ ggplot(mpg, aes(hwy)) +
 .pull-right[
 ```{r stat-count-2}
 ggplot(mpg, aes(hwy)) +
-  stat_count(stat="bar") #<<
+  stat_count(geom="bar") #<<
 ```
 ]
 
@@ -694,3 +694,279 @@ class: inverse, center, middle
 
 # Tutorial 05
 ## [Themes](../tutorials/05/)
+
+---
+class: intoc, inverse, center, middle
+
+# Annotations
+
+---
+class: base24
+
+# Types of Annotations
+
+.pull-left[
+
+]
+.pull-right[
+```{r annotations0, echo=FALSE, fig.asp=1.25}
+p <- ggplot(mpg) +
+  aes(displ, hwy) +
+  geom_point(aes(color=factor(cyl)))
+p
+```
+]
+
+---
+class: base24
+
+# Types of Annotations
+
+.pull-left[
+- Guides (axes and legend)
+]
+.pull-right[
+```{r annotations1, echo=FALSE, fig.asp=1.25}
+p <- p +
+  labs(
+    x = "Engine displacement [litres]",
+    y = "Highway mileage [miles/gallon]",
+    color = "Number of\ncylinders"
+  )
+p
+```
+]
+
+---
+class: base24
+
+# Types of Annotations
+
+.pull-left[
+- Guides (axes and legend)
+
+- Titles (title, subtitle and caption)
+]
+.pull-right[
+```{r annotations2, echo=FALSE, fig.asp=1.25}
+p <- p +
+  labs(
+    title = "Mileage by engine size and cylinders",
+    subtitle = paste(
+      "Highway mileage seems to be correlated with engine size,",
+      "but differences are mostly driven by the number of cylinders",
+      sep="\n"),
+    caption = "Source: http://fueleconomy.gov"
+  )
+p
+```
+]
+
+---
+class: base24
+
+# Types of Annotations
+
+.pull-left[
+- Guides (axes and legend)
+
+- Titles (title, subtitle and caption)
+
+- Text labels
+]
+.pull-right[
+```{r annotations3, echo=FALSE, fig.asp=1.25}
+p <- p +
+  annotate("text", x=1.5, y=15, label="Very important point", hjust=0) +
+  annotate("segment", x=2, y=16, xend=2.6, yend=19.6, arrow=arrow())
+p
+```
+]
+
+---
+class: base24
+
+# Types of Annotations
+
+.pull-left[
+- Guides (axes and legend)
+
+- Titles (title, subtitle and caption)
+
+- Text labels
+
+- Reference lines
+]
+.pull-right[
+```{r annotations4, echo=FALSE, fig.asp=1.25}
+p <- p +
+  geom_hline(yintercept=40, linetype="dashed") +
+  annotate("text", x=2.2, y=41, hjust=0, label="Outliers")
+p
+```
+]
+
+---
+class: base24
+
+# Types of Annotations
+
+.pull-left[
+- Guides (axes and legend)
+
+- Titles (title, subtitle and caption)
+
+- Text labels
+
+- Reference lines
+
+- Reference areas
+]
+.pull-right[
+```{r annotations5, echo=FALSE, fig.asp=1.25}
+p <- p +
+  annotate("rect", xmin=-Inf, xmax=Inf, ymin=40, ymax=Inf, color=NA, fill="red", alpha=0.2)
+p
+```
+]
+
+---
+class: base24
+
+# Types of Annotations
+
+.pull-left[
+- Guides (axes and legend)
+
+- Titles (title, subtitle and caption)
+
+- Text labels
+
+- Reference lines
+
+- Reference areas
+
+- Direct labeling
+]
+.pull-right[
+```{r annotations6, echo=FALSE, fig.asp=1.25}
+p <- p +
+  ggforce::geom_mark_ellipse(aes(label=cyl, group=cyl)) +
+  theme(legend.position="none")
+p
+```
+]
+
+---
+class: inverse, center, middle
+
+# Tutorial 06
+## [Annotations](../tutorials/06/)
+
+---
+class: intoc, inverse, center, middle
+
+# Arranging Plots
+
+---
+class: base24
+
+# Types of Arrangements
+
+.pull-left[
+- Compositions
+
+```{r compositions, echo=FALSE, fig.asp=1.15}
+library(patchwork)
+
+p1 <- ggplot(mpg) +
+  aes(displ, hwy) +
+  geom_point() +
+  labs(title="Plot 1")
+
+p2 <- ggplot(mpg) +
+  aes(as.character(year), fill=drv) +
+  geom_bar(position="dodge") +
+  labs(title="Plot 2", x="year")
+
+p3 <- ggplot(mpg) +
+  aes(hwy, fill=drv) +
+  geom_density(color=NA) +
+  facet_grid(drv~.) +
+  labs(title="Plot 3")
+
+p4 <- ggplot(mpg) +
+  aes(drv, hwy) +
+  stat_summary(aes(fill=drv), geom="col", fun.data=mean_se) +
+  stat_summary(geom="errorbar", fun.data=mean_se, width=0.5) +
+  labs(title="Plot 4")
+
+layout <- "
+AAB
+CEB
+CDD
+"
+
+p1 + p2 + p3 + p4 + guide_area() +
+  plot_layout(guides="collect", design=layout) +
+  plot_annotation(
+    title="This is a patchwork composition of 4 plots",
+    tag_levels="a", tag_suffix=")")
+```
+]
+.pull-right[
+- Insets
+
+```{r insets, echo=FALSE, fig.asp=1.15}
+xlim <- c(2.9, 3.2)
+ylim <- c(23, 28)
+
+zoom <- 3.5
+xlim_zoom <- 4.5 + c(0, diff(xlim)*zoom)
+ylim_zoom <- 45 - c(diff(ylim)*zoom, 0)
+
+p_zoom <- p1 +
+  coord_cartesian(xlim=xlim, ylim=ylim, expand=FALSE) +
+  labs(title=NULL) +
+  theme_light() +
+  theme(
+    axis.title = element_blank(),
+    plot.background = element_blank(),
+    plot.margin = unit(c(0, 0, 0, 0), "mm")
+  )
+
+p1 +
+  annotate("rect", xmin=xlim[1], xmax=xlim[2], ymin=ylim[1], ymax=ylim[2],
+           fill=NA, color="black") +
+  annotate("segment", x=xlim[2], xend=xlim_zoom[2], y=ylim[1], yend=ylim_zoom[1], linetype="dashed") +
+  annotate("segment", x=xlim[1], xend=xlim_zoom[1], y=ylim[2], yend=ylim_zoom[2], linetype="dashed") +
+  annotation_custom(ggplotGrob(p_zoom), xlim_zoom[1], xlim_zoom[2], ylim_zoom[1], ylim_zoom[2])
+```
+]
+
+---
+class: base24
+
+# Panel Alignment
+
+.pull-left[
+- None
+
+```{r alignment-none, echo=FALSE, fig.asp=0.575, fig.show="hold"}
+p1
+p3 + labs(title=NULL)
+```
+]
+.pull-right[
+- With [`patchwork`](https://patchwork.data-imaginist.com/)
+
+```{r alignment-patchwork, echo=FALSE, fig.asp=1.15}
+p1 / (p3 + labs(title=NULL))
+```
+]
+
+---
+class: inverse, center, middle
+
+# Tutorial 07
+## [Arranging Plots](../tutorials/07/)
