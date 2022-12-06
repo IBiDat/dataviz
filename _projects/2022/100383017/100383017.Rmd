@@ -256,11 +256,105 @@ theme(axis.text.x = element_text( size = 7),
           aspect.ratio = 1)
 plot_1
 ```          
-Finally, let´s change the limits on the plot to make it more readible by modifying the arguments of the coordinadates:
+Finally, let´s change the limits on the plot to make it more readable by modifying the arguments of the coordinate system:
 
 ```{r}
 plot_1 <- plot_1+
   coord_cartesian(xlim = c(0,10000), ylim = c(-2,7))
 plot_1
+```
+Now we will generate the second plot required for our enhancement resorting to a similar analyis as the one depicted above but focusing on the quantitative side. We will append next to plot_1 the corresponding representation of each linear regression accounting for our three country groups. As usual, we will have to read again our data to make from scratch the desirable transformations: 
+
+```{r}
+gdp <- as.data.frame(read_delim("gdp per capita.csv",
+                                  delim = ";"))
+```
+One again, we will have to split our country in three categories and generate our "Growth" column accounting for the rate of increase of GDP per capita that each economy experiences. Factor levels will be reset to obtain the desired order:
+
+```{r}
+gdp <- gdp %>%
+    rename(gdp_capita = gdp_per_capita) %>%
+    select(country, year,gdp_capita, ) %>%
+    filter(year %in% c(1950,2016)) %>%
+    pivot_wider(names_from = "year", values_from = gdp_capita) %>%
+    drop_na("1950", "2016") %>%
+    rename(gdp_capita_1950 = "1950", gdp_capita_2016 = "2016") %>%
+    mutate(type = ifelse(gdp_capita_2016<6000,
+                         "Poor",
+                         ifelse(gdp_capita_2016<30000,
+                                "Medium",
+                                "Rich"))) %>%
+    mutate(Growth = (((gdp_capita_2016/gdp_capita_1950)^(1/(2016-1950)))-1)*100) %>%
+    mutate(type = factor(type, levels = c("Poor",
+                                          "Medium",
+                                          "Rich")))
+```
+Now we can start depicting the second part of our enhancement graph! 
+The first part will consist of piping our already filtered data into ggplot() and select the appropriate aesthetics in which we will feed our argument "fill" with our country type. 
+
+```{r}
+plot_2 <-  gdp %>%
+    ggplot()+
+    aes(gdp_capita_1950,Growth, fill = type)
+plot_2
+```
+Notice that, different to plot_1 in which we mapped a text geometry into the plot to be able to spot each of the countries, our task now is to account for types of countries regardless of their label. Therefore, we will change the geometry to geom_point() and let the point be filled with the type of country while contouring it with a white color:
+
+```{r}
+plot_2 <- plot_2 +
+geom_point(shape = 21, color = "white", size = 3)
+plot_2
+```
+We will add some labels to the axis (the same that we had for our previous plot):
+
+```{r}
+plot_2 <- plot_2 +
+ labs(x="GDP per capita in 1950",
+         y = "Average GDP Growth Rate")
+plot_2
+```
+Let´s change the label of the vertical axis by adding a percentage symbol to indicate that it is a measure of percentage growth rate. This has been computed as the average annual growth rate, which is the growth rate required for a country to portray year by year (constant) to achieve the final level of GDP per capita:
+
+```{r}
+plot_2 <- plot_2+
+scale_y_continuous(label = label_number(suffix = "%"), n.breaks = 6)+
+  theme_minimal()
+plot_2
+```
+Next, we will change the appearance of our plot by modifying slightly the theme layout. Family "serif" will be chosen for the font in order to mimic the one used in the replication of the original plot and the background will be fill with grey. Panel grid lanes will be removed by setting the corresponding argument into element_blank().
+
+```{r}
+plot_2 <- plot_2 +
+theme(axis.text.x = element_text( size = 7),
+          axis.title.x = element_text( size = 12,family = "serif"),
+          axis.text.y = element_text(size = 7,family = "serif"),
+          axis.title.y = element_text( size = 12, family = "serif"),
+          panel.background = element_rect(fill = "grey"),
+          panel.grid= element_blank(),
+          legend.position = "bottom",
+          legend.background = element_rect(size = 2),
+          aspect.ratio = 1)
+plot_2
+```
+Finally, a linear regression line will be passed through each of the country groups to account for conditional convergence. The negative relationship which can be easily spotted once the line of best fit is included shows that, within groups of similar countries holding similar characteristics (depreciation rates, population growth rates etc.), there is convergence. However, the transition of a country from one group to another one is rarely seen. 
+
+```{r}
+plot_2 <- plot_2 +
+geom_smooth(method = "lm", size = 1, color = rgb(1,1,1,0.3))
+plot_2
+```
+We will change some limits of this plot to enable the reader focus on the inside and not get distracted with a hughe portion of unused plot:
+
+```{r}
+plot_2 <- plot_2 +
+ coord_cartesian(xlim = c(0,15000), ylim = c(-2,7))
+plot_2
+```
+
+```{r}
+library(ggpubr)
+enhancement <- ggarrange(plot_1,plot_2,  common.legend = TRUE, legend="bottom")
+annotate_figure(enhancement,
+                top = text_grob("Gdp per Capita Conditional Convergence", color = "red", size = 19))
 ```
 
