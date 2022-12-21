@@ -41,7 +41,7 @@ ggraph::ggraph(data.frame(from=c("Source", "Message", "Channel"),
                           to=c("Message", "Channel", "Receiver"),
                           label=c("encode", "", "decode"))) +
   ggraph::geom_edge_link(aes(label=label), arrow=arrow(type="closed"),
-                         end_cap=ggraph::circle(1.8, 'cm'), label_size=18) +
+                         end_cap=ggraph::circle(1.8, "cm"), label_size=18) +
   ggraph::geom_node_label(aes(label=name, color=c("black", "blue", "red", "black")),
                           size=20, label.padding=unit(2, "lines")) +
   scale_color_identity() +
@@ -155,7 +155,7 @@ class: base24
 ]
 .pull-right[
 ```yaml
-title:  'Title: it contains a colon'
+title:  "Title: it contains a colon"
 author:
 - Author One
 - Author Two
@@ -283,3 +283,264 @@ class: base24
 - [Journals](https://bookdown.org/yihui/rmarkdown/journals.html)
 
 - [**Distill**](https://rstudio.github.io/distill/)
+
+---
+class: base24
+
+# HTML Widgets
+
+- The `htmlwidgets` package provides a framework for creating R bindings to
+  create **web components**.
+
+- Charts, but also maps, diagrams, tables, forms... and even mini-apps.
+  Basically, any HTML component with optional **JavaScript**.
+
+--
+
+- You don't generally need to use the `htmlwidgets` package directly.
+  Many packages use it to provide many components.
+
+--
+
+- They can be
+  - used at the R console for data analysis, just like conventional R plots;
+  - embedded within any **HTML document**;
+  - saved as standalone web pages for ad-hoc sharing.
+
+---
+
+# HTML Widgets
+
+.pull-left-mod[
+```{r plotly, eval=FALSE}
+p <- ggplot(gapminder::gapminder) +
+  aes(gdpPercap, lifeExp) +
+  geom_point(aes(size=pop,
+                 color=continent),
+             alpha=0.7) +
+  scale_size(range=c(2, 12), guide=NULL) +
+  scale_x_log10() +
+  theme_gray(base_size=10) +
+  aes(frame=year, text=country)
+
+library(plotly)
+
+ggplotly(p) |>
+ layout(legend=list(
+   x=1, y=0, xanchor="right"))
+```
+]
+.pull-right-mod[
+```{r plotly, echo=FALSE, out.width="100%", out.height="550px"}
+```
+]
+
+---
+
+# HTML Widgets
+
+.pull-left-mod[
+```{r leaflet, eval=FALSE}
+library(leaflet)
+
+g <- c(
+  "OpenStreetMap", "Stamen.Toner",
+  "Stamen.TonerLite", "CartoDB.Positron")
+
+leaflet() |>
+  addProviderTiles(g[1], group=g[1]) |>
+  addProviderTiles(g[2], group=g[2]) |>
+  addProviderTiles(g[3], group=g[3]) |>
+  addProviderTiles(g[4], group=g[4]) |>
+  addLayersControl(g) |>
+  addMarkers(lng=174.768, lat=-36.852,
+             popup="The birthplace of R")
+```
+]
+.pull-right-mod[
+```{r leaflet, echo=FALSE, out.width="100%", out.height="550px"}
+```
+]
+
+---
+
+# HTML Widgets
+
+.pull-left-mod[
+```{r networkd3, eval=FALSE}
+library(networkD3)
+
+data(MisLinks)
+data(MisNodes)
+
+forceNetwork(
+  Links = MisLinks, Nodes = MisNodes,
+  Source = "source", Target = "target",
+  Value = "value", NodeID = "name",
+  Group = "group", opacity = 0.8)
+```
+]
+.pull-right-mod[
+```{r networkd3, echo=FALSE, out.width="100%", out.height="550px"}
+```
+]
+
+---
+
+# HTML Widgets
+
+```{r dt}
+DT::datatable(iris, options=list(pageLength=6))
+```
+
+---
+
+# HTML Widgets
+
+<iframe src="https://gallery.htmlwidgets.org/" style="position:relative;left:0;top:0;width:100%;height:100%" frameborder="0" scrolling="yes"></iframe>
+
+---
+class: base24
+
+# Dashboards
+
+- **Business-style reports** to highlight brief and key summaries.
+
+--
+
+<div style="float:right; width:30%; padding-left:20px">
+<img src="assets/img/ch4/example-tableau.png">
+<img src="assets/img/ch4/example-pbi.png">
+<img src="assets/img/ch4/example-ds.jpg">
+</div>
+
+- You may have heard of Salesforce's _Tableau_, Microsoft _Power BI_,
+  Google _Data Studio_...
+
+--
+
+- Often, grid-based layout, components arranged in boxes.
+
+--
+
+- With the `flexdashboard` package, you can
+  - use R Markdown to produce dashboards;
+  - embed a wide variety of components, including HTML widgets;
+  - specify flexible layouts that resize automatically;
+  - use **Shiny** for dynamic content.
+
+.footnote[[Documentation](https://pkgs.rstudio.com/flexdashboard/)]
+
+---
+class: inverse, center, middle
+
+# Demo
+
+---
+class: base24
+
+# Shiny
+
+.footnote[[Documentation](https://shiny.rstudio.com/)]
+
+## Static vs. Dynamic (!= interactive) content
+
+.pull-left[
+### Static HTML
+
+```{r, echo=FALSE, out.width="40%"}
+knitr::include_graphics("assets/img/ch4/html-static.svg")
+```
+]
+.pull-right[
+### Shiny
+
+```{r, echo=FALSE, out.width="83%"}
+knitr::include_graphics("assets/img/ch4/html-dynamic.svg")
+```
+]
+
+---
+
+# Shiny
+
+## Your first Shiny app
+
+.footnote[Example from `rmdexamples::kmeans_cluster()`]
+
+.pull-left[
+### ui.R
+.code50[
+```r
+library(shiny)
+vars <- names(iris)
+
+ui <- fluidPage(
+  fluidRow(style = "padding-bottom: 20px;",
+    column(4, selectInput("xcol", "X Variable", vars)),
+    column(4, selectInput("ycol", "Y Variable", vars,
+                          selected = vars[2])),
+    column(4, numericInput("clusters", "Cluster count", 3,
+                           min = 1, max = 9))
+  ),
+  fluidRow(
+    plotOutput("kmeans", height = "400px")  
+  )
+)
+```
+]]
+.pull-right[
+### server.R
+.code50[
+```r
+library(shiny)
+
+server <- function(input, output, session) {
+  selectedData = reactive({
+    iris[, c(input$xcol, input$ycol)]
+  })
+
+  clusters = reactive({
+    kmeans(selectedData(), input$clusters)
+  })
+
+  output$kmeans = renderPlot(height = 400, {
+    res = clusters()
+    par(mar = c(5.1, 4.1, 0, 1))
+    plot(selectedData(),
+         col = res$cluster, pch = 20, cex = 3)
+    points(res$centers, pch = 4, cex = 4, lwd = 4)
+  })
+}
+```
+]]
+
+---
+
+# Dashboards
+
+## Shiny dashboards!
+
+<br>
+
+<div style="float:right; width:44%; padding-left:20px">
+<img src="assets/img/ch4/dashboard-shiny.png">
+</div>
+
+1. Add `runtime: shiny` to the options declared at the top of the document
+  (YAML metadata).
+
+2. (Optional) Add the `{.sidebar}` attribute to the first column of the
+  dashboard to make it a host for Shiny input controls.
+
+3. Add Shiny inputs and outputs as appropriate.
+
+4. When including plots, be sure to wrap them in a call to `renderPlot()`.
+
+.footnote[[shinyapps.io](https://www.shinyapps.io/) | [Example app](https://enchufa2.shinyapps.io/ls-springs/)]
+
+---
+
+# Dashboards
+
+<iframe src="https://pkgs.rstudio.com/flexdashboard/articles/examples.html" style="position:relative;left:0;top:0;width:100%;height:100%" frameborder="0" scrolling="yes"></iframe>
