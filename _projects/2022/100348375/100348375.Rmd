@@ -1,7 +1,7 @@
 ---
-title: "Market share plots in R"
+title: "Market share chart in R"
 description: |
-  In this article I explain how I replicated a New York Times chart in R   and the process of creating a different chart with the same data.
+ In this article I explain how I replicated a New York Times chart in R and the process of creating a different chart with ggplot2 with the same data.
 categories: "2022"
 author: Isabel Molero Lopez
 date: 2022-11-16
@@ -11,10 +11,368 @@ output:
     toc: true
 ---
 
+## **First step: replicate the graph**
+# **Original graphic source: New York Times**
+
+The American newspaper "The New York Times" published in November 2018 an opinion article written by columnist David Leonhardt. This journalist explained how in recent years monopolies have increased in the United States despite the reluctance of many Americans who consider them a threat to market competition and individual freedom. This article is accompanied by a graph showing how the combined market share has changed for the top two companies in many industries.
+
+***[The Monopolization of America](https://www.nytimes.com/2018/11/25/opinion/monopolies-in-the-us.html?unlocked_article_code=AAAAAAAAAAAAAAAACEIPuonUktbco4hlSVUZBibSRdkhrxqAwv3IxrskgXv_ITPQSDAH0-QYRpWbvUfRYK4pL_0C4wOmfv4Terk-WK41ieZFI01mTwTvqMqKyMUPfS5woo_pAiZrj5-XGLkzrmevP2Xidr5xlePjskrbenCqDPKEqQApJAlipZFgfFmtyCZIkv-DSrgpr4E4ifQxBZl6RiMDZD2IuZTrDRZ4O9aBa3LM-1V8GrEZCXyIw4nqu_9Xex5SCFnGUHt8_W0_jdtZM94XN6r5RAUyt9cDVL2W_2EO8RB4R-XivQ&smid=nytcore-ios-share&referringSource=articleShare)***
 
 
-Distill is a publication format for scientific and technical writing, native to the web.
+```{r, echo=FALSE, out.width="50%"}
+knitr::include_graphics("Imagen1.png")
+```
 
-Learn more about using Distill at <https://rstudio.github.io/distill>.
+In this tutorial I will show how to replicate this data visualization step by step with R and the package ggplot2.
+
+```{r}
+# Load libraries
+library(tidyverse)
+library(ggplot2)
+
+```
 
 
+# **1-Read the data**
+
+Since the chart's data source was not directly accessible, I created a csv file with the data. This file contains data for three different variables: the type of industry, the market share in the year 2000, and the current market share. 
+Also, since in the original graph the positive and negative increases over time in the market share are differentiated, I create a new variable with this information.
+
+
+```{r echo=TRUE}
+
+data <- read.csv("data_graph.csv", sep = ";") %>% 
+  mutate(increase = market_share_now - market_share_2000,
+         increase2 = case_when(increase > 0 ~ "positive",
+                              T ~ "negative")) %>%
+  group_by(increase2) %>% 
+  arrange(desc(increase))
+
+```
+
+Let's see how the data is!
+
+```{r echo=TRUE}
+glimpse(data)
+
+```
+
+``` {r echo = TRUE}
+summary(data)
+```
+
+<br/><br/>
+
+
+# **2-Create the first part of the plot**
+
+The chosen graph has two distinct parts. The first one shows the evolution of the market share since the early 2000s (2002 to 2007 depending on data availability) and the second since 2012. For this reason, I will do the upper graph first and then the lower one.
+
+The first step, therefore, is to filter the data to use only those that correspond to the industries included in the first graph. Also, I create a variable that allows me to order the categorical variable "industry" from highest to lowest increase in market share over time.
+
+``` {r echo = TRUE}
+
+upper_plot <- data %>%
+  filter(industry != "Smartphones" & industry != "Social networks" & industry != "Cellphone service") %>% 
+  mutate(industry_order = fct_reorder(industry, increase)) 
+
+```
+
+## Coordinates and axes
+
+The graph has Cartesian coordinates, where x is the market share (continuous variable ranging from 0 to 100) and y is the type of industry (categorical variable). However, in this graph for each y (for each industry) we have to plot two points on the x-axis: the market share in the early 2000s and today. But we will see this after in the "Data" chapter. 
+
+```{r fig.align='center', fig.height=7, fig.width=6, fig.showtext= TRUE}
+
+sysfonts::font_add_google("Noto Serif")
+showtext::showtext_opts(dpi=300)
+
+upper_plot <- upper_plot %>%
+  ggplot() +
+  (aes(x = market_share_2000, 
+       y = industry_order))
+
+upper_plot
+
+```
+Also, we want the x scale to go from 10% to 100% in steps of 10 and to be at the top of the graph. We achieve all this with the arguments of the "scale_x_continuous" function. In the case of the y-axis, we only need to expand it slightly at the top to accommodate the labels that need to be entered on the chart later.
+
+```{r fig.align='center', fig.height=7, fig.width=6, fig.showtext= TRUE}
+
+sysfonts::font_add_google("Noto Serif")
+showtext::showtext_opts(dpi=300)
+
+upper_plot <- upper_plot +
+  scale_x_continuous(position = "top", breaks = c(10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
+                     limits = c(10, 100),
+                     labels = c("10%", "20", "30", "40", "50", "60", "70", "80", "90", "100"),
+                     name = NULL,
+                     expand = c(0,0)) +
+  scale_y_discrete(name = NULL, expand = expansion(add = c(0.4, 1.5)))
+
+upper_plot
+  
+```
+## Labs
+
+```{r fig.align='center', fig.height=7, fig.width=6, fig.showtext= TRUE}
+
+sysfonts::font_add_google("Noto Serif")
+showtext::showtext_opts(dpi=300)
+
+upper_plot <- upper_plot +
+    labs(title = "Dominance of Corporate Behemoths",
+       subtitle = "The combined market share of the two largest companies in many industries has grown\n in recent years, often because of mergers.",
+       tag = "MARKET SHARE:")
+
+upper_plot
+  
+```
+## Theme
+
+Labs settings
+
+```{r fig.align='center', fig.height=7, fig.width=6, fig.showtext= TRUE}
+
+sysfonts::font_add_google("Noto Serif")
+showtext::showtext_opts(dpi=300)
+
+upper_plot <- upper_plot +
+    theme(legend.position = "none",
+        plot.title = element_text(size = 12, face = "bold", family = "Noto Serif", margin = margin(0, 0, 5, 0)),
+        plot.subtitle = element_text(size = 9.5, colour = "#636363", family = "Noto Serif", margin = margin(0, 0, 20, 0)),
+        plot.title.position = "plot",
+        plot.tag.position = c(0.12, 0.88),
+        plot.tag = element_text(size = 8.7, family = "sans", colour = "#a7a7a7"))
+  
+upper_plot
+  
+```
+
+Panel grid and panel background
+
+```{r fig.align='center', fig.height=7, fig.width=6, fig.showtext= TRUE}
+
+sysfonts::font_add_google("Noto Serif")
+showtext::showtext_opts(dpi=300)
+
+upper_plot <- upper_plot +
+    theme(panel.grid.major.y = element_line(linetype = "dotted", colour = "#a7a7a7"),
+        panel.grid.major.x = element_line(colour = "#c9c9c9"),
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "white"))
+        
+upper_plot
+  
+```
+
+Axis text and axis ticks
+
+```{r fig.align='center', fig.height=7, fig.width=6, fig.showtext= TRUE}
+
+sysfonts::font_add_google("Noto Serif")
+showtext::showtext_opts(dpi=300)
+
+upper_plot <- upper_plot +
+    theme(axis.ticks.y = element_blank(),
+        axis.ticks.x = element_line(colour = "#c9c9c9", linewidth = c(0.3, 0.5, 0.5, 0.5, 0.8,
+                                                                 0.5, 0.5, 0.5, 0.5, 0.4)),
+        axis.ticks.length.x = unit(0.2, "cm"),
+        axis.text.y = element_text(size = 10, family = "sans", hjust = 0, vjust = 0.5),
+        axis.text.x = element_text(size = 9, family = "sans", colour = "#a7a7a7",
+                                   face = c('plain', 'plain', 'plain', 'plain', 'bold',
+                                            'plain', 'plain', 'plain', 'plain', 'plain')))
+  
+upper_plot
+  
+```
+Margins
+
+```{r fig.align='center', fig.height=7, fig.width=6, fig.showtext= TRUE}
+
+sysfonts::font_add_google("Noto Serif")
+showtext::showtext_opts(dpi=300)
+
+upper_plot <- upper_plot +
+    theme(plot.margin = margin(0, 1.7, 0, 0, "cm"))
+  
+upper_plot
+  
+```
+## Data
+
+geom_vline and geom_segment
+
+```{r fig.align='center', fig.height=7, fig.width=6, fig.showtext= TRUE}
+
+sysfonts::font_add_google("Noto Serif")
+showtext::showtext_opts(dpi=300)
+
+upper_plot <- upper_plot +
+  geom_vline(xintercept = 50, color = "gray", size = 0.8) + 
+  geom_segment(aes(x = market_share_2000, 
+                   xend = market_share_now, 
+                   y = industry_order, 
+                   yend = industry_order, color = increase2), 
+               arrow = arrow(length = unit(0.15, "cm"), 
+                             type = "closed"), size = 1) +
+  scale_color_manual(values = c("#575757", "#DB3B27"))
+
+upper_plot
+  
+```
+
+## Annotations
+
+```{r fig.align='center', fig.height=7, fig.width=6, fig.showtext= TRUE}
+
+sysfonts::font_add_google("Noto Serif")
+showtext::showtext_opts(dpi=300)
+
+upper_plot <- upper_plot +
+  annotate("text", x = 33, y = 23.8, label = "Early 2000s", size = 3, fontface = "bold") +
+  annotate("text", x = 85, y = 23.8, label = "Now", size = 3, fontface = "bold")
+
+upper_plot
+  
+```
+
+All the code together:
+
+```{r fig.align='center', fig.height=7, fig.width=6, fig.showtext= TRUE}
+
+sysfonts::font_add_google("Noto Serif")
+showtext::showtext_opts(dpi=300)
+
+upper_plot <- data %>%
+  filter(industry != "Smartphones" & industry != "Social networks" & industry != "Cellphone service") %>% 
+  mutate(industry_order = fct_reorder(industry, increase)) %>% 
+  ggplot() +
+  geom_vline(xintercept = 50, color = "gray", size = 0.8) +
+  geom_segment(aes(x = market_share_2000, 
+                   xend = market_share_now, 
+                   y = industry_order, 
+                   yend = industry_order, color = increase2), 
+               arrow = arrow(length = unit(0.15, "cm"), 
+                             type = "closed"), size = 1) +
+  scale_color_manual(values = c("#575757", "#DB3B27")) +
+  scale_x_continuous(position = "top", breaks = c(10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
+                     limits = c(10, 100),
+                     labels = c("10%", "20", "30", "40", "50", "60", "70", "80", "90", "100"),
+                     name = NULL,
+                     expand = c(0,0)) +
+  scale_y_discrete(name = NULL, expand = expansion(add = c(0.4, 1.5))) +
+  labs(title = "Dominance of Corporate Behemoths",
+       subtitle = "The combined market share of the two largest companies in many industries has grown\n in recent years, often because of mergers.",
+       tag = "MARKET SHARE:") +
+  theme(legend.position = "none",
+        plot.title = element_text(size = 12, face = "bold", family = "Noto Serif", margin = margin(0, 0, 5, 0)),
+        plot.subtitle = element_text(size = 9.5, colour = "#636363", family = "Noto Serif", margin = margin(0, 0, 20, 0)),
+        plot.title.position = "plot",
+        plot.tag.position = c(0.12, 0.88),
+        plot.tag = element_text(size = 8.7, family = "sans", colour = "#a7a7a7"),
+        panel.grid.major.y = element_line(linetype = "dotted", colour = "#a7a7a7"),
+        panel.grid.major.x = element_line(colour = "#c9c9c9"),
+        panel.grid.minor = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.ticks.x = element_line(colour = "#c9c9c9", linewidth = c(0.3, 0.5, 0.5, 0.5, 0.8,
+                                                                 0.5, 0.5, 0.5, 0.5, 0.4)),
+        axis.ticks.length.x = unit(0.2, "cm"),
+        axis.text.y = element_text(size = 10, family = "sans", hjust = 0, vjust = 0.5),
+        axis.text.x = element_text(size = 9, family = "sans", colour = "#a7a7a7",
+                                   face = c('plain', 'plain', 'plain', 'plain', 'bold',
+                                            'plain', 'plain', 'plain', 'plain', 'plain')),
+        panel.background = element_rect(fill = "white"),
+        plot.margin = margin(0, 1.7, 0, 0, "cm")) +
+  annotate("text", x = 33, y = 23.8, label = "Early 2000s", size = 3, fontface = "bold") +
+  annotate("text", x = 85, y = 23.8, label = "Now", size = 3, fontface = "bold")
+
+upper_plot
+
+
+```
+
+
+<br/><br/>
+
+
+# **3-Create the second part of the plot**
+
+
+```{r fig.align='center', fig.height=2, fig.width=6}
+
+sysfonts::font_add_google("Noto Serif")
+showtext::showtext_opts(dpi=300)
+
+library(grid)
+
+bottom_plot <- data %>%
+  filter(industry == "Smartphones" | industry == "Social networks" | industry == "Cellphone service") %>% 
+  mutate(industry = case_when(industry %in% c("Cellphone service") ~ "Cellphone service  ",
+                              T ~ industry),
+         industry_order = fct_reorder(industry, increase)) %>% 
+  ggplot() +
+  geom_vline(xintercept = 50, color = "gray", size = 0.8) +
+  geom_segment(aes(x = market_share_2000, 
+                   xend = market_share_now, 
+                   y = industry_order, yend = industry_order, color = increase2), 
+               arrow = arrow(length = unit(0.15, "cm"), 
+                             type = "closed"), size = 1) +
+  scale_color_manual(values = c("#DB3B27")) +
+  scale_x_continuous(position = "bottom", breaks = c(10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
+                     limits = c(10, 100),
+                     labels = c("10%", "20", "30", "40", "50", "60", "70", "80", "90", "100"),
+                     name = NULL,
+                     expand = c(0, 0)) +
+  scale_y_discrete(name = NULL, expand = expansion(add = c(0.2, 0.8))) +
+  labs(subtitle = "Technology companies since 2012",
+       caption = 'By The New York Times | Source: IbisWorld and Open Markets Institute; "Early 2000s" ranges from\n2002 to 2007, depending on data availability') +
+  theme(legend.position = "none",
+        plot.title.position = "plot",
+        plot.subtitle = element_text(size = 9.5, family = "Noto Serif", face = "bold", margin = margin(0, 0, 0, 0)),
+        plot.caption = element_text(size = 9, colour = "#636363", family = "Noto Serif", hjust = 0, margin = margin(20, 0, 0, 0)),
+        plot.caption.position = "plot",
+        panel.grid.major.y = element_line(linetype = "dotted", colour = "#a7a7a7"),
+        panel.grid.major.x = element_line(colour = "#c9c9c9"),
+        panel.grid.minor = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.ticks.x = element_line(colour = "#c9c9c9", size = c(0.3, 0.5, 0.5, 0.5, 0.8,
+                                                                 0.5, 0.5, 0.5, 0.5, 0.3)),
+        axis.ticks.length.x = unit(0.2, "cm"),
+        axis.text.y = element_text(size = 10, family = "sans", hjust = 0, vjust = 0.5),
+        axis.text.x = element_text(size = 9, family = "sans", colour = "#a7a7a7",
+                                   face = c('plain', 'plain', 'plain', 'plain', 'bold',
+                                            'plain', 'plain', 'plain', 'plain', 'plain')),
+        panel.background = element_rect(fill = "white"),
+        plot.margin = margin(0, 1.7, 0, 0, "cm")) +
+  # annotate("text", x = 75, y = 3.5, label = "2012", size = 3, fontface = "bold") +
+  # annotate("text", x = 97, y = 3.5, label = "Now", size = 3, fontface = "bold") +
+  annotation_custom(grob = textGrob(label = "Now", gp = gpar(fontsize = 8.5, fontface = "bold", fontfamily = "sans")),
+                    ymin = 3, xmin = 94.3) +
+  annotation_custom(grob = textGrob(label = "2012", gp = gpar(fontsize = 8.5, fontface = "bold", fontfamily = "sans")),
+                    ymin = 3, xmin = 52) # También tiene como límite los márgenes del área del gráfico.
+
+bottom_plot
+
+```
+<br/><br/>
+
+
+
+# **4-Both plots together**
+Now I am going to show the two plots created previously to see the replication of the graph from the New York Times.
+
+```{r fig.align='center', fig.height=7, fig.width=6, echo = FALSE, fig.showtext=TRUE}
+sysfonts::font_add_google("Noto Serif")
+showtext::showtext_opts(dpi=300)  
+upper_plot
+```
+```{r fig.align='center', fig.height=1.8, fig.width=6, echo=FALSE}
+sysfonts::font_add_google("Noto Serif")
+showtext::showtext_opts(dpi=300)  
+bottom_plot
+```
+<br/><br/>
+
+
+## **Second step: create a new visualization with the same data**
