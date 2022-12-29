@@ -18,9 +18,9 @@ As both a cause and a consequence of China's rapid economic growth, the proporti
 
 This post will seek to replicate this map, propose incremental enhancements and suggest an alternative visualization that depicts the relationship between growth potential, population and location or distance to the coast taking cities as our units of analysis.
 
-# The original chart
+## The original chart
 
-## Obtaining and processing the data
+### Obtaining and processing the data
 
 First, several libraries are required for processing and plotting the data, including the customization of fonts for our plot:
 
@@ -61,7 +61,9 @@ In order to obtain data on the 'longitude' and 'latitude' of each city, I used t
 data <- world.cities %>%
   filter(country.etc=="China") %>%
   select(name, lat, long) %>%
-  rename("City"="name", "Latitude"="lat", "Longitude"="long") 
+  rename("City"="name", 
+         "Latitude"="lat", 
+         "Longitude"="long") 
 ```
 
 The data also required cleaning, as there were several cities with the same name in different provinces. Using population data, I cross-checked which cities were the ones for which a ranking score was provided by the EIU and removed the rest. I also removed NAs for cities for which latitude and longitude data were not available.
@@ -69,7 +71,8 @@ The data also required cleaning, as there were several cities with the same name
 ```{r}
 fulloutput <- output %>% left_join(data, by="City")
 fulloutputclean <- fulloutput[-c(5, 23, 49, 51, 70, 81, 104, 113),]
-fulloutputclean <- fulloutputclean[!is.na(fulloutputclean$Latitude) & !is.na(fulloutputclean$Longitude), ]
+fulloutputclean <- fulloutputclean[!is.na(fulloutputclean$Latitude) 
+                                   & !is.na(fulloutputclean$Longitude), ]
 head(fulloutputclean, 5)
 ```
 
@@ -78,12 +81,13 @@ The final step in data processing was obtaining the data to plot the underlying 
 ```{r}
 China <- map_data("world") %>% 
   filter(region=="China") %>%
-  rename("Latitude"="lat", "Longitude"="long")
+  rename("Latitude"="lat", 
+         "Longitude"="long")
 ```
 
-## Building the plot
+### Building the plot
 
-### Coordinates of the map and data points
+#### Coordinates of the map and data points
 
 I use `geom_polygon` to draw the map of China. The `aes` argument maps the longitude and latitude columns to the x and y coordinates, respectively. This function is also used to specify the fill and the transparency (alpha) level of the map. 
 
@@ -95,7 +99,12 @@ A title and subtitle are added to replicate the original graph using the `labs` 
 
 ```{r}
 p <- ggplot() +
-  geom_polygon(data=China, aes(x=Longitude, y=Latitude, group=group), fill="cornsilk3", alpha=0.3) +       geom_point(data=fulloutputclean, aes(x=Longitude, y=Latitude, size=Population, fill=Ranking), shape=21,
+  geom_polygon(data=China, 
+               aes(x=Longitude, y=Latitude, group=group), 
+               fill="cornsilk3", alpha=0.3) +        
+  geom_point(data=fulloutputclean, 
+             aes(x=Longitude, y=Latitude, size=Population, fill=Ranking), 
+             shape=21,
              color="black") +                               
   coord_map() +
   labs(title = "March of the cities",                                                                   
@@ -103,7 +112,7 @@ p <- ggplot() +
        caption="Source: EIU")
 p
 ```
-### Scales
+#### Scales
 
 Next, the `scale_fill_stepsn` and `scale_size` functions are used to customize the appearance of the legends for the color and size aesthetics, respectively.
 
@@ -114,20 +123,27 @@ For the size legend, we do the same as with the color legend regarding the title
 
 ```{r}
 p2 <- p + 
-  scale_fill_stepsn(guide=guide_colorsteps(title="Rank", title.position="top",
-                                           ticks = TRUE, show.limits=TRUE, ticks.colour= "black",
-                                           ticks.linewidth = 1, draw.llim = TRUE,
-                                           draw.ulim = TRUE),
-                    colors=c("#1c2c74", "#5483b3", "#99ccff", "#fcdb9b", "#fcbc04", "#ac6404"),
-                    breaks=c(1, 20, 40, 60, 80, 100, 106), space="Lab") +
-  scale_size(guide=guide_legend(title = "Population, 2020, m", 
-                                title.position = "top"),
-             breaks=c(1000000, 10000000, 20000000),
-             labels=c("1", "10", "20"),
-             range=c(0.04, 6))
+  scale_fill_stepsn(
+      guide=guide_colorsteps(title="Rank",
+                             title.position="top",
+                             ticks = TRUE, 
+                             show.limits=TRUE, 
+                             ticks.colour= "black",
+                             ticks.linewidth = 1, 
+                             draw.llim = TRUE,
+                             draw.ulim = TRUE),
+      colors=c("#1c2c74", "#5483b3", "#99ccff", "#fcdb9b", "#fcbc04", "#ac6404"),
+      breaks=c(1, 20, 40, 60, 80, 100, 106), 
+      space="Lab") +
+  scale_size(
+      guide=guide_legend(title = "Population, 2020, m", 
+                        title.position = "top"),
+      breaks=c(1000000, 10000000, 20000000),
+      labels=c("1", "10", "20"),
+      range=c(0.04, 6))
 p2
 ```
-### Theme
+#### Theme
 
 Despite there being a special 'The Economist' theme, a completely empty theme (without the default background and axis elements) is what we want and hence we use `theme_void()`. I first specify the font most closely resembling the one used in the original map. Concerning the title and subtitle, we specify their size, as well as their vertical and horizontal justification. Also using the helping function `element_text()`, we instruct that the title be bold. We then set the position, direction and justification of the legend so that it is horizontal and gets centered to the north of China (approximately where Mongolia would be). We then specify that both legends be left-justified and set the font size for both the title and the text inside the legend. Finally, we set customized margins around the legend area and set the key width to 9mm, the key height to 3mm and the spacing between keys in the size legend to 0.1mm.
 
@@ -139,7 +155,7 @@ p3 <- p2 +
         plot.title=element_text(face="bold", size=22, vjust=-8, hjust=0.05), 
         plot.subtitle=element_text(size=18, vjust=-10, hjust=0.058),
         plot.caption=element_text(color = "gray", size = 17, hjust = 0.05),
-        legend.position=c(0.76, 0.96),
+        legend.position=c(0.73, 0.96),
         legend.direction="horizontal",
         legend.justification=c("right", "top"),
         legend.box.just="left",
@@ -152,45 +168,63 @@ p3 <- p2 +
 p3
 ```
 
-### Annotations
+#### Annotations
 
 
 The last step to replicate the original map is the annotations (for which I will use the `annotate()` function). While it may appear to be a caption, the text "1=best" is actually inside the plot and hence is introduced as an annotation. For this and the rest of annotations, I specify the type ("text"), set the coordinates (x, y), the label, the size and the font (as well as the vertical and horizontal justification for some). 
 
-For the textbox in the lower left corner in the original graph, I created two separate annotations for the title and the names of the five cities so as to be able to set the title in bold and with a different color.
+For the textbox in the lower left corner in the original graph, I created separate annotations for the title in order to be able to set it in bold and with a different color. Further, I separated each of the five cities into different annotations because grouping them together under the same one led to there being too large of a vertical space between them.
 
-For the individual annotations of the eight highest ranked cities on their locations, I simply used the coordinates for each city and adjusted them to be able to see which point corresponds to each label.
+For the individual annotations of the eight highest ranked cities on their locations, I simply used the coordinates for each city and adjusted them to be able to see which point corresponds to each label. I also added separate annotations with the lines for those cities that were clustered together. These lines make identifying which label corresponds to each point easier when cities are clustered together, as in the case of Dongguan, Guangzhou and Shenzhen.
 
 ```{r}
 p4 <- p3 + 
-  annotate("text", x=67, y=51, label="1=best", size=6, family="IBM Plex Sans") +
-  annotate("text", x=65, y=30, label= "Highest ranked", size=5, hjust=0, vjust=0, angle=0,
-           fontface = "bold", family = "IBM Plex Sans", color="blue4") +
-  annotate("text", x=65, y=28, size=5, hjust=0, vjust=0, label= "1  Hangzhou", family="IBM Plex Sans") +
-  annotate("text", x=65, y=26, size=5, hjust=0, vjust=0, label= "2  Shenzhen", family="IBM Plex Sans") +
-  annotate("text", x=65, y=24, size=5, hjust=0, vjust=0, label= "3  Shanghai", family="IBM Plex Sans") +
-  annotate("text", x=65, y=22, size=5, hjust=0, vjust=0, label= "4  Suzhou", family="IBM Plex Sans") +
-  annotate("text", x=65, y=20, size=5, hjust=0, vjust=0, label= "5  Guangzhou", family="IBM Plex Sans") +
-  annotate("text", x=122, y=26, size=6, hjust=0, vjust=0, 
-           label="Hangzhou", family="IBM Plex Sans") +
-  annotate("text", x=116, y=21, size=6, hjust=0, vjust=0, 
-           label="Shenzhen", family="IBM Plex Sans") +
-  annotate("text", x=122, y=33, size=6, hjust=0, vjust=0, 
-           label="Shanghai", family="IBM Plex Sans") +
-  annotate("text", x=114, y=29, size=6, hjust=0, vjust=0, 
-           label="Suzhou", family="IBM Plex Sans") +
-  annotate("text", x=102, y=23, size=6, hjust=0, vjust=0, 
-           label="Guangzhou", family="IBM Plex Sans") +
-  annotate("text", x=116, y=42, size=6, hjust=0, vjust=0, 
-           label="Beijing", family="IBM Plex Sans") +
-  annotate("text", x=123, y=29, size=6, hjust=0, vjust=0, 
-           label="Jiaxing", family="IBM Plex Sans") +
-  annotate("text", x=110, y=26, size=6, hjust=0, vjust=0, 
-           label="Dongguan", family="IBM Plex Sans") 
+  annotate("text", x=67, y=51, label="1=best", 
+           size=6, family="IBM Plex Sans") +
+  annotate("text", x=65, y=30, label="Highest ranked", 
+           size=5, family="IBM Plex Sans", hjust=0, vjust=0, angle=0,
+           fontface="bold", color="blue4") +
+  annotate("text", x=65, y=28, label="1  Hangzhou",
+           size=5, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=65, y=26, label="2  Shenzhen",
+           size=5, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=65, y=24, label="3  Shanghai",
+           size=5, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=65, y=22, label="4  Suzhou", 
+           size=5, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=65, y=20, label="5  Guangzhou",
+           size=5, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=122, y=26, label="Hangzhou",
+           size=6, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=116, y=21, label="Shenzhen",
+           size=6, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=122, y=33, label="Shanghai",
+           size=6, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=114, y=29, label="Suzhou",
+           size=6, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=102, y=23, label="Guangzhou",
+           size=6, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=116, y=41,label="Beijing", 
+           size=6, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=123, y=29, label="Jiaxing", 
+           size=6, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=110, y=26, label="Dongguan",
+           size=6, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("segment", x = 113, y = 25.5, 
+           xend = 113, yend = 24) +
+  annotate("segment", x = 110, y = 23, 
+           xend = 112.5, yend = 23) +
+  annotate("segment", x = 117, y = 30, 
+           xend = 120, yend = 31.5) +
+  annotate("segment", x = 123, y = 29, 
+           xend = 121, yend = 31) +
+  annotate("segment", x = 122, y = 27, 
+           xend = 120, yend = 30)
+
 p4
 ```
 
-# Evaluation and potential enhancements
+## Evaluation and potential enhancements
 
 Overall, this map is an effective visualization. The title and subtitle are concise and informative of the purpose and object of the map, i.e. showing how, because of urbanization, cities of varying populations on the coast of China have different levels of growth potential as measured by a comprehensive rank score. The underlying map, which does not encode any information, does not distract from the information being shown as it is given a light color. Moreover, the legends are clear. This is especially important in the case of the size legend, which could be problematic since people perceive areas rather than radii as visual features in circles. In this case, the area of the circle seems to be proportional to population and so it correctly provides a reference point for readers to estimate the population of individual cities. Finally, the annotations help readers focus on a small number of cities (eight for on-the-map annotations and five for the annotation on the bottom left corner), which facilitates the understanding of which cities have highest growth potential as well as of their characteristics (namely population and location).
 
@@ -209,24 +243,43 @@ xlim <- c(100, 135)
 ylim <- c(20, 50)
 
 p <- ggplot() +
-  geom_polygon(data=China, aes(x=Longitude, y=Latitude, group=group), fill="cornsilk3", alpha=0.3) +       geom_point(data=fulloutputclean, aes(x=Longitude, y=Latitude, size=Population, fill=Ranking),
-              shape=21, color="black") +                               
+  geom_polygon(data=China, 
+               aes(x=Longitude, y=Latitude, group=group),
+               fill="cornsilk3",
+               alpha=0.3) +        
+  geom_point(data=fulloutputclean,
+             aes(x=Longitude, y=Latitude, size=Population, fill=Ranking),
+             shape=21, color="black") +                               
   coord_cartesian(xlim=xlim, ylim=ylim, expand=FALSE) +
-  labs(title="March of the cities",                                                                              subtitle="China, emerging city ranking, 2022") +
-  scale_fill_stepsn(guide=guide_colorsteps(title="Rank", title.position="top", ticks = TRUE,
-                                           show.limits=TRUE, ticks.colour= "black",
-                                           ticks.linewidth = 1, draw.llim = TRUE,
-                                           draw.ulim = TRUE), 
-                    colors=c("#00008b", "#4169e1", "#6495ed", "#87cefa", "#add8e6", "#e0ffff"),
-                    breaks=c(1, 20, 40, 60, 80, 100, 106), space="Lab") +
-  scale_size(guide=guide_legend(title="Population, 2020, m", title.position="top"), 
-             breaks=c(1000000, 10000000, 20000000), 
-             labels=c("1", "10", "20"),
-             range=c(0.04, 6)) +
+  labs(title="March of the cities",                                                                              subtitle="China, emerging city ranking, 2022",
+       caption="Source: EIU") +
+  scale_fill_stepsn(
+     guide=guide_colorsteps(title="Rank",
+                            title.position="top",
+                            ticks = TRUE,
+                            show.limits=TRUE,
+                            ticks.colour= "black",
+                            ticks.linewidth = 1,
+                            draw.llim = TRUE,
+                            draw.ulim = TRUE), 
+       colors=c("#00008b", "#4169e1", "#6495ed", "#87cefa", "#add8e6", "#e0ffff"),
+       breaks=c(1, 20, 40, 60, 80, 100, 106),
+     space="Lab") +
+  scale_size(
+     guide=guide_legend(title="Population, 2020, m",
+                        title.position="top"), 
+     breaks=c(1000000, 10000000, 20000000), 
+     labels=c("1", "10", "20"),
+     range=c(0.04, 6)) +
   theme_void() +
   theme(text=element_text(family ="IBM Plex Sans"),
-        plot.title=element_text(face="bold", size=26, vjust = -14, hjust=0.025),                                  plot.subtitle=element_text(size=20, vjust = -20, hjust=0.03),
-        legend.position=c(0.9, 1.01),
+        plot.title=element_text(face="bold", size=24, 
+                                vjust = -14, hjust=0.025),                                    
+        plot.subtitle=element_text(size=18, 
+                                   vjust = -18, hjust=0.03),
+        plot.caption=element_text(color = "gray", size = 17, 
+                                  hjust = 0.05),
+        legend.position=c(0.97, 1.01),
         legend.direction="horizontal",
         legend.justification=c("right", "top"),
         legend.box.just="left",
@@ -238,22 +291,24 @@ p <- ggplot() +
         legend.title=element_text(face="bold", size=16),
         legend.title.align=0,
         legend.text=element_text(size=16)) +
-  annotate("text", x=101.7, y=44, label="1=best", size=6, family="IBM Plex Sans") +
-  annotate("text", x=121, y=29, size=6, hjust=0, vjust=0, 
-           label= "(1) Hangzhou", family="IBM Plex Sans") +
-  annotate("text", x=115, y=22, size=6, hjust=0, vjust=0, 
-           label= "(2) Shenzhen", family="IBM Plex Sans") +
-  annotate("text", x=122, y=32, size=6, hjust=0, vjust=0, 
-           label= "(3) Shanghai", family="IBM Plex Sans") +
-  annotate("text", x=116, y=30, size=6, hjust=0, vjust=0, 
-           label= "(4) Suzhou", family="IBM Plex Sans") +
-  annotate("text", x=111, y=24, size=6, hjust=0, vjust=0, 
-           label= "(5) Guangzhou", family="IBM Plex Sans") +
+  annotate("text", x=101.7, y=44, label="1=best",
+           size=5, family="IBM Plex Sans") +
+  annotate("text", x=121, y=29, label= "(1) Hangzhou", 
+           size=6, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=115, y=22, label= "(2) Shenzhen", 
+           size=6, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=122, y=32, label= "(3) Shanghai",
+           size=6, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=116, y=30, label= "(4) Suzhou", 
+           size=6, hjust=0, vjust=0, family="IBM Plex Sans") +
+  annotate("text", x=111, y=24, label= "(5) Guangzhou", 
+           size=6, hjust=0, vjust=0, family="IBM Plex Sans") +
   geom_vline(xintercept=112, linetype="dashed") 
 
 p
 ```
-# Alternative visualization
+
+## Alternative visualization
 
 The final section of this post proposes an alternative visualization to represent the relationship between the population, location and growth potential of cities in China. One possibility is the scatterplot shown below. We plot the ranking on the x-axis and population on the y-axis (this time, by using the `scale_y_continuous()` function, we change the default scientific notation so that the axis itself shows 'M' to represent 'million'). We also use the `geom_point()`function. We maintain the title, subtitle and main element themes from the original map.
 
@@ -262,13 +317,14 @@ The final section of this post proposes an alternative visualization to represen
 p <- ggplot(fulloutputclean) +
   aes(x=Ranking, y=Population) +
   geom_point() +
-  labs(title="March of the cities",                                                                             subtitle="China, emerging city ranking, 2022",
+  labs(title="March of the cities",                                                                              subtitle="China, emerging city ranking, 2022",
        caption="Coastal cities have highest growth potential",
        x="Rank",
        y="Population") +
   scale_y_continuous(labels=scales::label_number_si()) +
+  theme_light() +
   theme(text=element_text(family="IBM Plex Sans"),
-        plot.title=element_text(face="bold", size=26),                                                           plot.subtitle=element_text(size=20),
+        plot.title=element_text(face="bold", size=26),                                                            plot.subtitle=element_text(size=20),
         plot.caption=element_text(size=20, hjust=0)) 
 p
 ```
@@ -279,9 +335,12 @@ However, we still need to include information about the coordinates of cities. W
 annotation <- dplyr::filter(fulloutputclean, Longitude>112)
 p <- p + 
     geom_point(data=annotation, color="#6495ED") +
-    geom_rect(aes(xmin=79, xmax=120, ymin=14300000, ymax=15900000), fill="white", color = "#6495ED") +
-    geom_text(aes(x=80, y=15000000, label="Cities to the east of meridian 112°"), size=6,
-              hjust=0, vjust=0, color = "#6495ED")
+    geom_rect(aes(xmin=79, xmax=122, ymin=15000000, ymax=16600000),
+              fill="white",
+              color = "#6495ED") +
+    geom_text(aes(x=80, y=15800000, 
+                  label="Cities to the east of 112th meridian"),
+              size=6, hjust=0, vjust=0, color = "#6495ED")
 p
 ```
 
@@ -292,7 +351,10 @@ Therefore, as the caption suggests, it seems that location (whose effect is hard
 ```{r}
 annotation2 <- dplyr::filter(fulloutputclean, Ranking<=5)
 p <- p +
-  geom_text(aes(label=City), annotation2, hjust=-0.2, nudge_x=0.1, size=6, family = "IBM Plex Sans",
+  geom_text(aes(label=City),
+            annotation2,
+            hjust=-0.2, nudge_x=0.1, size=6,
+            family = "IBM Plex Sans",
             fontface="bold") 
 p
 ```
