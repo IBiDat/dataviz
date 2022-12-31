@@ -30,6 +30,11 @@ library(dplyr)
 library(ggplot2)
 library(showtext)
 library(maps)
+library(maptools)
+library(rgdal)  
+library(svglite)
+library(plyr)
+
 sysfonts::font_add_google("IBM Plex Sans", family="IBM Plex Sans")
 showtext::showtext_auto()
 ```
@@ -59,8 +64,8 @@ In order to obtain data on the "longitude" and "latitude" of each city, we used 
 ```{r}
 data <- world.cities %>%
   filter(country.etc=="China") %>%
-  select(name, lat, long) %>%
-  rename("City"="name", 
+  dplyr::select(name, lat, long) %>%
+  dplyr::rename("City"="name", 
          "Latitude"="lat", 
          "Longitude"="long") 
 ```
@@ -80,9 +85,14 @@ head(fulloutputclean, 5)
 The final step in data processing was obtaining the data to plot the underlying map of China. We used the [`map_data` function](https://ggplot2.tidyverse.org/reference/map_data.html) and again, filtered, selected and renamed variables accordingly.
 
 ```{r}
-China <- map_data("world") %>% 
-  filter(region=="China") %>%
-  rename("Latitude"="lat", 
+china <- readOGR(dsn=("./china_shapefile/"), layer="bou2_4p")
+
+china@data$id<-rownames(china@data)
+china.points<-fortify(china, region="id")
+china.df<-join(china.points, china@data, by="id")
+
+china<-subset(china.df, AREA>0.005) %>% 
+  dplyr::rename("Latitude"="lat", 
          "Longitude"="long")
 ```
 
@@ -92,27 +102,32 @@ China <- map_data("world") %>%
 
 Using the data loaded in 'China' in the last step, we use `geom_polygon()` to draw the underlying map. The `aes` argument maps the longitude and latitude columns to the x and y coordinates, respectively. This function is also used to specify the `fill` and the transparency (`alpha`) level of the map. 
 
-Then we add the data points at the specific locations of the 104 cities (defined by their latitude and longitude) with `geom_point()`. Thus, on top of the map, we are plotting a scatterplot where each point represents one city. The `size` of the point (more specifically, its area) represents its population and its `fill` depicts the relative position of a given city vis-à-vis other cities in the EIU ranking. We then set a black line around the point (`shape=21`) while specifying the `color` and thickness (`stroke`) of the border. 
+We then use `geom_path` to set the line demarcating the limits of the different provinces. We then set its `color` and `size`. Further, `coord_map()` sets the coordinate system for the map by projecting the defined portion of the Earth onto a flat 2D plane. 
 
-Further, `coord_map()` sets the coordinate system for the map by projecting the defined portion of the Earth onto a flat 2D plane. 
+```{r, out.width="100%"}
+p <- ggplot(data=china,
+            aes(x=Longitude, y=Latitude, group=group)) +
+  geom_polygon(fill="cornsilk3", alpha=0.3) +
+  geom_path(color="white", size=0.2) +
+  coord_map() 
+p
+```
+
+Then we add the data points at the specific locations of the 104 cities (defined by their latitude and longitude) with `geom_point()`. Thus, on top of the map, we are plotting a scatterplot where each point represents one city. The `size` of the point (more specifically, its area) represents its population and its `fill` depicts the relative position of a given city vis-à-vis other cities in the EIU ranking. We then set a black line around the point (`shape=21`) while specifying the `color` and thickness (`stroke`) of the border. 
 
 A title, subtitle and caption are added to replicate the original chart using the `labs` function. 
 
 ```{r}
-p <- ggplot() +
-  geom_polygon(data=China, 
-               aes(x=Longitude, y=Latitude, group=group), 
-               fill="cornsilk3", alpha=0.3) +        
+p2 <- p + 
+  labs(title="March of the cities",                                                                   
+       subtitle="China, emerging city ranking, 2022",
+       caption="Source: EIU") +
   geom_point(data=fulloutputclean, 
              aes(x=Longitude, y=Latitude, size=Population, fill=Ranking), 
              shape=21,
              color="black",
-             stroke=0.03) +                               
-  coord_map() +
-  labs(title="March of the cities",                                                                   
-       subtitle="China, emerging city ranking, 2022",
-       caption="Source: EIU")
-p
+             stroke=0.03) 
+p2
 ```
 #### Scales
 
@@ -123,7 +138,7 @@ For the color legend (or rather, *fill* legend, given our points have borders de
 For the size legend, we do the same as with the fill legend regarding the title and the breaks, although this time we are specifying 3 breaks. In this case we are also setting the `labels` for those breaks. This is because, by default, R uses scientific notation for population but the legend title already states that values are provided in millions. Finally, we set the `range` of the size of the bubbles from 0.04 to 6 mm. 
 
 ```{r}
-p2 <- p + 
+p3 <- p2 + 
   scale_fill_stepsn(
       guide=guide_colorsteps(title="Rank",
                              title.position="top",
@@ -142,14 +157,14 @@ p2 <- p +
       breaks=c(1000000, 10000000, 20000000),
       labels=c("1", "10", "20"),
       range=c(0.04, 6))
-p2
+p3
 ```
 #### Theme
 
 Despite there being a special 'The Economist' theme, a completely empty theme (without the default background and axis elements) is what we want. Hence we use `theme_void()`. Under the `theme()` function, we first specify the (previously loaded) font most closely resembling the one used in the original map. Concerning title, subtitle and caption, we specify their `size`, as well as their vertical (`vjust`) and horizontal justification (`hjust`). Also using the helping function `element_text()`, we instruct that the title be bold and the caption have the `color` "gray". We then set the position, direction and justification of the legend so that it is horizontal and gets centered to the north of China (approximately where Mongolia would be). We then specify that both legends be left-justified and set the font `size` for both the title and the text inside the legend (as well as the `face` in the case of the legend title). Finally, we set customized margins around the legend area and set the key width to 8mm, the key height to 2.5mm and the spacing between keys in the size legend to 0.1mm.
 
 ```{r}
-p3 <- p2 +
+p4 <- p3 +
   theme_void() +
   theme(text=element_text(family="IBM Plex Sans"),
         plot.title=element_text(face="bold", size=22, vjust=-8, hjust=0.05), 
@@ -165,7 +180,7 @@ p3 <- p2 +
         legend.key.width=unit(8, "mm"),
         legend.key.height=unit(2.5, "mm"),
         legend.spacing.x=unit(0.1, 'mm'))
-p3
+p4
 ```
 
 #### Annotations
@@ -177,7 +192,7 @@ For the textbox in the lower left corner in the original graph, we create a sepa
 For the individual annotations of the eight highest ranked cities on their locations on the map, we simply use the coordinates for each city and adjust them to be able to see which point corresponds to each label. I also added separate annotations with the lines for five cities: Dongguan, Guangzhou, Suzhou, Jiaxing and Hangzhou (`type`= "segment"). These lines make identifying which label corresponds to each point easier when cities are clustered together.
 
 ```{r}
-p4 <- p3 + 
+p5 <- p4 + 
   annotate("text", x=67, y=51.5, label="1=best", 
            size=5.5, family="IBM Plex Sans") +
   annotate("text", x=65, y=30, label="Highest ranked", 
@@ -219,7 +234,7 @@ p4 <- p3 +
            xend=121, yend=31) +
   annotate("segment", x=122, y=27, 
            xend=120, yend=30)
-p4
+p5
 ```
 
 ## Evaluation and potential enhancements
