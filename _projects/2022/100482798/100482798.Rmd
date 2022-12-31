@@ -13,8 +13,122 @@ output:
 
 
 ```{r}
+library (distill)
+library (tidyverse)
+library (sf)
+library(ggplot2)
 
+chinacsv <- read_delim ("dissent.csv", delim=",", skip=0) 
+
+chinadissent <- chinacsv %>% 
+                  mutate (
+                    code = case_when(
+                      province %in%  c("Anhui") ~ "0" ,
+                      province %in%  c("Fujian") ~ "1" ,
+                      province %in%  c("Gansu") ~ "2" ,
+                      province %in%  c("Guangdong") ~ "3" ,
+                      province %in%  c("Guangxi") ~ "4" ,
+                      province %in%  c("Guizhou") ~ "5" ,
+                      province %in%  c("Hainan") ~ "6" ,
+                      province %in%  c("Hebei") ~ "7" ,
+                      province %in%  c("Heilongjiang") ~ "8" ,
+                      province %in%  c("Henan") ~ "9" ,
+                      province %in%  c("Hubei") ~ "10" ,
+                      province %in%  c("Hunan") ~ "11" ,
+                      province %in%  c("Inner Mongolia") ~ "12" ,
+                      province %in%  c("Jiangsu") ~ "13" ,
+                      province %in%  c("Jiangxi") ~ "14" ,
+                      province %in%  c("Jilin") ~ "15" ,
+                      province %in%  c("Liaoning") ~ "16" ,
+                      province %in%  c("Shaanxi") ~ "17",
+                      province %in%  c("Shandong") ~ "18",
+                      province %in%  c("Shanxi") ~ "19",
+                      province %in%  c("Sichuan") ~ "20",
+                      province %in%  c("Tibet") ~ "21",
+                      province %in%  c("Yunnan") ~ "22",
+                      province %in%  c("Zhejiang") ~ "23",
+                      province %in% c("Qinghai") ~ "24",
+                      province %in% c("Xinjiang") ~ "25",
+                      province %in% c("Ningxia") ~ "26"
+                      )
+                  )  %>% 
+                  select(code) %>% 
+                  mutate(across(c(code), as.numeric)) %>% 
+                  count(code) %>% 
+                  drop_na() 
+
+china_map <- st_read("province.shp")
+
+china_map1 <- china_map  %>% mutate (
+                  code= case_when( 
+                            NAME_PINGY %in% c("Anhui Sheng") ~ "0",
+                            NAME_PINGY %in% c("Fujian Sheng") ~ "1",
+                            NAME_PINGY %in% c("Gansu Sheng") ~ "2",
+                            NAME_PINGY %in% c("Guangdong Sheng") ~ "3",
+                            NAME_PINGY %in% c("Guangxizhuangzu Zizhiqu") ~ "4",
+                            NAME_PINGY %in% c("Guizhou Sheng") ~ "5",
+                            NAME_PINGY %in% c("Hainan Sheng") ~ "6",
+                            NAME_PINGY %in% c("Hebei Sheng") ~ "7",
+                            NAME_PINGY %in% c("Heilongjiang Sheng") ~ "8",
+                            NAME_PINGY %in% c("Henan Sheng") ~ "9",
+                            NAME_PINGY %in% c("Hubei Sheng") ~ "10",
+                            NAME_PINGY %in% c("Hunan Sheng") ~ "11",
+                            NAME_PINGY %in% c("Neimenggu Zizhiqu") ~ "12",
+                            NAME_PINGY %in% c("Jiangsu Sheng") ~ "13",
+                            NAME_PINGY %in% c("Jiangxi Sheng") ~ "14",
+                            NAME_PINGY %in% c("Jilin Sheng") ~ "15",
+                            NAME_PINGY %in% c("Liaoning Sheng") ~ "16",
+                            NAME_PINGY %in% c("Shaanxi Sheng") ~ "17",
+                            NAME_PINGY %in% c("Shandong Sheng") ~ "18",
+                            NAME_PINGY %in% c("Shanxi Sheng") ~ "19",
+                            NAME_PINGY %in% c("Sichuan Sheng") ~ "20",
+                            NAME_PINGY %in% c("Xizang Zizhiqu") ~ "21",
+                            NAME_PINGY %in% c("Yunnan Sheng") ~ "22",
+                            NAME_PINGY %in% c("Zhejiang Sheng") ~ "23",
+                            NAME_PINGY %in% c("Xinjiangweiwu'erzu Zizhiqu") ~ "25",
+                            NAME_PINGY %in% c("Qinghai Sheng") ~ "24",
+                            NAME_PINGY %in% c("Ningxiahuizu Zizhiqu") ~ "26"
+                       ))   %>%
+                      mutate(across(c(code), as.numeric)) %>% 
+                            filter(NAME_PINGY != "Taiwan Sheng")
+                            
+
+join_map_data <-  china_map1 %>% left_join(chinadissent, by="code") 
+
+final_map <- ggplot(join_map_data) +
+  geom_sf(aes(fill=n), color="white",lwd=0.2)  + 
+  coord_sf(ylim=c(-2.1e+06, 2.1e+06))+
+labs(
+    fill=quote(bold("By province")),
+    title = quote(bold("Sick and tired of being sick and tired")),
+    subtitle = ("China, number of protests, May 18th-Oct 18th 2022 \n"),
+    ) +
+  theme(plot.title = element_text(size = rel(0.8)),
+        plot.subtitle = element_text(size = rel(0.77)),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        legend.margin=margin(0),
+        legend.direction = "horizontal",
+        legend.text = element_text(size=7.7),
+        legend.key.height = unit(0.2, 'cm'),
+        plot.title.position = "plot",
+        legend.title = element_text(size=7.7),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        legend.position = c(0.125,0.97)) +
+  guides(fill = guide_colorbar(title.position = "top"))+
+  scale_fill_binned(breaks = c(10, 20, 30, 40, 50),
+                    low = "#C7E6FD", high = "#15346F", 
+                    na.value="#d6d6d6",
+                    limits=c(0, 60)
+            )
+
+
+
+final_map
 ```
+
+
 
 
 
