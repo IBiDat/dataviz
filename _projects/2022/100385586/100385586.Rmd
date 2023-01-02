@@ -1,21 +1,172 @@
 ---
 title: "Final project Alejandro Aísa"
-description: |
-  An overview of the winners of the nobel prize in literature.
+author: "Alejandro Aísa Martín"
 categories: 2022
-author: Alejandro Aísa Martín 
+description: "Restrictions on religion among the 25 most populous countries"
 date: "`r Sys.Date()`"
 output:
-  distill::distill_article:
-    self_contained: false
-    toc: true 
+  html_document: default
+  pdf_document: default
+
 ---
 
+```{r setup, fig.showtext=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries 
+
+```{r include=FALSE}
+library(tidyverse)
+library(gganimate)
+library(gifski)
+library(plotly)
+library(ggtext)
+library(RColorBrewer)
+library(htmlwidgets)
+library(ggtext)
+library(showtext)
+
+```
+
+## Prerequisites for the graph
+
+### Adapting the database. 
 
 
+```{r}
+religion.df <- read_delim("rel.csv", show_col_types = FALSE)
 
-Distill is a publication format for scientific and technical writing, native to the web.
+religion <- religion.df %>% transmute(
+  year = as.integer(`Year `), 
+  GRI = GRI, 
+  SHI = SHI,
+  Country = Country, 
+  Pop = `Population Size `) %>% 
+  mutate(
+  pos = case_when(
+    (GRI < 2.3 & SHI < 1.4) ~ 1, 
+    ((GRI >= 2.3 & GRI < 4.5) & SHI < 1.4) ~ 2, 
+    ((GRI >= 4.5 & GRI < 6.6) & SHI < 1.4) ~ 3, 
+    ((GRI >= 6.6 & GRI < 10)  & SHI < 1.4) ~ 4,
+    ((GRI >= 0 & GRI < 2.3)   & SHI < 3.6) ~ 2,
+    ((GRI >= 2.3 & GRI < 4.5) & SHI < 3.6) ~ 3, 
+    ((GRI >= 4.5 & GRI < 6.6) & SHI < 3.6) ~ 4, 
+    ((GRI >= 6.6 & GRI < 10)  & SHI < 3.6) ~ 5, 
+    ((GRI >= 0 & GRI < 2.3)   & SHI < 7.2) ~ 3,
+    ((GRI >= 2.3 & GRI < 4.5) & SHI < 7.2) ~ 4, 
+    ((GRI >= 4.5 & GRI < 6.6) & SHI < 7.2) ~ 5, 
+    ((GRI >= 6.6 & GRI < 10)  & SHI < 7.2) ~ 6,
+    ((GRI >= 0 & GRI < 2.3)   & SHI <= 10) ~ 4,
+    ((GRI >= 2.3 & GRI < 4.5) & SHI <= 10) ~ 5, 
+    ((GRI >= 4.5 & GRI < 6.6) & SHI <= 10) ~ 6, 
+    ((GRI >= 6.6 & GRI < 10)  & SHI <= 10) ~ 7)) %>% 
+  mutate(
+    pos = as.factor(pos), 
+    Country = as.factor(Country)
+  ) %>% group_by(Country)
+```
 
-Learn more about using Distill at <https://rstudio.github.io/distill>.
+### Creating some elements that will be later add to the graph
+
+```{r}
+breaks_x <- c(1.4, 4.15, 5.8, 9.6)
+breaks_y <- c(1.7, 5, 6.5, 9.5)
+
+
+labels_x <- c("Low", "Moderate", "High", "Very High")
+labels_y <- c("Low", "Moderate", "High", "Very High")
+
+title <- paste ("Restrictions on religion among the 25 most populous countries,",  
+                "2007-2020", sep = "\n")
+
+subtitle  <- paste ( 
+"Among the 25 most populous countries, India, Egypt, Pakistan, Indonesia and Nigeria had the highest levels of overall restrictions on", 
+"religion in 2020, while Japan, the United States, Italy, the Democratic Republic of the Congo and Tanzania had the fewest restrictions.", 
+"Click play to see how restrictions have changed in each country since 2007. Read the full report", 
+"Year: {closest_state}", 
+sep = "\n")
+
+caption <- "Note, Population data comes from United Nations 2020 population estimates."
+
+pal <-c("#f7f3d7","#f6e9c8","#f4dbbd","#f5c6ac","#f2b0a2","#e89389","#d48379")
+
+sysfonts::font_add_google("Playfair Display", family = "playfair display")
+showtext::showtext_auto()  
+
+```
+
+
+## Graph construction 
+
+```{r}
+p <- ggplot(religion) + 
+  aes(GRI, SHI) + 
+  geom_point(aes(size = Pop, colour = pos, group = Country)) + 
+  scale_size_area(max_size = 20)+
+  geom_text(aes(label=Country))+
+  scale_color_manual(values = pal, l = 20)+
+  scale_x_continuous(
+    limits =  c(0, 10), 
+    expand = c(0, 0), 
+    breaks = breaks_x, 
+    labels = labels_x)+ 
+  scale_y_continuous(
+    limits = c(0, 10), 
+    expand = c(0, 0), 
+    breaks = breaks_y, 
+    labels = labels_y)+
+  labs(
+    title = title, 
+    subtitle = subtitle,
+    caption = caption, 
+    x = "Government Restrictions Index (GRI)", 
+    y = "Social Hostilities Index (SHI)") +
+  theme_classic()+  
+  theme(
+    plot.title = element_text(face = "bold", family = "playfair display"),
+    plot.subtitle = element_text(face = "italic", family = "playfair display"),
+    axis.title.x = element_text(face = "bold"), 
+    axis.title.y = element_text(face = "bold", vjust = 1, hjust = 0.45), 
+    axis.text.x = element_text(hjust = 1.8), 
+    axis.text.y = element_text(angle = 90, hjust = 1.9), 
+    axis.line.x = element_blank(), 
+    axis.line.y = element_blank(),
+    axis.ticks.x = element_blank(), 
+    axis.ticks.y = element_blank())+
+  guides(
+    size = "none", 
+    alpha = "none", 
+    colour = "none") + 
+  geom_vline(xintercept = c(2.3, 4.5, 6.6), alpha = 0.2)+
+  geom_hline(yintercept = c(1.4, 3.5, 7.2, 10), alpha = 0.2)+
+  geom_hline(yintercept = 0, alpha = 0.35)+
+  aes(frame = year)
+
+
+```
+
+
+## The Graph(s)
+
+### Animation added with GGanimate.
+
+The problem: we cannot make it interactive. 
+
+```{r, fig.align='center', fig.height = 5, fig.width = 9.5}
+p + transition_states(year) 
+```
+
+
+### Interactive options with plotly. 
+
+```{r plotly, eval=FALSE, fig.align='center', include=FALSE}
+
+fig <- ggplotly(p) %>% 
+config(displayModeBar = FALSE) %>% 
+animation_slider(currentvalue = {"year"}) 
+fig
+
+```
 
 
