@@ -12,4 +12,184 @@ output:
     toc: true
 ---
 
+# Loading libraries and type of letter
+
+```{r}
+
+library(tidyverse)
+library(ggplot2)
+library(ggiraph)
+library(showtext)
+library(ggfittext)
+
+font_add_google("Encode Sans", family = "encodesans")
+showtext_auto()
+
+```
+
+# Getting the data 
+
+### The data is not openly available, we should consult the font mentioned in the plot to find out the source: Traffic General Direction. In this case, data needs to be transformed into percentages and organized in a dataframe manually. This data is about 10 years.
+
+```{r}
+
+data <- data.frame(Año = c(2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020),
+                   "0-4 años" = c("22%", "18%", "16%", "15%", "15%", "16%", "18%", "20%", "21%", "20%"),
+                   "5-9 años" = c("31%", "32%", "31%", "28%", "25%", "21%", "16%", "14%", "14%", "14%"),
+                   "10-14 años" = c("24%", "26%", "27%", "27%", "27%", "28%", "28%", "27%", "24%", "22%"),
+                   "Más de 15 años" = c("23%", "25%", "26%", "29%", "33%", "37%", "37%", "39%", "41%", "44%"),
+                   check.names = FALSE)
+
+mygraph <- data %>% pivot_longer(-"Año", 
+                                 names_to = "Antigüedad",
+                                 values_to = "Valor") 
+
+mygraph <- mygraph %>%  mutate(Año = as.factor(Año),
+                               Antigüedad = as.factor(Antigüedad),
+                               Valor = as.numeric(str_sub(mygraph$Valor, 1, 2)))
+
+mygraph <- mygraph %>% mutate(Año = fct_reorder(Año, desc(Año)),
+                              Antigüedad = fct_relevel(Antigüedad, "Más de 15 años", "10-14 años", "5-9 años", "0-4 años"))
+
+```
+
+# Building the chart
+
+## Coordinates and axes
+
+### Here we set x and y variables. We introduce "Antigüedad" to differentiate segments in the bar according to age of the vehicles.
+
+```{r}
+
+p <- mygraph %>% ggplot(aes(x=Año, y=Valor, fill=Antigüedad)) +
+        geom_bar(stat="identity")
+
+p
+
+```
+
+### Then, we assign colour to each level of "Antigüedad" and flip coordinates.
+
+```{r}
+
+p <- p + scale_fill_manual(values=c(rgb(0.43, 0.89, 0.99), rgb(0, 0.66, 0.91), rgb(0.02, 0.4, 0.67),                                         rgb(0, 0.2, 0.53))) + 
+        coord_flip()
+
+p
+
+```
+
+## Labels and theme
+
+### Now, we label the plot, remove both axis labels and background, and organize the legend.
+
+```{r}
+
+p <- p + labs(title = "El parque automovilístico por antigüedad",
+              caption = "Fuente: Dirección General de Tráfico. EL MOTOR") +
+         theme(plot.title = element_text(family = "encodesans", face = "bold"),
+               plot.title.position = "plot",
+               plot.caption = element_text(family = "encodesans", color = "gray", hjust = 1),
+               axis.title.x = element_blank(),
+               axis.text.x = element_blank(),
+               axis.ticks.x = element_blank(),
+               axis.title.y = element_blank(),
+               axis.text.y = element_text(family = "encodesans", size = 12),
+               axis.ticks.y = element_blank(),
+               legend.position = "top",
+               legend.title = element_blank(),
+               legend.justification = c(-0.2,1),
+               legend.text = element_text(family = "encodesans", size = 12),
+               legend.key.size = unit(0.4, "cm"), 
+               panel.grid.major = element_blank(),
+               panel.grid.minor = element_blank(),
+               panel.background = element_blank()
+         ) +
+         scale_x_discrete(expand = c(0,0)) + 
+         scale_y_discrete(expand = c(0,0)) + 
+         guides(fill = guide_legend(reverse=TRUE))
+
+p
+
+```
+
+### Once we have the basic structure of the plot, it is time to introduce labels inside each segment of the bars. This is the most tricky part, as we have to bear in mind several aspects:
+1. To put labels inside each segment of the bars we need to use geom_bar_text() function. It is similar to geom_text() and it is contained in library(ggfittext)
+2. At the time when presenting this work (January 2023) ggfittext package is in  "maturing" lifecycle, this means that some functions are in an experimental phase and may suffer changes and actualizations.
+3. In this particular case, there was not specific documentation for dealing with independent label color changes inside bars. So, what I did was to assign default colors for "Antigüedad" and then change them manually relating "values" with the different levels of "Antigüedad".
+4. geom_bar_text has a contrast option (TRUE or FALSE) which assigns black or white color to the label based on its background. The problem that we had was that R assigned white labels only for the two darker blues in our plot, leaving "10-14 años" with black number labels.  
+
+```{r}
+
+p <- p + geom_bar_text(aes(label = paste0(`Valor`, "%"),
+                           colour = Antigüedad),
+                       position = "stack", 
+                       reflow = TRUE, 
+                       place = "left",
+                       family = "encodesans") + 
+    scale_colour_manual(values = c(`0-4 años` = "White", `5-9 años` = "White", `10-14 años` = "White", `Más de 15 años` = "Black"), guide = "none")
+
+p
+
+```
+
+# Final step: creating an interaction
+
+To make the graph interactive I have used the package ggiraph(). Because it is very recent and there is not much documentation and users' feedback, it has some functions that are difficult to use or are not extended a lot.
+
+The idea that ggiraph proposes is to redefine ggplot functions with the suffix _interactive. At the same time, key data has to be provided inside each function in order to ggiraph make the interaction. With this mechanism ggiraph identifies which parts of the plot have to interact and adds this movement to the plot.
+
+```{r}
+
+interactive <- ggplot(mygraph, aes(Año, Valor, fill = Antigüedad, data_id = Antigüedad)) +
+  geom_bar_interactive(stat = "identity", aes(`data-id`= Antigüedad), extra_interactive_params = "data-id") +
+  scale_fill_manual_interactive(extra_interactive_params = "data-id",
+                                 `data-id`= unique(mygraph$Antigüedad),
+                                 values=c(rgb(0.43, 0.89, 0.99), rgb(0, 0.66, 0.91), rgb(0.02, 0.4, 0.67), rgb(0, 0.2, 0.53)),
+                                 guide = guide_legend_interactive(reverse=TRUE),
+                                 data_id = function(breaks) as.character(breaks)) +
+  coord_flip() + 
+  labs(title = "El parque automovilístico por antigüedad",
+       caption = "Fuente: Dirección General de Tráfico. EL MOTOR") +
+  theme(plot.title = element_text(family = "encodesans", 
+        face = "bold"),
+        plot.title.position = "plot",
+        plot.caption = element_text(family = "encodesans", # no se porque pero se queda en negrita 
+          color = "darkgray",
+          hjust = 1), # posición del pie de foto
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_text(family = "encodesans", size = 12), # cambiar la letra
+        axis.ticks.y = element_blank(),
+        legend.position = "top",
+        legend.title = element_blank(),
+        legend.justification = c(-0.11,1),
+        legend.text = element_text(family = "encodesans", size = 12), # cambiar la letra
+        legend.key.size = unit(0.4, "cm"), # para cambiar el tamaño de los cuadraditos de la leyenda
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank()) +
+  scale_x_discrete(expand = c(0,0)) + 
+  scale_y_discrete(expand = c(0,0)) +
+  guides(guide_legend_interactive(reverse=TRUE)) +
+  geom_bar_text(aes(label = paste0(`Valor`, "%"),
+                    colour = Antigüedad),
+                    position = "stack", 
+                    reflow = TRUE, 
+                    place = "left",
+                    family = "encodesans") + # cambiar tipo de letra
+  scale_colour_manual(values = c(`0-4 años` = "White", `5-9 años` = "White", `10-14 años` = "White", `Más de 15 años` = "Black"), guide = "none")
+
+girafe(ggobj = interactive,
+       width_svg = 10, 
+       height_svg = 6,
+       options = list(
+        opts_hover(css = girafe_css("stroke-width: 1; opacity: 1;")),
+        opts_hover_key(css = girafe_css("stroke-width: 1; opacity: 0.6;")),
+        opts_hover_inv(css = girafe_css("stroke-width: 1; opacity: 0.6;"))
+               ))
+
+```
 
