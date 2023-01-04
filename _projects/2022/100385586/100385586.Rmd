@@ -1,8 +1,10 @@
 ---
-title: "Final project Alejandro Aísa"
-author: "Alejandro Aísa Martín"
-categories: 2022
-description: "Restrictions on religion among the 25 most populous countries"
+title: "Final project Alejandro Aísa" 
+description: | 
+  A replication of a graph from Pew Research Center on the 
+  restrictions on religion among the 25 most populous countries.
+categories: "2022"
+author: Alejandro Aísa 
 date: "`r Sys.Date()`"
 output:
  distill::distill_article:
@@ -11,13 +13,9 @@ output:
 
 ---
 
-```{r setup, fig.showtext=TRUE}
-knitr::opts_chunk$set(include = FALSE)
-```
+## Set up and libraries 
 
-## Libraries 
-
-```{r include=FALSE}
+```{r setup, fig.showtext=TRUE, echo=TRUE, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(gganimate)
 library(gifski)
@@ -34,6 +32,7 @@ library(showtext)
 
 ### Adapting the database. 
 
+First, what we have to do is to load the data. In this case, it has been directly compiled from the Pew Research Center. Some columns are going to be renamed and/or modified to make easier the coding. Also, a new variable is created to give later the colour to the bubbles (geom_point) via the case_when function. 
 
 ```{r}
 religion.df <- read_delim("rel.csv", show_col_types = FALSE)
@@ -64,19 +63,15 @@ religion <- religion.df %>% transmute(
     ((GRI >= 6.6 & GRI < 10)  & SHI <= 10) ~ 7)) %>% 
   mutate(
     pos = as.factor(pos), 
-    Country = as.factor(Country)
-  ) %>% group_by(Country)
+    Country = as.factor(Country))
+  
 ```
 
-### Creating some elements that will be later add to the graph
+### Elements and labels. 
+
+At this stage, some elements of the graph, such as the breaks, titles and subtitles are defined. Again, the main purpose of this is about making the code easier and more understandable. 
 
 ```{r}
-breaks_x <- c(1.2, 4.1, 5.7, 8.9)
-breaks_y <- c(1.3, 4.1, 6, 10)
-
-
-labels_x <- c("Low", "Moderate", "High", "Very High")
-labels_y <- c("Low", "Moderate", "High", "Very High")
 
 title <- paste ("Restrictions on religion among the 25 most populous countries,",  
                 "2007-2020", sep = "\n")
@@ -84,11 +79,25 @@ title <- paste ("Restrictions on religion among the 25 most populous countries,"
 subtitle  <- paste ( 
 "Among the 25 most populous countries, India, Egypt, Pakistan, Indonesia and Nigeria had the highest levels of overall restrictions on", 
 "religion in 2020, while Japan, the United States, Italy, the Democratic Republic of the Congo and Tanzania had the fewest restrictions.", 
-"Click play to see how restrictions have changed in each country since 2007. Read the full report", 
+"Click play to see how restrictions have changed in each country since 2007. Read the full report.", 
 "Year: {closest_state}", 
-sep = "\n")
+sep = "\n") # The phrases have to be written independently and separated with the \n function. 
 
-caption <- "Note, Population data comes from United Nations 2020 population estimates."
+
+X <- "Government Restrictions Index (GRI)"
+Y <- "Social Hostilities Index (SHI)"
+
+
+breaks_x <- c(0.1, 1.1, 3.35, 5.55, 8.3, 10)
+breaks_y <- c(0.1, 1.35, 4.1, 6, 9.9, 10)
+
+labels_x <- c("0", "Low", "Moderate", "High", "Very High", "10")
+labels_y <- c("0", "Low", "Moderate", "High", "Very High", "10")
+
+caption <- paste(
+"Note, Population data comes from United Nations 2020 population estimates.", 
+"Source of the original graph: Pew Research Center, 2022", 
+sep = "\n")
 
 pal <-c("#f7f3d7","#f6e9c8","#f4dbbd","#f5c6ac","#f2b0a2","#e89389","#d48379")
 
@@ -100,14 +109,23 @@ showtext::showtext_auto()
 
 ## Graph construction 
 
+### Technical features of the graph. 
+
+First, we include the aesthetics of the graph; the two variables of the X (GRI) and Y (SHI) axis. The main visual representation is the geom_point, which also have sizes depending on population and colour depending on position. The graph is also limited between 0 and 10 in both axis, under a continuous scale. Next, we have the labs and titles, which were previously defined. 
+
+Next step is providing it with a classic theme to have the axis and guides removed, as only some custom horizontal and vertical lines will be needed. The particular fonts, sizes and possible italics and/or bold for the labs are also specified at this stage. 
+
+Finally, we include an aesthetic that will set up the animated part: the frame according to the year. 
+
+
 ```{r}
 p <- ggplot(religion) + 
   aes(GRI, SHI) + 
-  geom_point(aes(size = Pop, colour = pos, group = Country)) + 
+  geom_point(aes(size = Pop, colour = pos, group = Country)) + # Aesthetics of the graph
   scale_size_area(max_size = 20)+
   geom_text(aes(label=Country), size = 1.6)+
-  scale_color_manual(values = pal, l = 20)+
-  scale_x_continuous(
+  scale_color_manual(values = pal, l = 20)+ # Providing the geom_point with the colour needed
+  scale_x_continuous(   # Specifying the limits for the axis and the locations of the annotations. 
     limits =  c(0, 10), 
     expand = c(0, 0), 
     breaks = breaks_x, 
@@ -117,35 +135,35 @@ p <- ggplot(religion) +
     expand = c(0, 0), 
     breaks = breaks_y, 
     labels = labels_y)+
-  labs(
-    title = title, 
+  labs( # Adding the labs with the text that was already defined.
+    title = title,  
     subtitle = subtitle,
     caption = caption, 
-    x = "Government Restrictions Index (GRI)", 
-    y = "Social Hostilities Index (SHI)") +
+    x = X, 
+    y = Y) +
   theme_classic()+  
-  theme(
+  theme( # Specifying some features of the graph, such as the custom lines or the fonts. 
     plot.title = element_text(face = "bold", 
-                              family = "playfair display", size = 20),
+                              family = "playfair display", size = 21),
     plot.subtitle = element_text(face = "italic", 
-                              family = "playfair display", size = 10),
+                              family = "playfair display", size = 11),
     plot.caption =  element_text(hjust = 0, size = 8), 
     axis.title.x = element_text(face = "bold", size = 8), 
-    axis.title.y = element_text(face = "bold", vjust = 1, hjust = 0.45, size = 8), 
-    axis.text.x = element_text(hjust = 1.8, size = 6.5), 
+    axis.title.y = element_text(face = "bold", hjust = 0.45, size = 8), 
+    axis.text.x = element_text(size = 6.5), 
     axis.text.y = element_text(angle = 90, hjust = 1.9, size = 6.5), 
     axis.line.x = element_blank(), 
     axis.line.y = element_blank(),
     axis.ticks.x = element_blank(), 
-    axis.ticks.y = element_blank())+
-  guides(
+    axis.ticks.y = element_blank())+ 
+  guides(  # Removing all the legends from the graph. 
     size = "none", 
     alpha = "none", 
     colour = "none") + 
-  geom_vline(xintercept = c(2.3, 4.5, 6.6), alpha = 0.2)+
+  geom_vline(xintercept = c(2.3, 4.5, 6.6), alpha = 0.2)+ # Adding the custom lines.  
   geom_hline(yintercept = c(1.4, 3.5, 7.2, 10), alpha = 0.2)+
-  geom_hline(yintercept = 0, alpha = 0.35)+
-  aes(frame = year)
+  geom_hline(yintercept = 0, alpha = 0.3)+
+  aes(frame = year) # Adding the "time faceting". 
 
 ```
 
@@ -153,16 +171,33 @@ p <- ggplot(religion) +
 
 ## The Graph(s)
 
-### Animation added with GGanimate.
+### Features 
 
-The problem: we cannot make it interactive. 
+The graph consist on a basic scatter plot accounting for the relationship between two variables: GRI and SHI. However, more information is included on it. 
+
+On the one hand the size of the geom_points is going to be determined by the population of each country. On the other hand, the colour of the bubble is given by the position in the graph. Vissually, this transmits the amount of religious constraints for each country. The darker the point, the more conflicts related to religion. Technically speaking, it was done with to the case_when function at the beginning. 
+
+Other noticeable features of the graph include the breaks included for each axis, which account for the scale for both measures. 
+
+Lastly, the interactive part had to be removed due to logistical and time constraints, so it only possesses the animated feature which is provided by GGanimated. Notice how the bubbles change colour depending on the cuadrant within the graph. 
 
 ```{r, fig.align='center', fig.height = 5, fig.width = 9.5}
 p + transition_states(year) 
 ```
 
+### Unachieved features. 
+
+Apart from the interactivity, there are some issues that could not not be fully replicated: 
+
+1. The fonts for the titles are not exactly the same as the original. 
+2. The spacing between lines is smaller than the original.
+3. The orientation of the 0 and the 10 of the Y axis is not the correct. The "very high" label is also wrongly positioned. 
+4. It was not possible to include the link in the last part of the subtitle. 
+
 
 ### Interactive options with plotly. 
+
+To be completed. 
 
 ```{r plotly, eval=FALSE, fig.align='center', include=FALSE}
 
