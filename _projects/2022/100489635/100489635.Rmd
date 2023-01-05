@@ -16,24 +16,26 @@ As both a cause and consequence of China's rapid economic growth, the proportion
 ![The Economist's "March of the cities" map. Figure from [economist.com](https://economist.com).](economist.png){.external}
 
 
-This post will seek to replicate this map, propose incremental enhancements and suggest an alternative visualization that depicts the relationship between growth potential, population and location (or distance to the coast) taking cities as our units of analysis.
+This post will seek to replicate this map, propose incremental enhancements and suggest an alternative visualization that depicts the relationship between growth potential, population and location (or distance to the coastline) taking cities as our units of analysis.
 
 ## The original chart
 
 ### Obtaining and processing the data
 
-First, several libraries are required for processing and plotting the data, including the customization of fonts for our plot:
+```{r setup, include=FALSE}
 
-```{r}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+
 library(tidyverse)
 library(dplyr)
 library(ggplot2)
 library(showtext)
 library(maps)
 library(maptools)
-library(rgdal)  
+library(rgdal) 
 library(svglite)
 library(plyr)
+library(sf)
 
 sysfonts::font_add_google("IBM Plex Sans", family="IBM Plex Sans")
 showtext::showtext_auto()
@@ -59,7 +61,7 @@ In order to get both attributes ("Ranking" and "Population") on the same dataset
 output <- ranking %>% left_join(population, by="City")
 ```
 
-In order to obtain data on the "longitude" and "latitude" of each city, we used the [`world.cities` database](https://search.r-project.org/CRAN/refmans/maps/html/world.cities.html). This database includes data on these and other variables for over 40,000 cities in the world. I then filtered the cities in China and selected (as well as renamed) the variables of interest to later on construct my final database.
+In order to obtain the "longitude" and "latitude" of each city, we used the [`world.cities` database](https://search.r-project.org/CRAN/refmans/maps/html/world.cities.html). This database includes these and other variables for over 40,000 cities in the world. We then filtered the cities in China and selected (as well as renamed) the variables of interest to later on construct my final database.
 
 ```{r}
 data <- world.cities %>%
@@ -72,25 +74,26 @@ data <- world.cities %>%
 
 We then merged the location dataset ('data') and the dataset with information on ranking and location ('output'). 
 
-The data also required some cleaning and adjustment. First, there were two cities with the same name (i.e. Suzhou) in the EIU ranking. Since they are located in different provinces, we used population data to cross check which city corresponded to which score provided by the EIU and renamed one of them to establish the difference. Second, there were several other cities in the 'data' dataset with the same name as cities in the 'output' one, which led to there being more than one row for each unit of analysis in the 'fulloutput' table. We removed the appropriate rows, as well as the rows for which latitude and longitude data were not available (i.e. NAs for those variables). 
-
 ```{r}
 fulloutput <- output %>% left_join(data, by="City")
+```
+
+The data also required some cleaning and adjustment. First, there were two cities with the same name (i.e. Suzhou) in the EIU ranking. Since they are located in different provinces, we used population and location data to cross check which city corresponded to which score provided by the EIU and renamed one of them to establish the difference. Second, there were several other cities in the 'data' dataset with the same name as cities in the 'output' one, which led to there being more than one row for each unit of analysis in the 'fulloutput' table. We removed the appropriate rows, as well as the rows for which latitude and longitude data were not available (i.e. NAs for those variables). We are left with 104 rows.
+
+```{r}
 fulloutputclean <- fulloutput[-c(5, 23, 49, 51, 70, 81, 104, 113),]
 fulloutputclean <- fulloutputclean[!is.na(fulloutputclean$Latitude) 
                                    & !is.na(fulloutputclean$Longitude), ]
 head(fulloutputclean, 5)
 ```
 
-The final step in data processing was obtaining the data to plot the underlying map of China. We used the [`ggplot2-china-map` repository](https://github.com/xiaohk/ggplot2-china-map). This provides us with the necessary data to be able to draw the provinces in China. We used the `readOGR` function to read the 'shapefile', cleaned the data and fortified into a dataframe. We then instructed that the islands in the South China Sea not be drawn by selecting only observations with "AREA" above 0.005. Finally, again, we renamed variables accordingly.
+The final step in data processing was obtaining the data to plot the underlying map of China and its provinces. The [`ggplot2-china-map` repository](https://github.com/xiaohk/ggplot2-china-map) contains such information. We used the `readOGR` function to read the 'shapefile', cleaned the data and fortified into a dataframe. We then instructed that the islands in the South China Sea not be drawn by selecting only observations with "AREA" above 0.005. Finally, again, we renamed variables accordingly.
 
 ```{r}
 china <- readOGR(dsn=("./china_shapefile/"), layer="bou2_4p")
-
 china@data$id<-rownames(china@data)
 china.points<-fortify(china, region="id")
 china.df<-join(china.points, china@data, by="id")
-
 china<-subset(china.df, AREA>0.005) %>% 
   dplyr::rename("Latitude"="lat", 
          "Longitude"="long",
@@ -101,9 +104,11 @@ china<-subset(china.df, AREA>0.005) %>%
 
 #### Coordinates of the map and data points
 
-Using the data loaded in 'China' in the last step, we use `geom_polygon()` to draw the underlying map. The `aes` argument maps the longitude and latitude columns to the x and y coordinates, respectively. This function is also used to specify the `fill` and the transparency (`alpha`) level of the map. 
+Using the data loaded in 'china' in the last step, we use `geom_polygon()` to draw the underlying map. The `aes` argument maps the longitude and latitude columns to the x and y coordinates, respectively. This function is also used to specify the `fill` and the transparency (`alpha`) level of the map. 
 
-We then use `geom_path` to set the line demarcating the province limits. After indicating the use of the same variables in the 'china' dataset as for `geom_polygon()`, we set the `color` and `size` of the border. Further, `coord_map()` sets the coordinate system for the map by projecting the defined portion of the Earth onto a flat 2D plane. 
+We then use `geom_path()` to set the line demarcating the province limits. After indicating the use of the same variables and the same dataset as for the `geom_polygon()` function, we set the `color` and `size` of the border. 
+
+Further, `coord_map()` sets the coordinate system for the map by projecting the defined portion of the Earth onto a flat 2D plane. 
 
 ```{r, layout="l-body-outset"}
 p <- ggplot() +
@@ -118,7 +123,7 @@ p <- ggplot() +
 p
 ```
 
-Then we add the data points at the specific locations of the 104 cities (defined by their latitude and longitude) with `geom_point()`. Thus, on top of the map, we are plotting a scatterplot using data from 'fulloutputclean' where each point represents one city. The `size` of the point (more specifically, its area) represents its population and its `fill` depicts the relative position of a given city vis-à-vis other cities in the EIU ranking. We then set a black line around the point (`shape=21`) while specifying the `color` and thickness (`stroke`) of the border. 
+Next, we add the data points at the specific locations of the 104 cities (defined by their latitude and longitude) with `geom_point()`. Thus, on top of the map, we are plotting a scatterplot using data from 'fulloutputclean' where each point represents one city. The `size` of the point (more specifically, its area) represents its population and its `fill` depicts the relative position of a given city vis-à-vis other cities in the EIU ranking. We then set a black line around the point (`shape=21`) while specifying the `color` and thickness (`stroke`) of the border. 
 
 A title, subtitle and caption are added to replicate the original chart using the `labs` function. 
 
@@ -166,7 +171,7 @@ p3
 ```
 #### Theme
 
-Despite there being a special 'The Economist' theme, a completely empty theme (without the default background and axis elements) is what we want. Hence we use `theme_void()`. Under the `theme()` function, we first specify the (previously loaded) font most closely resembling the one used in the original map. Concerning title, subtitle and caption, we specify their `size`, as well as their vertical (`vjust`) and horizontal justification (`hjust`). Also using the helping function `element_text()`, we instruct that the title be bold and the caption have the `color` "gray". We then set the position, direction and justification of the legend so that it is horizontal and gets centered to the north of China (approximately where Mongolia would be). We then specify that both legends be left-justified and set the font `size` for both the title and the text inside the legend (as well as the `face` in the case of the legend title). Finally, we set customized margins around the legend area and set the key width to 8mm, the key height to 2.5mm and the spacing between keys in the size legend to 0.1mm.
+Despite there being a special 'The Economist' theme, a completely empty theme (without the default background and axis elements) is what we want. Hence we use `theme_void()`. Under the `theme()` function, we first specify the (previously loaded) font most closely resembling the one used in the original map. Concerning title, subtitle and caption, we specify their `size`, as well as their vertical (`vjust`) and horizontal justification (`hjust`). Also using the helping function `element_text()`, we instruct that the title be bold and the caption have the `color` "gray". We then set the position, direction and justification of the legend so that it is horizontal and gets centered to the north of China (approximately where Mongolia would be). We then specify that both legends be left-justified and set the font `size` for both the title and the text inside the legend (as well as the `face` in the case of the legend title). Finally, we customize the margins around the legend area and set the key width to 8mm, the key height to 2.5mm and the spacing between keys in the size legend to 0.1mm.
 
 ```{r, layout="l-body-outset"}
 p4 <- p3 +
@@ -190,11 +195,11 @@ p4
 
 #### Annotations
 
-The last step to replicate the original map is the annotations, for which we use the `annotate()` function. While it may appear to be a caption, the text "1=best" is actually inside the plot and hence is introduced as an annotation. For this and the rest of annotations, we specify the type ("text"), set the coordinates (`x`, `y`), the `label`, the `size` and the `family` (as well as the `hjust`, `vjust`, `fontface` and `color` for some). 
+The last step to replicate the original map is the annotations, for which we use the `annotate()` function. While it may appear to be a caption, the text "1=best" is actually inside the plot and hence is introduced as an annotation. For this and the rest of annotations, we specify the type, the coordinates (`x`, `y`), the `label`, the `size` and the `family` (as well as the `hjust`, `vjust`, `fontface` and `color` for some). 
 
-For the textbox in the lower left corner in the original graph, we create a separate annotation for the title in order to be able to set it in bold and with a different color. Further, we separate each of the five cities into different annotations as well because grouping them together under the same one led to there being too large of a vertical space between each of the give lines.
+For the textbox in the lower left corner in the original chart, we create a separate annotation for the title in order to be able to set its `fontface` to bold and assign it a different color. Further, we separate each of the five cities into different annotations as well because grouping them together under the same one led to there being too large of a vertical space between each of the five lines.
 
-For the individual annotations of the eight highest ranked cities on their locations on the map, we simply use the coordinates for each city and adjust them to be able to see which point corresponds to each label. I also added separate annotations with the lines for five cities: Dongguan, Guangzhou, Suzhou, Jiaxing and Hangzhou (`type`= "segment"). These lines make identifying which label corresponds to each point easier when cities are clustered together.
+For the individual annotations of the eight highest ranked cities on their locations on the map, we simply use the coordinates for each city and adjust them to be able to see which point corresponds to each label. We also added separate annotations with the lines for five cities: Dongguan, Guangzhou, Suzhou, Jiaxing and Hangzhou (`type`= "segment"). These lines make identifying which label corresponds to each point easier when cities are clustered together.
 
 ```{r, layout="l-body-outset"}
 p5 <- p4 + 
@@ -331,17 +336,19 @@ p <- ggplot() +
 p
 ```
 
-As suggested by the famous author in the field of visualization Edward Tufte, we should seek to maximize the data-ink ratio when displaying data. To that end, we should ask ourselves whether all elements ("ink") in the chart are necessary to convey our message. Applying this notion to our map, we set limits for the coordinates through the argument `xlim` and `ylim` inside the `coord_map()` function. This way, as seen in the map above, we "zoom in" to show the relevant data and remove the area west of meridian 110°. If we did this, we would only lose one observation (i.e. one city) and so it may be worth exploring this alternative. Since we have less "unused" space, we also set the legend background `fill` to "white" in order to establish a clear contrast between the legend and the map.
+As suggested by the famous author in the field of visualization Edward Tufte, we should seek to maximize the data-ink ratio when displaying data. To that end, we should ask ourselves whether all elements ("ink") in the chart are necessary to convey our message. Applying this notion to our map, we set limits for the coordinates through the arguments `xlim` and `ylim` inside the `coord_map()` function. This way, as seen in the map above, we "zoom in" to show the relevant data and remove the area west of meridian 100°. If we did this, we would only lose one observation (i.e. one city) and so it may be worth exploring this alternative. Since we have less "unused" space, we also set the legend background `fill` to "white" in order to establish a clear contrast between the legend and the map.
 
-Moreover, some changes to the fill legend may increase the ease of decoding visual information on ranking. Despite being a small detail, the choice of the color palette may not be the most appropriate to depict the ordering of cities according to their EIU scores. There does not seem to be an obvious reason for why stronger colors are assigned to the extremes in the ranking spectrum (i.e. highest- and lowest-ranked cities). Allocating different levels of saturation or lightness of the same hue could be an alternative way of visually conveying the order of cities according to ranking. In the code above, we simply change the last three colors in the 'scales' section for lighter shades of blue. Additionally, in order to enhance discriminability on the fill scale, we reduce the number of categories from six to four. This way it is easier for readers to figure out the order of cities according to their ranking and relate their scores to location and population.
+Moreover, some changes to the fill legend may increase the ease of decoding visual information on ranking. In order to enhance discriminability on this scale, we reduce the number of categories from six to four. This way, it is easier for readers to figure out the order of cities according to their ranking and relate their scores to location and population without having to distinguish between too many values. 
 
-Furthermore, the fact that eight cities are annotated on the map and only five are included in the bottom-left textbox is not too easy to realize at first and both annotations seem to include redundant information. By removing the textbox and adding the rank numbers directly to the cities annotated on the map, we simplify the visualization without removing essential information.
+Additionally, despite being a small detail, the choice of the color palette may not be the most appropriate to depict this ordering. There does not seem to be an obvious reason for why stronger colors are assigned to the extremes in the ranking spectrum (i.e. highest- and lowest-ranked cities). Allocating different levels of saturation or lightness of the same hue could be an alternative way of visually conveying the ordering of cities according to growth potential. In the code above, we simply replace the colors for the original '40-60' and '60-80' categories with two lighter shades of blue under the `scale_fill_stepsn()`function. 
 
-Finally, in order to emphasize the idea that cities with the highest growth potential are on the coast, we might want to insert a vertical line (we use `geom_vline()`) at the (arbitrary) level of longitude 112°. This way we can see that among the 10 cities with the highest growth potential, only Chengdu is to the west of this longitude.
+Furthermore, the fact that eight cities are annotated on the map and only five are included in the bottom left textbox is not too easy to realize at first and both annotations seem to include redundant information. By removing the textbox and adding the rank numbers directly to the cities annotated on the map, we simplify the visualization without removing essential information.
+
+Finally, in order to emphasize the idea that cities with the highest growth potential are on the coast, we might want to insert a vertical line (we use `geom_vline()`) at the (arbitrary) level of longitude 112°. This way we can see that among the 10 cities with the highest growth potential, only Chengdu (i.e. the "dark blue" bubble farthest west) is to the west of this longitude.
 
 ## Alternative visualization
 
-The final section of this post proposes an alternative visualization to represent the relationship between the population, location and growth potential of cities in China. One possibility is the scatterplot shown below. We plot the ranking on the x-axis and population on the y-axis. We also use the `geom_point()`function just like in the original map.
+The final section of this post proposes an alternative visualization to represent the relationship between the population, location and growth potential of cities in China. One possibility is the scatterplot shown below. We plot the ranking on the x-axis and population on the y-axis. We also use the `geom_point()` function just like in the original map.
 
 We change the title and subtitle of the plot. We also add an informative caption and change the axis labels so as to make it even easier to understand what each variable represents and the message being conveyed. We alter the theme to `theme_light()` so as to increase the contrast between the background and the text and data points.
 
@@ -368,7 +375,7 @@ p <- ggplot(fulloutputclean) +
 p
 ```
 
-In general, we can see that higher growth potential (lower value for the variable "City Growth Ranking") tends to be associated with a larger population, which was perhaps harder to see on the original map. However, we still need to include information about the location (coordinates) of cities. Within the location variable, it seems that longitude is the most important factor: cities closer to the coast (i.e. farther east, or higher values of x) appear to have higher growth potential. These high-ranking cities seem to be distributed more or less evenly from North to South, hence we disregard the latitude information for simplicity. Therefore, we could encode longitude through the color of the points by highlighting in blue those points representing cities that are located east of the (again, arbitrarily chosen) 112° meridian. I also add a text label (on top of a white rectangle constructed with `geom_rect()`) to indicate that blue dots represent cities farther to the east in China.
+In general, we can see that higher growth potential (lower value for the variable "City Growth Ranking") tends to be associated with a larger population, which was perhaps harder to see on the original map. However, we still need to include information about the location (coordinates) of cities. Within the location variable, it seems that longitude is the most important factor: cities closer to the coastline (i.e. farther east, or higher values of x) appear to have higher growth potential. These high-ranking cities seem to be distributed more or less evenly from north to south, hence we disregard the latitude information for simplicity. Therefore, we could encode longitude through the color of the points by highlighting in blue those points representing cities that are located east of the (again, arbitrarily chosen) 112° meridian. We also add a text label (on top of a white rectangle constructed with `geom_rect()`) to indicate that blue dots represent cities farther east in China.
 
 ```{r, layout="l-body-outset"}
 annotation <- dplyr::filter(fulloutputclean, Longitude>112)
@@ -383,7 +390,7 @@ p <- p +
 p
 ```
 
-Finally, to highlight the top 5 cities from the original map, I construct another annotation and insert it as an argument in the `geom_text()` function. I adjust the size and horizontal justification of the labels, and make them bold.
+Finally, to highlight the top 5 cities from the original map, We construct another annotation and insert it as an argument in the `geom_text()` function. We adjust the size and horizontal justification of the labels, and make them bold.
 
 ```{r, layout="l-body-outset"}
 annotation2 <- dplyr::filter(fulloutputclean, Ranking<=5)
@@ -395,6 +402,6 @@ p <- p +
             fontface="bold") 
 p
 ```
-We can see that highly-ranked cities are all near the coast (i.e. all highlighted in blue because they are east of the meridian 112°), but there is a rather wide range of population numbers among the top 5. For instance, both Shanghai and Suzhou have very high growth potential. Yet the former has more than 3.5 times the population of the latter. This is because many variables are included in the calculation of scores. For instance, Hangzhou tops the ranking due to its nature as a big tech hub. While government regulation targeting tech firms may hamper its medium- and long-term growth, other factors such as its fiscal position, economic diversity or metropolitan development jointly yield a high growth potential for the city. 
+We can see that highly-ranked cities are all near the coast (i.e. all highlighted in blue because they are east of the meridian 112°), but there is a rather wide range of population sizes among the top 5. For instance, both Shanghai and Suzhou have very high growth potential. Yet, the former has more than 3.5 times the population of the latter. This is because many variables are included in the calculation of scores. For instance, Hangzhou tops the ranking due to its nature as a big tech hub. While government regulation targeting tech firms may hamper its medium- and long-term growth, other factors such as its fiscal position, economic diversity or metropolitan development jointly yield a high growth potential for the city. 
 
 All in all, as the caption suggests, it seems that location (whose effect is hard to separate from other historical, economic and environmental factors) is more important than current population as a predictor of future economic growth.
