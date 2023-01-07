@@ -13,13 +13,14 @@ output:
 ```{r setup, include=FALSE}
 
 knitr::opts_chunk$set(fig.showtext=TRUE)
+
 ```
 
 ## About the graph
 
 Brooke Auxier and Monica Anderson published an article in the Pew Research Center in which they analyzed Social Media Use in 2021 for the Northamerican context, through data collected by the same organization and depicted by them in several graphs. One of them, the objective of this project, visually presents the evolution of use of thirteen Social Networks since 2012 (although only 5 of them have available data for the whole time series):
 
-```{r, out.width="85%", out.height="85%", fig.align='center'}
+```{r, out.width="90%", out.height="90%", fig.align='center'}
 
 knitr::include_graphics("Data/Original plot.jpg")
 
@@ -44,7 +45,13 @@ library(showtext) #To include alternative fonts
 
 Once we prepared our environment, it's time for us to work with the data. In this case, the Pew Research Center uploaded a PDF file (https://www.pewresearch.org/internet/wp-content/uploads/sites/9/2021/04/PI_2021.04.07_Social-Media-Use_TOPLINE.pdf) with the specific questions and answers used for the report, from which we created a CSV file. It's worth noting that we anticipated to our future needs and introduced the different variables in a long format, as we would later need it to develop the plot. 
 
-### Font preparation, color setting
+```{r}
+
+read_delim("Data/database.csv")
+
+```
+
+So, we store our CSV file as a dataframe, also renaming the 'Social media' variable into just 'Social' for simplicity purposes. Additionally, we filter the first and last data values for each Social Network into another dataframe, as we later will need it to display the points in each side of the lines. 
 
 ```{r}
 
@@ -60,16 +67,176 @@ filtered <- data %>%
 
 ```
 
-### Font preparation
+### Font preparation and color setting
+
+In this step, we start by adding into our document the fonts used by the authors. Note that we included the same font two times, the regular and the bold version; this is because we had some issues while trying to compute the bold aspect manually (with double asterisk at each side of the text).
+
 ```{r}
 
-font_add(family = "Franklin Gothic Demi", regular = "FRADM.ttf")
 font_add(family = "Franklin Gothic", regular = "FRAMD.ttf")
-font_add(family = "Georgia", regular = "GEORGIAI.ttf")
 font_add(family = "Franklin Gothic Demi", regular = "FRADM.ttf")
+font_add(family = "Georgia", regular = "GEORGIAI.ttf")
 
 ```
 
+Then, we create a vector assigning each possible Social Network to its displayed color in the graph, to then apply it to the lines setting. 
+
+```{r}
+
+colors <- c("Youtube" = "#bf4538", "Facebook" = "#23689a", 
+            "Instagram" = "#6c9acf", "Pinterest" = "#747a46",
+            "Linkedin" = "#c2c88e", "Snapchat" = "#746a7c", 
+            "Twitter" = "#d1aa42", "Whatsapp" = "#253a5c",
+            "TikTok" = "#e9a03f", "Reddit" = "#92885a", 
+            "Nextdoor" = "#e28377" )
+
+```
+
+
+### Coordinates, axes and scales
+
+Our panel base depends on two axis, years and usage rate (%). 
+
+```{r, fig.height=6, fig.width=6, out.height="100%", out.width="100%", dpi=300}
+
+p <- data %>% ggplot() +
+  aes(Year, Use)
+
+p
+
+```
+
+Previous to mapping the data inside the plot, we need to set properly the labels, axes and scales. 
+
+```{r, fig.height=6, fig.width=6, out.height="100%", out.width="100%", dpi=300}
+
+p <- p +
+  scale_x_continuous(
+    name = NULL,
+    limits=c(2012, 2021.9),
+    n.breaks = 10,
+    labels = function(x) paste0("'", substr(x, 3, 4)),
+    expand=c(0,0)
+  ) +
+  scale_y_continuous(
+    name = NULL,
+    limits=c(0, 100),
+    breaks = c(20, 40, 60, 80),
+    labels = c("20" = "20", "40" = "40", "60" = "60", "80" = "80"),
+    expand = c(0,0)
+  ) 
+
+p
+
+```
+Now, the first year is 2012, just as the original plot, and we've set the y limits to 100%. Note that we didn't add the last label, "100%": this is because it's placed slightly to the right, as the top grid is shorter than the rest, so we'll later set it as an individual annotation. We also notice that the x axis doesn't end in '21: this is because we let some space to connect the last values to their labels through segments. 
+
+One characteristic aspect of this plot is that it requires a lot of annotations in order to display its elements correctly. As our first one, we'll set the grid lines (although we'll not see them properly until applying the theme).
+
+```{r, fig.height=6, fig.width=6, out.height="100%", out.width="100%", dpi=300}
+p <- p +
+  annotate("segment", x=2012, xend = 2021, y=10, yend=10, 
+           color = "grey", linetype="dotted") +
+  annotate("segment", x=2012, xend = 2021, y=20, yend=20, 
+           color = "grey", linetype="dotted") +
+  annotate("segment", x=2012, xend = 2021, y=30, yend=30, 
+           color = "grey", linetype="dotted") +
+  annotate("segment", x=2012, xend = 2021, y=40, yend=40, 
+           color = "grey", linetype="dotted") +
+  annotate("segment", x=2012, xend = 2021, y=50, yend=50, 
+           color = "grey", linetype="dotted") +
+  annotate("segment", x=2012, xend = 2021, y=60, yend=60, 
+           color = "grey", linetype="dotted") +
+  annotate("segment", x=2012, xend = 2021, y=70, yend=70, 
+           color = "grey", linetype="dotted") +
+  annotate("segment", x=2012, xend = 2021, y=80, yend=80, 
+           color = "grey", linetype="dotted") +
+  annotate("segment", x=2012, xend = 2021, y=90, yend=90, 
+           color = "grey", linetype="dotted") +
+  annotate("segment", x=2012.25, xend = 2021, y=100, yend=100, 
+           color = "grey", linetype="dotted") +
+  annotate("segment", x=2012, xend = 2021, y=0, yend=0, 
+           color = "grey", alpha = 0.4) 
+
+p
+
+```
+
+### Theme settings
+
+We'll now prepare the theme for previous and further changes. As seen in the original image, the background and plot margins are all white, vertical grid lines are not displayed,there are some margins we need to adjust at the right (to leave space for the labels and values) and at the bottom (to leave space for the last caption, "PEW RESEARCH CENTER") and there are no axis ticks but for the years. 
+
+```{r, fig.height=6, fig.width=6, out.height="100%", out.width="100%", dpi=300}
+p <- p +
+  theme(
+    axis.ticks.x.bottom = element_line(color = "lightgrey"),
+    panel.grid.major.y = element_line(colour = "transparent"),
+    panel.grid.minor.y = element_line(colour = "transparent"),
+    panel.background = element_rect(fill = "transparent"),
+    legend.position = "none",
+    axis.text.x.bottom = element_text(color="grey64", 
+                                    family = "Franklin Gothic"),
+    axis.text.y.left = element_text(color="grey64", 
+                                    family = "Franklin Gothic", hjust=-0.5, size=10),
+    axis.line.x.bottom = element_line(color="transparent"),
+    axis.ticks.length = unit(0, "pt"),
+    axis.ticks.length.x.bottom = unit(5, "pt"),
+    plot.caption = element_text(family = "Franklin Gothic", 
+                                color = "grey64", hjust = 0),
+    plot.caption.position = "plot",
+    aspect.ratio = 1.1,
+    plot.subtitle = element_text(family = "Georgia", 
+                                 color = "grey64", hjust = 0.02, size=11),
+    plot.title = element_text(family = "Franklin Gothic Demi", hjust = 0, size=14.4),
+    plot.title.position = "plot",
+    plot.margin = margin(t=0,
+                         r=17,
+                         b=18,
+                         l=0)
+  ) +
+  annotate("text", label="100%", x=2012, y=100, color = "grey64", 
+           family="Franklin Gothic", size=3.5, hjust=1) +
+  coord_fixed(xlim=c(2012,2021), clip = 'off') 
+  
+
+```
+
+We also delete the previous grids and set the correct text settings, along with the "100% annotation" (it will display correctly after adding the title and subtitle) and a fixed coordinate system (with clip = 'off' to allow us to annotate outside the plot limits). 
+
+
+
+```{r, fig.height=6, fig.width=6, out.height="100%", out.width="100%", dpi=300}
+
+p +
+  labs(title = paste(" Growing share of Americans say that they use YouTube;\n", 
+"Facebook remains one of the most widely used online\n",
+"platforms among U.S. adults"),
+       subtitle = "% of U.S. adults who say they ever use ...",
+       caption = paste("Note: Respondents who did not give an answer are not shown. Pre-2018 telephone poll",
+       "data is not available for Youtube, Snapchat and Whatsapp; pre-2019 telephone poll data is",
+       "not available for Reddit. Pre-2021 telephone poll data is not available for TikTok. Trend",
+       "data is not available for Nextdoor.",
+       "Source: Survey of U.S. adults conducted Jan. 25-Feb. 8, 2021.", 
+       '"Social media use in 2021"',  sep="\n")) +
+  annotate("text", label= "PEW RESEARCH CENTER", x=2012, y=0, vjust=16.5, 
+           hjust=0.15, family = "Franklin Gothic", size=2.8)
+  
+
+```
+
+
+### Adding our data
+
+Now that we've prepared the plot's 'skeleton', it's time for us to add the data. It's important to do it after adding the grid annotations: if not, they would overlap the geom_line(). 
+
+```{r, fig.height=6, fig.width=6, out.height="100%", out.width="100%", dpi=300}
+
+p +  geom_line(aes(group=Social, color=Social), linewidth= 1) +
+  geom_point(data = filtered, aes(color=Social),
+             size = 1.75, shape = 21, fill="white", stroke = 1) +
+  scale_color_manual(values = colors) 
+
+```
 
 
 ## Addendum
@@ -156,7 +323,6 @@ data %>% ggplot() +
                          r=17,
                          b=18,
                          l=0)
-    #plot.margin = margin(0,300,0,0, "pt")
   )  +
   annotate("text", label="YouTube", y=81, x=2021, hjust=-0.8, size=3.5, 
            family = "Franklin Gothic", color = "#bf4538") +
@@ -255,7 +421,6 @@ data %>% ggplot() +
        "data is not available for Nextdoor.",
        "Source: Survey of U.S. adults conducted Jan. 25-Feb. 8, 2021.", 
        '"Social media use in 2021"',  sep="\n")) +
-  #coord_capped_cart(bottom = 'both') +
 coord_fixed(xlim=c(2012,2021), clip = 'off')
 
 ```
