@@ -13,9 +13,10 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(fig.showtext=TRUE)
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=80), tidy=TRUE)
 ```
 
-![Diagram listing the 17 Sustainable Development Goals. Figure from [un.org](https://sdgs.un.org/goals)](/Users/isabelazeberio/Documents/GitHub/dataviz/_projects/2022/100386498/sustainabledevgoals.png)
+![Diagram listing the 17 Sustainable Development Goals. Figure from [un.org](https://sdgs.un.org/goals)](sustainabledevgoals.png){.external width="100%"}
 
 **The Atlas of Sustainable Development Goals** is a compilation of statistics from over 200 economies about global development and the quality of people's lives. The Atlas is a visual guide to the trends, challenges and measurement issues related to each of the [17 Sustainable Development Goals](https://sdgs.un.org/goals) (SDGs). The SDGs are an urgent call for action by all countries in a global partnership. The Atlas was first created in [2017](https://datatopics.worldbank.org/sdgatlas/archive/2017/index.html) and since then two more editions have been published, [2018](https://documents.worldbank.org/en/publication/documents-reports/documentdetail/590681527864542864/atlas-of-sustainable-development-goals-2018-world-development-indicators) and [2020](https://datatopics.worldbank.org/sdgatlas/). From 2017 to 2020 there has been a big change in the visualization of the data.. Therefore, for this project I have decided to focus on recreating a chart from the first Atlas and improve some elements to better represent the idea that richer countries tend to have higher national poverty lines.
 
@@ -46,7 +47,7 @@ knitr::opts_chunk$set(fig.showtext=TRUE)
 
 The chart I have chosen is from the first SDGs: [No poverty](https://datatopics.worldbank.org/sdgatlas/archive/2017/SDG-01-no-poverty.html). In the section on **Reducing poverty in all its dimensions according to national definitions**, the figure 1c is introduced to represent how richer countries tend to have higher national poverty lines than poorer ones, and in some cases a richer country may even have a higher national poverty rate than a poorer country. 
 
-![The World Bank's Chart. Figure from [worldbank.org](https://datatopics.worldbank.org/sdgatlas/archive/2017/SDG-01-no-poverty.html)](/Users/isabelazeberio/Documents/GitHub/dataviz/_projects/2022/100386498/theworldbank.png)
+![The World Bank's Chart. Figure from [worldbank.org](https://datatopics.worldbank.org/sdgatlas/archive/2017/SDG-01-no-poverty.html)](theworldbank.png){.external width="100%"}
 
 
 ## Getting the data
@@ -66,15 +67,14 @@ library(ggtext)
 
 I created the csv file coping the data from the Appendix 2 table. The variables needed to recreate the chart are the following:
 
-```{r include=FALSE}
-world_bank <- read_delim("/Users/isabelazeberio/Documents/GitHub/dataviz/_projects/2022/100386498/povertyline.csv", 
-                         delim = ";", 
-                         escape_double = FALSE, 
-                         col_types = cols(`National poverty line 2011 PPPs` = col_number(), 
-                                          `Household survey mean 2011 PPPs` = col_number(), 
-                                          `HFCE (2011 PPPs)` = col_number(), 
-                                          `GNI (2011 USD, Atlas)` = col_number()), 
-                         trim_ws = TRUE, skip = 1)
+```{r}
+world_bank <- read_delim(
+  "povertyline.csv", delim = ";", escape_double = FALSE,
+  col_types = cols(`National poverty line 2011 PPPs` = col_number(),
+                   `Household survey mean 2011 PPPs` = col_number(),
+                   `HFCE (2011 PPPs)` = col_number(),
+                   `GNI (2011 USD, Atlas)` = col_number()),
+  trim_ws = TRUE, skip = 1)
 
 
 world_bank <-  world_bank %>% 
@@ -92,6 +92,7 @@ world_bank <-  world_bank %>%
 ```{r}
 glimpse(world_bank)
 ```
+
 ```{r}
 summary(world_bank)
 ```
@@ -109,10 +110,11 @@ After calculating GNI per capita quartile, I create a new column to group each c
 ```{r}
 qntile <-  world_bank %>% 
   mutate(GNI = replace_na(GNI, 0)) %>% 
-  mutate(country_class = case_when(GNI <= 2.770  ~ "Low income", #33
-                                   GNI > 2.770  & GNI <= 11.040 ~ "Lower middle income", #31
-                                   GNI > 11.040 & GNI <= 35.505   ~ "Upper middle income", #31
-                                   GNI > 35.505 ~ "High income")) #31
+  mutate(country_class = 
+           case_when(GNI <= 2.770  ~ "Low income",
+                     GNI > 2.770  & GNI <= 11.040 ~ "Lower middle income",
+                     GNI > 11.040 & GNI <= 35.505   ~ "Upper middle income",
+                     GNI > 35.505 ~ "High income")) 
 
 
 qntile %>% group_by(country_class) %>% 
@@ -124,13 +126,14 @@ qntile %>% group_by(country_class) %>%
 
 Despite grouping the countries following the indications from the article by Jolliffe & Beer Prydz (2016), I obtained a slightly different classification. These differences mean that in my final chart some countries (dots) are colored differently than in the original chart.
 
-![Table 2: International Poverty Lines: Median and mean national lines, by group. Figure from [Jolliffe & Beer Prydz (2016)](https://datatopics.worldbank.org/sdgatlas/archive/2017/SDG-01-no-poverty.html)](/Users/isabelazeberio/Documents/GitHub/dataviz/_projects/2022/100386498/table2.png)
+![Table 2: International Poverty Lines: Median and mean national lines, by group. Figure from [Jolliffe & Beer Prydz (2016)](https://datatopics.worldbank.org/sdgatlas/archive/2017/SDG-01-no-poverty.html)](table2.png)
 
-```{r include=FALSE}
-#To maintain the order in which the categories are shown in the legent
+In order to maintain the order in which the categories are shown in the legend I used the function `factor`:
 
-qntile$country_class <- factor(qntile$country_class,# Re-level group factor
-                           levels = c("Low income", "Lower middle income", "Upper middle income", "High income"))
+```{r}
+qntile$country_class <- factor(
+  qntile$country_class,levels = c("Low income","Lower middle income",
+                                  "Upper middle income", "High income"))
 
 ```
 
@@ -146,12 +149,14 @@ The World Bank's chart is a scatterplot in which each dot represents a country, 
  + `stroke` enables us to change the line's width. I will recreate the dots from the original chart by setting a thick outline and filling the dots in white. 
 
 ```{r fig.width=12,fig.height=8,fig.align = "center"}
-p <- ggplot(qntile) +
+p<-ggplot(qntile) +
   aes(x=HFCE, y=national_povt_line, 
       color=country_class,
       fill=country_class) + 
   ylab("") + 
-  xlab("Household final consumption expenditure per capita per day, 2000-12 (2011 PPP $)") +
+  xlab(
+    "Household final consumption expenditure per capita per day, 2000-12 (2011 PPP $)"
+    ) +
   geom_point(size=3, shape=21, stroke=3) 
 p
 ```
@@ -161,14 +166,17 @@ p
 In the original chart what is plotted is the log of HFCE and the log of the national poverty line. The limit of the x axis is 100 and the limit of the y axis is 40, and the origin is 1. The breaks of both axes are really specific, thus I specified all of them.  
 
 ```{r fig.width=12,fig.height=8,fig.align = "center"}
-p <- p + scale_y_log10( limits = c(1, 40), 
-               expand = expansion(0), 
-               breaks= c(1,1.5,2,3,4,5,7,10,15,20,30,40),
-               labels = c("1","1.5","2","3","4","5","7","10","15","20","30","40")) +
-  scale_x_log10( limits = c(1, 100), 
-                 expand = expansion(0),
-                 breaks= c(1,1.5,2,3,4,5,7,10,15,20,30,40,50,70,100),
-                 labels = c("1","1.5","2","3","4","5","7","10","15","20","30","40","50","70","100"))
+p <- p + scale_y_log10(
+  limits=c(1, 40),
+  expand=expansion(0),
+  breaks=c(1,1.5,2,3,4,5,7,10,15,20,30,40),
+  labels=c("1","1.5","2","3","4","5","7","10","15","20","30","40"))+
+  scale_x_log10(
+    limits = c(1, 100),
+    expand = expansion(0),
+    breaks= c(1,1.5,2,3,4,5,7,10,15,20,30,40,50,70,100),
+    labels = c("1","1.5","2","3","4","5","7","10","15","20",
+               "30","40","50","70","100"))
 p
 ```
 
@@ -181,10 +189,13 @@ I used the theme function to customize the panel and the axes. After specifying 
 
 ```{r fig.width=12,fig.height=8,fig.align = "center"}
 p <- p + theme(panel.background = element_rect(fill="#f8f8f8"), 
-        panel.grid.major = element_line(color = "#dbddde",size = 0.5,linetype = 1),
-        panel.border = element_rect(fill = "transparent",color = "#d5d7d8",size = 0.5), 
+        panel.grid.major = element_line(
+          color = "#dbddde",size = 0.5,linetype = 1),
+        panel.border = element_rect(
+          fill = "transparent",color = "#d5d7d8",size = 0.5), 
         panel.grid.minor = element_blank(),
-        axis.text = element_text(face="bold",color="#58595b",size=12),
+        axis.text = element_text(face="bold",
+                                 color="#58595b",size=12),
         axis.ticks = element_blank())
 p
 ```
@@ -216,46 +227,52 @@ Horizontal(`hjust`) and vertical(`vjust`) justification have the same parameteri
   + Left = 0, center = 0.5, right = 1
 
 ```{r fig.width=12,fig.height=8,fig.align = "center"}
-p <- p + annotate("text", 
-           x = c(1.44, 1.9, 1.58, 2.72, 2.76, 5.96, 5.31, 4.4, 3.79, 5.2, 6.48, 9.28, 9.47, 13.9,
-                 7.96, 13.36, 12.52, 17.91, 29.61, 22.88, 16.46, 15.88, 28.99, 26.12, 31.85, 35.4,
-                 33.95, 29.28, 27.98, 35.52, 35.9, 46.8,39.98, 49.03, 63.41),
-           y = c(1.27, 1.45, 1.86, 2.1, 2.53, 1.76, 2.75, 3.7, 3.89, 4.46, 5.19, 6.43, 7.63, 6.32,
-                 2.97, 2.14, 2.60, 3.08, 2.82, 3.38, 3.8, 3.87, 5.24, 6.06, 7.17, 8.01, 9.16, 9.62,
-                 11.07, 12.98, 15.69, 18.63, 19.37, 20.33, 35.12), 
-           label = c("Malawi (2010)", "Mozambique (2009)", "Niger (2011)", "Togo (2011)",
-                     "Guinea (2012)", "Lesotho (2010)","Cong, Rep. (2011)", "Mauritania (2008)",
-                     "Comoros (2004)", "Tajikistan (2009)", "Azerbaijan (2001)","Honduras (2011)",
-                     "Bolivia (2011)", "Paraguay (2011)", "Bhutan (2012)", "Namibia (2010)", 
-                     "Sri Lanka (2010)", "Swaziland (2010)", "Turkey (2011)", "Malaysia (2009)",
-                     "Albania (2012)", "Armenia (2011)", "Romania (2011)", "Montenegro (2011)",
-                     "Chile (2011)", "Poland (2011)", "Lithuania (2011)", "Croatia (2011)", 
-                     "Estonia (2011)","Czech Rep (2011)", "Slovak Rep. (2011)", "Spain (2011)",
-                     "Slovenia (2011)", "Ireland (2011)", "Norway(2011)"), 
-           hjust = c(0.5, 0.15, 0.5, 1.2, 1.2, 0.65, 1.2, 0.5, 1.25, 1.25, 1.2, 1.25, -0.2, 0.5,
-                     -0.25, -0.2, -0.15, 0.5,0.3, -0.15, 0.65, -0.2, -0.2, -0.1, -0.15, -0.15, -0.1,
-                     1.15, -0.15, 1.15, -0.15, -0.15, 1.15, 0.95, 1.15), 
-           vjust = c(2, 2, 2, 0.45, 0.45, 2.5, -1.5, 2.5, 0.35, 0.5, 0.15, 0.1, 0,-1.5, 0.15, 0.2,
-                     1.15, 3, 3, 0.25, 2, -1.6,0.55, 0, 0.5, 0.25, 0.3, 0.25, 0.35, 0.5, 0.35, 2.5,
-                     0.45, -2, 0.25),
-           size= 3.5,
-           color = "#58595b") 
+p <- p + annotate(
+  "text",
+  x = c(1.44, 1.9, 1.58, 2.72, 2.76, 5.96, 5.31, 4.4, 3.79, 5.2, 6.48, 9.28,
+        9.47, 13.9,7.96, 13.36, 12.52, 17.91, 29.61, 22.88,16.46,15.88,
+        28.99, 26.12, 31.85, 35.4, 33.95, 29.28, 27.98, 35.52,35.9,46.8,
+        39.98, 49.03, 63.41),
+  y = c(1.27, 1.45, 1.86, 2.1, 2.53, 1.76, 2.75, 3.7, 3.89, 4.46, 5.19,6.43,
+        7.63, 6.32,2.97, 2.14, 2.60, 3.08, 2.82, 3.38, 3.8, 3.87,5.24, 6.06,
+        7.17, 8.01, 9.16, 9.62,11.07, 12.98, 15.69, 18.63,19.37, 20.33, 
+        35.12), 
+  label = c("Malawi (2010)","Mozambique (2009)","Niger (2011)","Togo (2011)",
+            "Guinea (2012)","Lesotho (2010)","Cong, Rep. (2011)","Mauritania 
+            (2008)","Comoros (2004)",  "Tajikistan (2009)","Azerbaijan 
+            (2001)","Honduras (2011)","Bolivia (2011)","Paraguay 
+            (2011)","Bhutan (2012)", "Namibia (2010)","Sri Lanka 
+            (2010)","Swaziland (2010)","Turkey (2011)", "Malaysia 
+            (2009)","Albania (2012)","Armenia (2011)","Romania (2011)", 
+            "Montenegro (2011)","Chile (2011)","Poland (2011)", "Lithuania 
+            (2011)","Croatia (2011)","Estonia (2011)","Czech Rep 
+            (2011)","Slovak Rep. (2011)", "Spain (2011)","Slovenia (2011)", 
+            "Ireland (2011)", "Norway(2011)"),
+  hjust = c(0.5, 0.15, 0.5, 1.2, 1.2, 0.65, 1.2, 0.5, 1.25, 1.25, 1.2,1.25,
+            -0.2, 0.5, -0.25, -0.2, -0.15, 0.5,0.3, -0.15, 0.65, -0.2, -0.2,
+            -0.1, -0.15, -0.15, -0.1, 1.15, -0.15, 1.15,-0.15, -0.15, 1.15, 
+            0.95, 1.15),
+  vjust = c(2, 2, 2, 0.45, 0.45, 2.5, -1.5, 2.5, 0.35, 0.5, 0.15, 0.1,0,-1.5,
+            0.15, 0.2, 1.15, 3, 3, 0.25, 2, -1.6,0.55, 0, 0.5,0.25, 0.3, 
+            0.25, 0.35, 0.5, 0.35, 2.5,0.45, -2, 0.25),
+  size= 3.5,
+  color = "#58595b") 
 p
 ```
 
 ### Text
 In this segment I add to the chart the title, the subtitle, and the caption. I used a `<span>` element to set the two colors of the title.
 
-```{r fig.width=15,fig.height=10,fig.align = "center"}
+```{r fig.width=12,fig.height=10,fig.align = "center"}
 p <- p +
-  labs(title = "<span style='color: #cd1449;'>1c<span><span style='color: #444444;'> Richer countries
-       tend to have higher national poverty lines<span>",
+  labs(title = "<span style='color: #cd1449;'>1c<span><span style=
+  'color: #444444;'> Richer countriestend to have higher national poverty lines<span>",
        subtitle = "National per capita per day poverty line, 2000–12 (2011 PPP $)",
        x = "Household final consumption expenditure per capita per day, 2000-12 (2011 PPP $)",
        y = "",
-       caption = "Source: Jolliffe, D. M., and E. B. Prydz. 2016, Estimating International Poverty
-       Lines from Comparable National Thresholds, Policy Research Working Paper WPS 7606, Washington,
-       DC: World Bank Group.") +
+       caption = "Source: Jolliffe, D. M., and E. B. Prydz. 2016, 
+       Estimating International Poverty Lines from Comparable National Thresholds,
+       Policy Research Working Paper WPS 7606, Washington, DC: World Bank Group.") +
   theme(text = element_text(size = 12),
         plot.title = element_markdown(face = "bold", hjust = 0),
         plot.subtitle = element_markdown(hjust=0),
@@ -302,27 +319,27 @@ As in the original graph it was a bit confusing to know precisely which dot the 
 
 In addition, to enhance the colors of the dots I used the color scheme by [Carto](https://carto.com/carto-colors/) to make more visible the different groups.
 
-```{r fig.show='hide'}
-p1 <- ggplot(qntile, aes(HFCE, national_povt_line, color=country_class)) + 
+```{r  out.width="0.3",fig.asp="0.3",layout="l-page",fig.align = "center"}
+p1 <- ggplot(qntile, 
+             aes(HFCE, national_povt_line, color=country_class, label=country)) + 
   geom_point(data = transform(qntile,
      country_class = NULL), colour = "grey80") + 
   geom_point(alpha=0.7) +
-  ggrepel::geom_text_repel(aes(label=country)) +
-  scale_color_manual(values = c("#5F4690","#38A6A5", "#73AF48", "#E17C05")) +
+  scale_color_manual(values = c("#5F4690","#38A6A5", "#73AF48", "#E17C05"))+
   facet_grid(~country_class, scales = "free") + 
-  theme_bw()
-```
-
-```{r echo=FALSE, fig.width=15,fig.height=12,fig.align = "center"}
-p1 <- p1 + labs(title = "<span style='color: #CC503E;'>1c<span><span style='color: #000000;'> Richer
-          countries tend to have higher national poverty lines<span>",
-          subtitle="Class country",
-       x = "Household final consumption expenditure per capita per day, 2000-12 (2011 PPP $)",
-       y = "National per capita per day poverty line, 2000–12 (2011 PPP $)",
-       caption = "Source: Jolliffe, D. M., and E. B. Prydz. 2016, Estimating International Poverty Lines from Comparable National Thresholds, Policy Research Working Paper WPS 7606, Washington, DC: World Bank Group.") +
+  theme_bw() + 
+  labs(title = "<span style='color: #CC503E;'>1c<span><span style='color: #000000;'> 
+  Richer countries tend to have higher national poverty lines<span>",
+  subtitle="Class country",
+  x = "Household final consumption expenditure per capita per day, 2000-12 
+  (2011 PPP $)",
+  y = "National per capita per day poverty line, 2000–12 (2011 PPP $)",
+  caption = "Source: Jolliffe, D. M., and E. B. Prydz. 2016, Estimating 
+  International PovertyLines from Comparable National Thresholds, Policy Research 
+  Working Paper WPS 7606, Washington, DC: World Bank Group.") +
   scale_x_log10()+
   scale_y_log10()+
-  theme(text = element_text(size = 16),
+  theme(text = element_text(size = 6),
         legend.position="top",
         legend.title = element_blank(),
         legend.background = element_rect(size=0.5, linetype="solid", 
@@ -331,9 +348,13 @@ p1 <- p1 + labs(title = "<span style='color: #CC503E;'>1c<span><span style='colo
         plot.subtitle = element_markdown(face = "bold",hjust = 0.5),
         axis.title.x  = element_markdown(),
         axis.title.y = element_markdown(),
-        plot.caption.position = "plot",
-        plot.caption = element_text(hjust = 0, vjust = 0.5)) +
-  guides(color = guide_legend(override.aes = list(size = 6)))
+        plot.caption = element_markdown(face = "bold",hjust = 0.1)) +
+  guides(color = guide_legend(override.aes = list(size = 3)))
+
+p1 <- p1 + ggrepel::geom_text_repel(size=2, aes(label=country),
+                                    box.padding = 0.1,  max.overlaps = 6,
+                                     min.segment.length = 0.05,
+                                    point.size = 2) 
 p1
 ```
 
@@ -346,14 +367,15 @@ Another alternative visualization is to plot an interactive scatterplot by using
   - Household final consumption
   - GNI
 
-```{r fig.width=100,fig.height=90,fig.align = "center"}
+```{r out.width="150",fig.asp="0.7",fig.align = "center"}
 library(plotly)
 
 p2 <-  qntile %>%
    mutate(text = paste("Country: ", country, "\nYear: ", 
                        year, "\nNational poverty live: ", national_povt_line,
-                       "\nHousehold final consumption: ", HFCE, "\nGNI: ", GNI,sep="")) %>% 
-   ggplot( aes(x=HFCE, y=national_povt_line, color = country_class, text=text)) +
+                       "\nHousehold final consumption: ", 
+                       HFCE, "\nGNI: ", GNI,sep="")) %>% 
+   ggplot(aes(x=HFCE, y=national_povt_line, color = country_class, text=text)) +
    geom_point(alpha=0.7) +
    scale_size(range = c(1.4, 19), name="Dollars ($)") +
    scale_color_manual(values = c("#5F4690","#38A6A5", "#73AF48", "#E17C05")) +
@@ -362,28 +384,24 @@ p2 <-  qntile %>%
 ```
 
 
-```{r include=FALSE}
+```{r out.width="100%",fig.asp="0.7",fig.align = "center"}
 p2 <- p2 +
   scale_x_log10() +
   scale_y_log10() +
   theme_minimal() 
-```
 
-
-```{r include=FALSE}
 p2 <- plotly::ggplotly(p2, tooltip="text", type='scatter', mode='markers')
  
-p2 <- p2 %>% layout(legend = list(x = 0.02, y = 0.9,title=list(text='<b> Country class </b>')))
+p2 <- p2 %>% layout(legend = list(x = 0.02, y = 0.9,title=
+                                    list(text='<b> Country class </b>')))
 
 
 p2 <- p2 %>%  layout(xaxis = list(autotypenumbers = 'strict', title =
-                              'Household final consumption expenditure',ticks="inside",
-                            showline=TRUE), 
-               yaxis = list(title = 'National poverty line',ticks="inside", showline=TRUE),
+                              'Household final consumption expenditure',
+                              ticks="inside",showline=TRUE), 
+               yaxis = list(title = 'National poverty line',ticks="inside",
+                            showline=TRUE),
                title="1c Richer countries tend to have higher national poverty lines")
-```
-
-```{r fig.width=12,fig.height=8,fig.align = "center"}
 p2
 ```
 
