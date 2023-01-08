@@ -1,27 +1,31 @@
 ---
 title: "HDI - What a time to be alive"
 description: |
-  Using the United Nation's Human Development Index (HDI) data to produce The Economist's map and other visualizations 
+  Using the United Nation's Human Development Index (HDI) data to produce The Economist's map and other visualizations.
 categories: "2022"
 author: Emma Perez Hernandez
 date: "`r Sys.Date()`"
 output:
   distill::distill_article:
-    self_contained: true
+    self_contained: false
     toc: true
 ---
-The Economist published this map in September 2022 in order to highlight that 'living standards are moving in the wrong direction'. (<https://www.economist.com/graphic-detail/2022/09/08/global-living-standards-are-moving-in-the-wrong-direction>) 
+
+The Economist published this map in September 2022 in order to highlight that ['living standards are moving in the wrong direction'](https://www.economist.com/graphic-detail/2022/09/08/global-living-standards-are-moving-in-the-wrong-direction).
 It is striking how most countries in the world have worsened their scores in the Human Development Index (HDI) between 2019 and 2021, which makes the map mainly red. The HDI, calculated by the United Nations since 1990, is a summary measure of average achievement in three key dimensions of human development: life expectancy, education and have a decent standard of living (income per person.)
 
 The aim of this tutorial is to reproduce the map and propose an alternative visualization using the same dataset.
 
-```{r, out.width="100%", fig.align='center', echo='FALSE'}
-knitr::opts_chunk$set(fig.showtext=TRUE)
-knitr::include_graphics("../100392586/HDI map.PNG")
+![HDI map. Source: [The Economist](https://www.economist.com/graphic-detail/2022/09/08/global-living-standards-are-moving-in-the-wrong-direction).](HDI map.PNG){.external width="100%"}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.showtext=TRUE,
+                      fig.align="center",
+                      out.width="100%")
 ```
  
 
-```{r, include=FALSE}
+```{r}
 library(readr)
 library(tidyverse)
 library(ggthemes)
@@ -30,25 +34,22 @@ library(giscoR)
 library(extrafont)
 library(showtext)
 library(sysfonts)
-library(av)
-library(gifski)
 library(gganimate)
 library(plotly)
 library(patchwork)
 ```
 
-```{r, include=FALSE}
+```{r}
 sysfonts::font_add_google("Open Sans", family = "Open Sans")
 showtext::showtext_auto()
 ```
+
 ## Getting and cleaning data
-All the data needed for this map can be downloaded directly from the UNDP website. 
-<https://hdr.undp.org/data-center/documentation-and-downloads> 
-They provide a complete data set with the latest ranking (2021), the index value for each country since 1990 and its components. Since the map only shows the change between 2019 and 2021, I select a subset of the data to compute the growth change in the required period, the country name and the ISO3 code. 
+All the data needed for this map can be downloaded directly from the [UNDP website](https://hdr.undp.org/data-center/documentation-and-downloads).
+They provide a [complete data set](https://hdr.undp.org/sites/default/files/2021-22_HDR/HDR21-22_Composite_indices_complete_time_series.csv) with the latest ranking (2021), the index value for each country since 1990 and its components. Since the map only shows the change between 2019 and 2021, I select a subset of the data to compute the growth change in the required period, the country name and the ISO3 code. 
 
 ```{r}
-
-HDI <- read.csv("https://hdr.undp.org/sites/default/files/2021-22_HDR/HDR21-22_Composite_indices_complete_time_series.csv")
+HDI <- read.csv("HDR21-22_Composite_indices_complete_time_series.csv")
 
 my_data <- HDI %>%
   select(country, iso3, hdi_2019, hdi_2021) %>%
@@ -91,7 +92,7 @@ The fill aesthetic is set to the variable "change", and the proper scale fill is
 Color is fixed in white and the size in 0.1 to  generate the lines for countries' contour. 
 Theme_map is added, since it sets all chart elements in blank but for the map.
 
-```{r, out.width="100%", fig.pos='center'}
+```{r}
 
 m <- ggplot(data = all_data) +
   geom_sf(aes(fill = change), color = "white", size = 0.1) +
@@ -120,11 +121,11 @@ m
 
 Since the previous legend does not show the missing values, another legend has to be configured for them. To do so, I get a very small region (Gibraltar), and add it as another map layer with color aesthetic in blank. For this aes, a scale color is defined in which a guide_bins is added specifying the proper color in the override.aes argument. 
 
-```{r, out.width="100%", fig.pos='center'}
+```{r}
 Gibraltar <- all_data %>% filter(ISO3_CODE == "GIB")
 
 m <- m + geom_sf(data = Gibraltar, aes(color = "")) +
-  scale_color_discrete(guide = guide_bins(
+  scale_color_discrete(guide = guide_legend(
     axis = FALSE,
     label = FALSE,
     title = "No data",
@@ -166,7 +167,7 @@ dataset and get their geographical centers with `st_point_on_surface`
 
 Another dataframe is created for Australia 
 
-```{r, out.width="100%", fig.pos='center'}
+```{r}
 points <- all_data %>% filter(ISO3_CODE %in% c("LBN", "BGD", "VEN", "NAM"))
 countries_center <- st_point_on_surface(points)
 
@@ -175,7 +176,7 @@ australia <- all_data %>% filter(ISO3_CODE == "AUS")
 
 Then, we can add them in two different layers
 
-```{r, out.width="100%", fig.pos='center'}
+```{r}
 m <- m + geom_sf_text(
   data = australia, aes(label = paste(NAME_ENGL, "1.1")),
   size = 2.5,
@@ -228,7 +229,7 @@ bangladesh_end <- st_transform(bangladesh_end, "+proj=robin")
 
 With the elements above, segments and text annotations can be put in place using `annotate`. The name and the change value of each country are used as labels, and their corresponding colors are also added. 
 
-```{r, out.width="100%", fig.pos='center'}
+```{r}
 m <- m + annotate("segment",
   x = lebanon[[1]][1], y = lebanon[[1]][2],
   xend = lebanon_end[[1]][1], yend = lebanon_end[[1]][2], size = 0.5) +
@@ -273,7 +274,7 @@ m
 
 Lastly, adding the proper title, subtitle and caption, and placing them in the same positions, the final map is achieved. The font used is "Open Sans", which can be downloaded from Google Fonts. 
 
-```{r, out.width="120%", fig.pos='center'}
+```{r, layout="l-page", preview=TRUE}
 m + labs(
   title = "What a time to be alive",
   subtitle = "Change in UN Human Development Index, 2019-21, %",
@@ -370,7 +371,7 @@ hdi_text_levels <- c("Low", "Medium", "High", "Very High")
 
 The axes are fix in a way that maximize the ink ratio, so I first analyze the range of the variables to be displayed in all available years
 
-```{r, out.width="100%", fig.pos='center'}
+```{r}
 
 range(hditotal$value, na.rm = TRUE)
 range(hditotal$f_m_diff, na.rm = TRUE)
@@ -380,7 +381,7 @@ The year 1990 is selected to create the static plot. The Y axe starts in 0.2 sin
 The X axe limits allow to show the maximum and minimum values of HDI Gender Gap. 
 
 
-```{r,  out.width="100%", fig.pos='center'}
+```{r}
 
 a <- hditotal %>%
   filter(year == 1990) %>%
@@ -396,7 +397,7 @@ a
 Notice that countries in which women are better off than men have a negative value, so they will appear on the left size of 0. To highlight this fact, I add a dashed line in 0. I also add dashed lines in each of the levels of HDI to differentiate them clearly. Additionally, I add an annotation showing the corresponding level under the dashed line. To do so, I specify its position just two decimals below the HDI level mark. 
 
 
-```{r,  out.width="100%", fig.pos='center'}
+```{r}
 hdi_pos_levels <- c(0.48, 0.68, 0.78, 0.98)
 
 a <- a + geom_hline(yintercept = c(0.5, 0.7, 0.8, 1), linetype = "dashed", color = "grey") +
@@ -410,7 +411,7 @@ a
 
 Since I want the background to be blank and other visual details differently, I adjust the elements in theme in accordance. 
 
-```{r,  out.width="100%", fig.pos='center'}
+```{r}
 a <- a + theme(
   text = element_text(family = "Open Sans"),
   axis.line.y = element_blank(),
@@ -426,7 +427,7 @@ a
 ```
 Now, I add the year we are referring to in a new `geom_text` layer. 
 
-```{r,  out.width="100%", fig.pos='center'}
+```{r}
 a <- a + geom_text(aes(0.24, 0.9, label = as.factor(year)), size = 8.5, color = "gray")
 a
 ```
@@ -440,7 +441,7 @@ We are ready to add the data. In order to show the situation of each country in 
   - Development region mapped to color (hue)
 
 
-```{r,  out.width="100%", fig.pos='center'}
+```{r}
 a <- a + geom_jitter(aes(y = value, x = f_m_diff, color = Region, size = hdi_f), alpha = 0.6)
 a
 ```
@@ -448,7 +449,7 @@ a
 Since I want to adjust the color paletter and the elements of the legends, I add `scale_color_brewer`  for the color, and `scale_size_area` for the bubbles' size. 
 In them, I set the legends options with `guide_legend` and make bigger color points and title adjustments. 
 
-```{r,  out.width="100%", fig.pos='center'}
+```{r}
 a <- a +
   scale_color_brewer(
     palette = "Set1",
@@ -477,7 +478,7 @@ a
 
 Addint title, subtitle and caption
 
-```{r,  out.width="100%", fig.pos='center', fig.height=5}
+```{r, fig.height=5}
 a <- a + labs(
   title = "Human Development Index and Gender gaps",
   subtitle = "Gender gap =  HDI male - HDI female",
@@ -488,7 +489,7 @@ a
 
 Tweaking legend and titles' details to fix their sizes and background
 
-```{r,  out.width="100%", fig.pos='center', fig.height=5}
+```{r, fig.height=5}
 a <- a + theme(
   plot.title = element_text(face = "bold", size = 10),
   plot.caption = element_text(size = 7.5, hjust = 0, color = "grey50"),
@@ -504,7 +505,7 @@ a
 Finally, it is worth annotating the countries which are outliers or have interesting positions in the plot. To do so, I select a bunch of countries and save them in a vector. Them, I filter the dataset to get this names along with its data in 1990. Finally, I add a new `geom_text`
 
 
-```{r, out.width="100%", fig.pos='center', fig.height=5}
+```{r, fig.height=5}
 
 countries <- c("Spain", "Afghanistan", "China", "Yemen", "India", "Niger", "Uruguay")
 
@@ -522,7 +523,7 @@ a_lab
 
 Having the chart for 1990 ready, we can reproduce it for different years using `%+%` to use the whole data set and filtering the desired year. I create the static chart for 2021 like this
 
-```{r, out.width="100%", fig.pos='center', fig.height=5}
+```{r, fig.height=5}
 d <- a %+% (hditotal %>% filter(year == 2021))
 
 labels2021 <- hditotal %>% filter(country %in% countries, year == 2021)
@@ -546,7 +547,7 @@ Placing both years together, we can see the changes produced in 40 years of evol
  - Low HDI area: Sub-Saharan countries + those with highest gender gap in 2021
  
 
-```{r, fig.pos='center', fig.width=12, fig.height=5}
+```{r, fig.width=12, fig.height=5, layout="l-page"}
 
 a_lab + (d_lab +plot_layout(guides="keep")) + plot_layout(guides="collect")
 
@@ -573,7 +574,7 @@ b <- a + geom_text(
 
 By using ` %+% hditotal` we switch to use the whole data set
 
-```{r, out.width="130%", fig.pos='center'}
+```{r}
 
 ggplotly(b %+% hditotal + aes(frame = year),
   width = 750, height = 550,
@@ -583,7 +584,7 @@ ggplotly(b %+% hditotal + aes(frame = year),
 
 ### And finally... a GIF 
 
-The package `animate` also allows us add a different kind of motion. It keeps all formatting much better than ggplotly, showing clearly how regions have evolved over the past 40 years, converging towards higher levels of human development (moving up) and reducing the HDI gender gap (moving to the left). 
+The package `gganimate` also allows us add a different kind of motion. It keeps all formatting much better than ggplotly, showing clearly how regions have evolved over the past 40 years, converging towards higher levels of human development (moving up) and reducing the HDI gender gap (moving to the left). 
 
 As before, we have to use the whole data set. I create a new object for that (c). We also have to add two more lines specific of this package in which we specify the transition time and the way in which it moves. 
 
@@ -597,7 +598,8 @@ c <- c +
 
 Now we just use animate
 
-```{r,  out.width="100%", fig.pos='center', fig.showtext=FALSE}
-showtext::showtext_opts(dpi=96)#sizes fit better with this option in the gif
+```{r, fig.showtext=FALSE}
+# sizes fit better with this option in the gif
+showtext::showtext_opts(dpi=96)
 animate(c, height = 400, width = 600)
 ```
