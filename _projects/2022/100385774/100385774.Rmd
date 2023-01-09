@@ -18,7 +18,7 @@ knitr::opts_chunk$set(fig.showtext=TRUE)
 
 ## About the graph
 
-Brooke Auxier and Monica Anderson published an article in the Pew Research Center in which they analyzed Social Media Use in 2021 for the Northamerican context, through data collected by the same organization and depicted by them in several graphs. One of them, the objective of this project, visually presents the evolution of use of thirteen Social Networks since 2012 (although only 5 of them have available data for the whole time series):
+Brooke Auxier and Monica Anderson published an article in the Pew Research Center in which they analyzed Social Media Use in 2021 for the Northamerican context, through data collected by the same organization and depicted by them in several graphs. One of them, the objective of this project, visually presents the evolution of use of eleven Social Networks since 2012 (although only 5 of them have available data for the whole time series).
 
 ```{r, out.width="90%", out.height="90%", fig.align='center'}
 
@@ -27,7 +27,7 @@ knitr::include_graphics("Data/Original plot.jpg")
 ```
 
 
-With it, their objective was to show how despite all controversies and negative feelings towards them, a majority of Northamericans still use at least one, and their usage increase through the last years. The goal of this project is to replicate the plot as closely as posible and to offer feasible enhancements and alternative visualizations. 
+With it, their objective was to show how despite all controversies and negative feelings towards them, a majority of Northamericans still use at least one, and how their usage has increased through the last years. The goal of this project is to replicate the plot as closely as posible and to offer feasible enhancements and alternative visualizations. 
 
 ## Plot construction
 
@@ -130,7 +130,7 @@ p <- p +
 p
 
 ```
-Now, the first year is '12, just as the original plot, and we've set the y limits to 100%. We didn't add the last vertical label, "100%": this is because it's placed slightly to the right, as the top grid is shorter than the rest, so we'll later set it as an individual annotation. We can also check how the x axis doesn't end in '21: this is because we've left some space to connect the last values to their labels through segments. 
+Now, the first year is '12, just as the original plot, and we've set the y limits to 100%. We didn't add the last vertical label, "100%": this is because it's placed slightly to the right, as the top grid is shorter than the rest, so we'll later set it as an individual annotation. We can also check how the x axis doesn't 'strictly' end in '21: this is because we've left some space to connect the last values to their labels through segments. 
 
 One characteristic aspect of this graphic is that it requires a lot of annotations in order to display its elements correctly. As our first one, we'll set the grid lines (although we'll not see them properly until applying the theme). The reason behind this is to avoid them extending 2021 when we leave space to connect the last points of data with the labels. 
 
@@ -598,12 +598,33 @@ filter(
 
 ```
 
+We set our last values, create a new column with the evolution since 2018 for each Social Media and make 3 filterings depending on if it's positive, negative or neutral. 
 
 ```{r}
 
-new %>% ggplot(aes(Social, Use)) +
-  geom_line() +
-  geom_point() +
+last <- new %>% filter(Year == max(Year))
+
+new <- new %>% group_by(Social) %>% 
+  mutate(
+    evo = last(Use) - first(Use)
+  )
+
+pos <- new %>% filter(evo > 0) %>% 
+  filter(Year == max(Year))
+neg <- new %>% filter(evo < 0) %>% 
+  filter(Year == max(Year))
+same <- new %>% filter(evo == 0)
+
+```
+
+A preliminary version of the idea would look similar to this: 
+
+```{r,  fig.height=7, fig.width=7, out.height="100%", out.width="100%", dpi=300}
+new %>% ggplot(aes(x = reorder(Social, -Use), y=Use)) +
+  geom_line(aes(color = evo),size = 0.9) +
+  geom_point(data = pos, aes(fill=evo), shape=24, size=1.2, color = "grey") +
+  geom_point(data = neg, aes(fill=evo), shape=25, size=1.2, color = "grey") +
+  geom_point(data = same, shape=18, size=2, fill="grey", color="grey") +
   scale_y_continuous(
     name = NULL,
     limits=c(0, 100),
@@ -611,17 +632,20 @@ new %>% ggplot(aes(Social, Use)) +
     labels = c("20" = "20", "40" = "40", "60" = "60", "80" = "80", "100" = "100%")
   ) +
   scale_x_discrete(name = NULL) +
+  #scale_color_manual(values= colors) +
+  scale_color_gradient(low="red", high="green") +
+  geom_label(data = last, aes(label = Use), nudge_x = 0.3, label.size = 0, fill="transparent") +
   theme(
     axis.ticks.x.bottom = element_line(color = "lightgrey"),
     panel.grid.major.y = element_line(colour = "lightgrey", linetype = "dotted"),
-    panel.grid.minor.y = element_line(colour = "transparent"),
+    panel.grid.minor.y = element_line(colour = "lightgrey", linetype = "dotted"),
     panel.background = element_rect(fill = "transparent"),
     legend.position = "none",
     axis.text.x.bottom = element_text(color="grey64", 
                                     family = "Franklin Gothic"),
     axis.text.y.left = element_text(color="grey64", 
                                     family = "Franklin Gothic", size=10),
-    axis.line.x.bottom = element_line(color="transparent"),
+    axis.line.x.bottom = element_line(color="lightgrey"),
     axis.ticks.length = unit(0, "pt"),
     axis.ticks.length.x.bottom = unit(5, "pt"),
     plot.caption = element_text(family = "Franklin Gothic", 
@@ -629,20 +653,27 @@ new %>% ggplot(aes(Social, Use)) +
     plot.caption.position = "plot",
     
     plot.subtitle = element_text(family = "Georgia", 
-                                 color = "grey64", hjust = 0.02, size=11),
-    plot.title = element_text(family = "Franklin Gothic Demi", hjust = 0, size=14.4),
+                                 color = "grey64", hjust = 0.02),
+    plot.title = element_text(family = "Franklin Gothic Demi", hjust = 0, size= 18),
     plot.title.position = "plot",
-    plot.margin = margin(t=0,
-                         r=0,
-                         b=18,
-                         l=0)
-  )
+    aspect.ratio = 1/1.2
+  ) +
+  labs(title = paste(" Growing share of Americans say that they use YouTube;\n", 
+"Facebook remains one of the most widely used online\n",
+"platforms among U.S. adults"),
+       subtitle = "% of U.S. adults who say they ever use ... ('18-'21)",
+       caption = paste("Note: Respondents who did not give an answer are not shown.",
+       "Temporal series start in 2018\nfor all Social Media except for",
+       "TikTok and Nextdoor (2021)",
+       "\nSource: Survey of U.S. adults conducted Jan. 25-Feb. 8, 2021.", 
+       '\n"Social media use in 2021"'))
+    
   
 
 ```
+The idea is to give more importance to the actual position and the latest evolution, using arrows pointing to the last trend and gradient colors to remark when it's positive or negative.
 
-
-(New graph explanation)
+We could also add the logos from each Social Network below the name, to improve the understanding of the graph for those readers who are not very familiar with Internet (please note that this is a draft version). 
 
 ## Addendums
 
