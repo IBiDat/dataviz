@@ -13,7 +13,8 @@ preview: Polio Vaccine - WSJ.png
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(out.width = "100%",
-                      fig.align = "center")
+                      fig.align = "center",
+                      fig.showtext=TRUE)
 ```
 
 ## Polio Vaccine in the US
@@ -119,13 +120,18 @@ Next we will merge the three data sets into one and then add up all the cases so
 
 ```{r}
 
+Abb <- read_delim("US State Abbreviations.csv", 
+    delim = ";", escape_double = FALSE, trim_ws = TRUE)
+
 Poliojoint <- full_join(Polio2, Polio1, by = c("State" = "State", "Date" ="Date"))
 
 Poliojoint1 <- full_join(Poliojoint, Polio, by = c("State" = "State", "Date" ="Date"))
 
-Polio_sum <- Poliojoint1 %>%  mutate_at(c('Cases.x', 'Cases.y', "Cases"), as.numeric) %>% 
+Poliojoint2 <- left_join(Poliojoint1, Abb, by = c("State" = "States"))
+
+Polio_sum <- Poliojoint2 %>%  mutate_at(c('Cases.x', 'Cases.y', "Cases"), as.numeric) %>% 
   mutate(sum_cases = rowSums(across(where(is.numeric)), na.rm=T), .keep = "unused") %>% 
-  filter(Date >= '1928-01-01')
+  filter(Date >= '1928-01-01') %>% rename(States = Abb) %>% select(-State)
 
 ```
 
@@ -150,7 +156,7 @@ The original graph is a heat map showing the number of polio cases reported in e
 
 ```{r}
 p <- Polio_sum %>% ggplot() +
-  aes(x=Date, y=fct_rev(State),fill=sum_cases)
+  aes(x=Date, y=fct_rev(States),fill=sum_cases)
 p
 ```
 
@@ -189,12 +195,10 @@ The breaks argument specifies the positions of the tick marks on the x-axis. In 
 
 
 ```{r}
-
 p <- p+ scale_x_date(expand=c(0,0), 
                      breaks = (seq(ymd("1930-01-01"), ymd("1965-01-01"), 
                                    by = "5 years")), 
-                     date_labels = "%Y")
-
+                     date_labels = "%Y") 
 p
 
 ```
@@ -223,14 +227,12 @@ Now we use different functions to modify the appearance of the chart to make it 
 
  p <-  p + labs(x="", y="", fill="")+
   ggtitle("Polio") +
-  theme(aspect.ratio = 6.5/12.5,
-    legend.position= "bottom",
+  theme(    legend.position= "bottom",
         legend.direction="horizontal",
         legend.text=element_text(colour="grey20"),
-    plot.margin=grid::unit(c(.5,.5,1.5,.5), "cm"),
-        axis.text.y=element_text(size=4.5, family="Tajawal", 
+        axis.text.y=element_text(size=8, family="Tajawal", 
                                  hjust=1),
-        axis.text.x=element_text(size=8),
+        axis.text.x=element_text(size=6),
         axis.ticks.y=element_blank(),
     axis.ticks.x=element_line(color = "grey50", size = 0.5),
     axis.line.x =element_line(color = "grey50", size = 0.5),
@@ -246,8 +248,7 @@ Finally, we add a label with the text "Vaccine introduced" to the plot at the sp
 ```{r}
 
   p <- p+ annotate("text", x=as.Date("1955-01-01"), y=55, label="Vaccine introduced", 
-           vjust=1, hjust=0, size=I(3), family="Tajawal")+
-  coord_fixed()
+           vjust=1, hjust=0, size=I(3), family="Tajawal")
 p
 
 
@@ -259,26 +260,32 @@ An attempt was made to use the same data set to replicate the original plot as c
 
 In this version, we can see that after the introduction of the vaccine in 1955 there was no drastic decrease in the number of cases, but on the contrary there was a slight increase in 1956. In addition, we can see that the number of cases actually dropped significantly after 1961, which coincides with the date when an improved version of the vaccine was introduced in the US.
 
-
 ## Improved plot
 
-```{r include=FALSE}
-p1 <- Polio_sum %>% ggplot() +
-  aes(x=Date, y=fct_rev(State),fill=sum_cases) + 
+It is a great challenge to make an improvement of a plot so well done and with so many recognitions. In fact, I personally consider that the original plot is the best way to visualize the effect of a vaccine in reducing the number of positive cases of contagion. 
+
+Therefore, I am not going to propose a new plot. Instead, I am going to improve the original plot by adding more useful information.
+
+First, as the most important thing is to see the effect of the vaccine, let's reduce the number of years exposed. To do this we will start in the year 1940 and end in the year 1970. For this purpose we will reduce the dataset.
+
+```{r}
+
+Polio_sum1 <- Polio_sum %>% filter(Date >= "1940-01-01" & Date <= "1966-01-01")
+
+p1 <- Polio_sum1 %>% ggplot() +
+  aes(x=(Date), y=fct_rev(States),fill=sum_cases) + 
   geom_tile(colour="white", lwd = 0.2, linetype = 1)+
   theme_minimal()+
-  scale_fill_gradientn(colours=cols,limits=c(0, 300))+
   scale_x_date(expand=c(0,0), 
-               breaks = (seq(ymd("1930-01-01"), ymd("1965-01-01"), 
+               breaks = (seq(ymd("1930-01-01"), ymd("1970-01-01"), 
                              by = "5 years")), date_labels = "%Y")+
   labs(x="", y="", fill="")+
   theme(aspect.ratio = 6.5/12.5,
-    legend.position= "bottom",
+        legend.position= "bottom",
         legend.direction="horizontal",
         legend.text=element_text(colour="grey50"),
-    plot.margin=grid::unit(c(.5,.5,1.5,.5), "cm"),
-        axis.text.y=element_text(size=3.5, family="Tajawal"),
-        axis.text.x=element_text(size=8),
+        axis.text.y=element_text(size=6, family="Tajawal"),
+        axis.text.x=element_text(size=6),
         axis.ticks.y=element_blank(),
     axis.ticks.x=element_line(color = "grey50", size = 0.5),
     axis.line.x =element_line(color = "grey50", size = 0.5),
@@ -288,11 +295,8 @@ p1 <- Polio_sum %>% ggplot() +
         text=element_text(family="Tajawal"))
 ```
 
-It is a great challenge to make an improvement of a plot so well done and with so many recognitions. In fact, I personally consider that the original plot is the best way to visualize the effect of a vaccine in reducing the number of positive cases of contagion. 
 
-Therefore, I am not going to propose a new plot. Instead, I am going to improve the original plot by adding more useful information.
-
-First I want to change the palette color to a color with more visual impact. That is why I want to choose a palette that makes it easier to see the years with the highest polio cases. That's why I chose the YlGnBu palette from the RColorBrewer package, which gives a very interesting effect.
+I want to change the palette color to a color with more visual impact. That is why I want to choose a palette that makes it easier to see the years with the highest polio cases. That's why I chose the YlGnBu palette from the RColorBrewer package, which gives a very interesting effect.
 
 ```{r}
 
@@ -309,7 +313,7 @@ This shows that it was only after the introduction of the second vaccine in 1961
 ```{r}
 p1 <- p1 + geom_segment(x=as.Date("1955-01-01"), xend=as.Date("1955-01-01"), 
                y=0, yend=52.5, size=.9, color="grey50", alpha=0.5)+
-  annotate("text", x=as.Date("1953-01-01"), y=56, label="First vaccine", 
+  annotate("text", x=as.Date("1952-01-01"), y=56, label="First vaccine", 
            vjust=1, hjust=0, size=I(3), family="Tajawal", color="grey50")+
    geom_segment(x=as.Date("1961-01-01"), xend=as.Date("1961-01-01"), 
                 y=0, yend=52.5, size=.9, color="grey50", alpha=0.5)+
@@ -327,15 +331,12 @@ p1 <- p1 + labs(title="Effect of the introduction of the two polio vaccines in t
   theme(plot.subtitle=element_text(size=6), plot.title=element_text(size=10))
 p1
 ```
-
-
-
 Now I want to include to the plot the number of cases presented in each of the states in order to easily visualize which of the states was the most affected by the polio virus.
 
 In that sense, we are going to modify the dataset to obtain the cases presented in each state during the years 1928 and 1971.
 
 ```{r}
-Casesxstate <- Polio_sum %>%  group_by(State) %>% summarise(total_cases = sum(sum_cases))
+Casesxstate <- Polio_sum %>%  group_by(States) %>% summarise(total_cases = sum(sum_cases))
 
 ```
 
@@ -343,7 +344,7 @@ Next, we are going to make a Barplot using the geom_col function, filling the ba
 
 ```{r}
 casebars <- ggplot(Casesxstate) + 
-  aes(x=total_cases, y=fct_rev(State), fill=total_cases)+
+  aes(x=total_cases, y=fct_rev(States), fill=total_cases)+
   geom_col(show.legend=FALSE)+
   theme_minimal()+
   scale_fill_gradientn(colors = brewer.pal(n=9, "YlGnBu"),
@@ -355,7 +356,7 @@ casebars <- ggplot(Casesxstate) +
     axis.line.y=element_blank(), 
     axis.text.y=element_blank(),
         axis.ticks.y=element_blank(), 
-    axis.text.x=element_text(size=6, colour="grey20"), 
+    axis.text.x=element_text(size=6, colour="grey50"), 
     axis.ticks.x=element_line(color = "grey50", size = 0.5),
     axis.line.x =element_line(color = "grey50", size = 0.5))
 casebars
@@ -364,17 +365,13 @@ casebars
 Next, we will use the patchwork package to assemble different plots. In our case, we are going to use the "inset_element" function to assemble the original plot with the new plot so that they are in the same plot. Let's see.
 
 ```{r}
-p2 <- p1+inset_element(casebars, 
-                       left=0.05, 
-                       bottom=0.03, 
-                       right=2.1, 
-                       top=0.97, 
-                       align_to="plot") + 
-  coord_fixed()
-p2
-
-ggsave("resultadofinalmejorado.pdf", plot = p2, width = 20, height = 20, units = "cm")
-
+p1+ inset_element(casebars, 
+                       left=0.95, 
+                       bottom=-0.1, 
+                       right=1.22, 
+                       top=0.965,
+                       align_to="panel", 
+                  clip = TRUE)
 ```
 
 With these improvements to the plot we can more easily see the change of colors in relation to the number of polio cases, we can see the effect of the introduction of the second vaccine in the US and finally we can see the states that suffered the most from Polio during the years recorded.
