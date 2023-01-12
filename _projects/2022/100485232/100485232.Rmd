@@ -11,7 +11,330 @@ output:
     toc: true
 ---
 
-asdfasdf asdkfjas dflaksj df
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(corrplot)
+library(forcats)
+library(sysfonts)
+library(showtextdb)
+library(showtext)
+library(giscoR)
+library(sf)
+library(leaflet)
+library(rnaturalearth)
+knitr::opts_chunk$set(echo = TRUE)
+
+#Dots per inch
+knitr::opts_chunk$set(fig.showtext=TRUE)
+
+#above code chunk to extend graph height, and make it longer
+
+sysfonts::font_add_google("Playfair Display", family = "Playfair Display")
+showtext::showtext_auto()
+sysfonts::font_add_google("Arimo", family = "arimo")
+showtext::showtext_auto()
+
+```
+
+## Chosen graph
+
+<iframe src="https://ourworldindata.org/grapher/self-reported-loneliness-older-adults" loading="lazy" style="width: 100%; height: 600px; border: 0px none;"></iframe>
+
+
+
+
+## Initial graph replicated
+```{r echo=FALSE, fig.height=10, fig.width=12, warning=FALSE}
+
+#Open data set
+worldsadness <- read_csv("self-reported-loneliness-older-adults.csv",
+                         show_col_types = FALSE)  %>%
+                          select(-Code)  %>%
+                           rename( Country = Entity)
+                    
+worldsadness$Country <- factor(worldsadness$Country, 
+                               levels=c("Denmark","Switzerland", "Sweden",
+                                        "United States", "England",
+                                        "Netherlands","Germany", "Finland",
+                                        "Spain", "Belgium","France", "Austria",
+                                    "Italy","Israel", "Greece"))
+sysfonts::font_add_google("Playfair Display", family = "Playfair Display")
+showtext::showtext_auto()
+sysfonts::font_add_google("Arimo", family = "arimo")
+showtext::showtext_auto()
+
+#Defining text fonts
+font_add_google("Playfair Display", family = "Playfair Display")
+showtext_auto()
+font_add_google("Arimo", family = "arimo")
+showtext_auto()
+
+#Graph
+ggplot(worldsadness)+
+  #establecer los ejes
+  aes(x=Country, y= Sadness, fill=Country )+
+  #quitar las etiquetas del eje x
+  scale_x_discrete(NULL) + 
+  #specify a color for each bar
+  geom_col( width = 0.75,#width of bars in relation to the x-axis
+            fill = c("#4982C5",#Austria
+                     "#C69F73",#Belgium
+                     "#719461",#Denmark
+                     "#E98473",#England
+                     "#CA6B7D",#Finland
+                     "#9A5057",#France
+                     "#3B6334",#Germany
+                     "#835CA2",#Greece
+                     "#CA723A",#Israel
+                     "#72B99E",#Italy
+                     "#A96C4A",#Netherlands
+                     "#274A74",#Spain
+                     "#B06FAB",#Sweden
+                     "#56B7C5",#Switzerland
+                     "#B06FAB"#USA
+                     ))+
+  coord_flip()+
+  theme_minimal()+
+  #now texts content 
+  labs(y= NULL,
+       title= "Self-reported loneliness among older adults",
+        subtitle = "Share of survey respondents who report feeling lonely at least some of the time. For all countries estimates \n correspond to population ages 65+, except in the following cases: US (ages 72+); UK (ages 65-74); and \n Finland (ages 75+).",
+       caption = "Source: Our World in Data based on Sundström et al. (2009), Savikko et al (2005), ONS (2019) and CIGNA (2018)\nNote: Estimates correspond to people who report feeling lonely \"some of the time\", \"most of the time\", or \"almost all the\n time\". This is in contrast to those that report feeling lonely \"rarely\", \"almost none of the time\", or \"never\".\nCC BY")+
+  #now texts characteristics
+  theme(
+    plot.title = element_text(size=32, family = "Playfair Display",
+                              color = "#555555"),
+    plot.subtitle = element_text(size=18, family = "arimo", color = "#555555",
+                                 lineheight = 0.8, margin= margin(0,0,20,0)),
+    plot.caption = element_text(size = 15, family = "arimo", color = "#555555",
+                                lineheight = 0.7,  margin= margin(10,0,0,0)))+
+  #now text position
+  theme(plot.title.position = "plot")+
+  theme(plot.subtitle = element_text(hjust = 0))+
+  theme(plot.caption =  element_text(hjust = 0))+
+  theme(plot.caption.position = "plot")+
+  #add label at the end of the bar
+  geom_text(aes(label = paste(Sadness, Year, sep= "% in ")), vjust = 0.7,
+            hjust=-0.1, colour = "#555555", size= 6, family= "arimo")+
+  #change the grid
+  theme(panel.grid.major.x = element_line(color = "lightgrey",
+                                          size = 0.4, linetype = 2))+
+  theme(panel.grid.minor.x = element_blank())+
+  theme(panel.grid.major.y = element_blank())+
+  #ticks del eje y bien puestos
+  scale_y_continuous(limits = c(0,70), 
+                     labels = c("0%","10%","20%","30%","40%","50%","60%"),
+                     breaks = c(0,10,20,30,40,50,60))+
+                    
+   #both axis text characteristics modified
+  theme(axis.text.x = element_text(size = 20, family = "arimo",
+                                   color = "#555555"))+
+  theme(axis.text.y = element_text( size = 17, family = "arimo", 
+                                    face = "bold", color = "#555555", 
+                                    hjust=1, vjust= 0.5))
+  
+```
+
+
+
+## Initial graph enhanced
+```{r echo=FALSE, fig.height=6, warning=FALSE}
+#above code chunk to extend graph height, and make it longer
+
+#Open data set
+worldsadness2 <- read_csv("remake2-self-reported-loneliness-older-adults.csv",
+                          show_col_types = FALSE)  %>% select(-Code)  %>%
+                          rename( Country = Entity)
+
+worldsadness2$Country <- factor(worldsadness2$Country, 
+                               levels=c("Denmark","Switzerland", "Sweden",
+                                        "United States", "England",
+                                        "Netherlands","Germany", "Finland",
+                                        "Spain", "Belgium","France", "Austria",
+                                        "Italy","Israel", "Greece"))
+worldsadness2$Age <- factor(worldsadness2$Age, 
+                               levels=c("65+", "65-74", "72+", "75+"))
+#Graph
+ggplot(worldsadness2)+
+  #establecer los ejes
+  aes(x=Country, y= Sadness, fill= Age)+
+  geom_col(width = 0.75)+#width of bars in relation to the x-axis
+  coord_flip()+
+  #cambiar fondo
+  theme_minimal()+
+  #the legend characteristics
+  scale_fill_manual(name = "Respondents age and \n data collection year",
+                      labels = c("65+ & 2005",
+                                 "65-74 & 2018",
+                                 "72+ & 2018", 
+                                 "75+ & 2002"),
+                      values = c("#BEBEBE",#Austria and all
+                                "#4169E1",#England
+                                "#A020F0",#USA
+                                "#2E8B57"))+#Finland
+  theme(legend.position = c (.8,.4))+
+  theme(legend.title =  element_text(size=8, family = "Playfair Display", hjust=0.4))+
+  theme(legend.text =  element_text(size=7, family = "Arimo"))+
+  #quitar las etiquetas del eje x
+  scale_x_discrete(NULL) + 
+  #change the grid characteristics
+  theme(panel.grid.major.x = element_line(color = "lightgrey",
+                                          size = 0.4, linetype = 2))+
+  theme(panel.grid.minor.x = element_blank())+
+  theme(panel.grid.major.y = element_blank())+
+  #now texts content
+  labs(y= NULL,
+       title= "Self-reported loneliness among older adults",
+       subtitle = "Percentage of respondents who reported feeling lonely \"some of the time\", \"most of the time\", or \"almost \nall the time\", contrary to those who reported feeling lonely \"rarely\", \"almost none of the time\" or \"never\".",
+       caption = "Source: Our World in Data based on Sundström et al. (2009), Savikko et al (2005), ONS (2019) and CIGNA (2018)")+
+  #now texts characteristics
+  theme(
+    plot.title = element_text(size=17, family = "Playfair Display",
+                              color = "black"),
+    plot.subtitle = element_text(size=9, family = "Arimo", color = "#555555",
+                                 lineheight = 0.9, margin= margin(0,0,10,0)),
+    plot.caption = element_text(size = 7, family = "Arimo", color = "#555555",
+                                lineheight = 0.5, margin= margin(10,0,0,0)))+
+  #now text position
+  theme(plot.title.position = "plot")+
+  theme(plot.subtitle = element_text(hjust = 0))+
+  theme(plot.caption =  element_text(hjust = 0))+
+  theme(plot.caption.position = "plot")+
+  #add label at the end of the bar
+  geom_text(aes(label = paste(Sadness, "%", sep = "")), vjust = 0.7, hjust=-0.1,
+            colour = "#555555", size= 3, family= "Arimo")+
+    #ticks del eje y bien puestos
+  scale_y_continuous(limits = c(0,70), labels = c("","","","30%","", "","60%"), 
+                     breaks = c(0,10,20,30,40,50,60))+  
+  #both axis text characteristics modified
+  theme(axis.text.x = element_text(size = 10, family = "Arimo",
+                                   color = "#555555"))+
+  theme(axis.text.y = element_text(size = 9, family = "Arimo", face = "bold",
+                                   color = "#555555", hjust=1, vjust= 0))
+```
+
+## Alternative visualization of the graph
+
+### Choropleth map
+```{r echo=FALSE, warning=FALSE, fig.align="center"}
+
+#graph fonts
+sysfonts::font_add_google("Playfair Display", family = "Playfair Display")
+showtext::showtext_auto()
+sysfonts::font_add_google("Public sans", family = "public sans")
+showtext::showtext_auto()
+#The data
+worldsadness3 <- read_csv("map-self-reported-loneliness-older-adults.csv", 
+                          show_col_types = FALSE)  %>% select(-Code)  %>% 
+                          rename( Country = Entity)
+#The map
+world <- ne_countries(scale = "medium", returnclass = "sf")
+Europe <- world[which(world$continent == "Europe"),]
+#To join the data frames, map and data
+mapdata<- Europe %>% left_join(worldsadness3, by = c("admin" = "Country"))
+#data as map
+mapdata <- st_as_sf(mapdata)
+# Project the map data into a different coordinate system
+mapdata <- st_transform(mapdata, crs = "+proj=longlat +datum=WGS84")
+#The graph
+ ggplot(mapdata) +
+  geom_sf(aes(fill= Sadness),color = "white",
+          linetype = 1,
+          lwd = 0.25) +
+  coord_sf(xlim = c(-15,50), ylim = c(35,73), expand = FALSE)+
+#Without grid
+  theme_void()+
+#scale color and legend
+   scale_fill_gradient(low="yellow", high ="red", limits = c(20,70), name=NULL,
+                      labels = c("30%","40%", "50%","60%"),
+                      breaks = c(30,40,50,60),
+                      guide = guide_colourbar(reverse = TRUE))+
+#now texts content
+labs(
+     title= "Percentage of elders \n feeling sad",
+     subtitle= "Other countries: \n USA 30% \n Israel 48%",
+     caption = "Displayed respondents reported feeling lonely \"some of the time\",\n \"most of the time\", or \"almost all the time\", contrary to those who \n reported feeling lonely \"rarely\", \"almost none of the time\" or \"never\"\n \n Source: Our World in Data based on Sundström et al. (2009), Savikko et al (2005), ONS (2019) and CIGNA (2018)")+
+#now texts characteristics
+  theme(
+    plot.title = element_text(size=19, family = "Playfair Display",
+                              color = "black", lineheight = 0.9),
+    plot.subtitle = element_text(size = 9, family = "public sans", color = "#555555",
+                                 lineheight = 0.8, margin= margin(10,0,0,0)),
+    plot.caption = element_text(size = 8, family = "public sans", color = "#555555", 
+                                lineheight = 0.8, margin= margin(10,0,0,0)))+
+  #now text position
+  theme(plot.title.position = "plot")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(plot.caption =  element_text(hjust = 0.5))+
+  theme(plot.caption.position = "plot")+
+   theme(plot.subtitle = element_text(hjust = 1))
+```
+
+### Interactive map
+```{r echo=FALSE, warning=FALSE, fig.align="center"}
+#The data
+worldsadness4 <- read_csv("map-self-reported-loneliness-older-adults.csv",
+                          show_col_types = FALSE)%>%
+                          select(-Code)  %>%
+                          rename( Country = Entity)
+#The map
+world <- ne_countries(scale = "medium", returnclass = "sf")
+Europe <- world[which(world$continent == "Europe"),]
+#To join the data frames, map and data
+mapdata<- Europe %>% left_join(worldsadness4, by = c("admin" = "Country"))
+#data as map
+mapdata <- st_as_sf(mapdata)
+# Project the map data into a different coordinate system
+mapdata <- st_transform(mapdata, crs = "+proj=longlat +datum=WGS84")
+#ANIMATED GRAPH
+#Color gradient another function, 
+color_gradient2 <- colorNumeric(c("white", "yellow",
+"red", "darkred"), 1:65)
+my_colors3 <- color_gradient2(mapdata$Sadness)
+#labels content
+mylabels <- paste(ifelse(is.na(mapdata$name), "", mapdata$name), "<br/>",
+                  ifelse(is.na(mapdata$Sadness), "", paste(mapdata$Sadness,"%")),
+                  "<br/>",ifelse(is.na( mapdata$Year), "",
+                  paste("Data collection:", mapdata$Year)), "<br/>",
+                  ifelse(is.na(mapdata$Age), "", 
+                         paste("Respondents age:", mapdata$Age)))%>%
+  lapply(htmltools::HTML)
+#title and reference
+htmltitle <- "<h5> <b> Percentage of elders feeling sad <b> </h5>"
+EEUU <- "<h5> USA 30%  <br /> Data collection: 2018 <br /> Respondents age: 72+ </h5>"
+Israel <- "<h5> Israel 48% <br /> Data collection: 2005 <br /> Respondents age: 65+ </h5>"
+
+#THE GRAPH
+leaflet(mapdata) %>%
+  setView( lat=55, lng=20 , zoom=3)%>%
+  addPolygons(
+    fillColor = my_colors3,
+    stroke = TRUE,
+    color = 'White', 
+    weight = 1.5,
+    label = mylabels,
+    labelOptions = labelOptions( 
+      style = list("font-weight" = "normal", padding = "3px 8px"), 
+      textsize = "13px", 
+      direction = "auto")) %>%
+  
+  addLegend(
+            position = "bottomright", 
+            pal= color_gradient2, 
+            values = ~mapdata$Sadness,
+            na.label = "No data",
+            opacity = 0.4,
+            labFormat = labelFormat(suffix="%"),
+            title = "") %>%
+  addControl(html=Israel, position = "topright") %>%
+  addControl(html=EEUU, position = "bottomright") %>%
+  addControl(html=htmltitle, position = "topleft")
+
+```
+
 
 
 
