@@ -1,7 +1,7 @@
 ---
 title: "China Dissent"
 description: |
-  We are going to represent The Economist's graph related to social dissent in China.
+  Representing social dissent in China geospatially and by issue.
 categories: "2022"
 author: Gabriel Rodríguez Molina
 date: "`r Sys.Date()`"
@@ -12,15 +12,18 @@ output:
 ---
 
 
-```{r}
+```{r include=FALSE}
 library (distill)
 library (tidyverse)
+library (tmap)
 library (sf)
 library(ggplot2)
 library(ggtext)
 
-chinacsv <- read_delim ("dissent.csv", delim=",", skip=0) 
+## read data
+chinacsv <- read_delim ("dissent_last.csv", delim=",", skip=0) 
 
+## creating codes to join the data and the map
 chinadissent <- chinacsv %>% 
                   mutate (
                     code = case_when(
@@ -58,6 +61,7 @@ chinadissent <- chinacsv %>%
                   count(code) %>% 
                   drop_na() 
 
+## code for the map
 china_map <- st_read("province.shp")
 
 china_map1 <- china_map  %>% mutate (
@@ -91,80 +95,52 @@ china_map1 <- china_map  %>% mutate (
                             NAME_PINGY %in% c("Ningxiahuizu Zizhiqu") ~ "26"
                        ))   %>%
                       mutate(across(c(code), as.numeric)) %>% 
-                            filter(NAME_PINGY != "Taiwan Sheng")
-                            
-join_map_data <-  china_map1 %>% left_join(chinadissent, by="code") 
-
-join_map_data %>% ggplot() +
-  geom_sf(aes(fill=n), color="white",lwd=0.2, )  + 
-  coord_sf(ylim=c(-1.7e+06, 2e+06), xlim=(c(-2.45e+06, 2e+06)))+
-labs(
-    fill=quote(bold("By province")),
-    title = quote(bold("Do you hear the people sing?")),
-    subtitle =("<span style='font-size: 12pt; font-family:Calibri;'>China, number of protests</font><br>
-                <span style='font-size: 10pt; font-family:Helvetica;'>May 18th-Oct 18th 2022</font><br><br><br><br>")
-    ) + 
-  theme(plot.title = element_text(size = rel(1.2), family="Calibri"),
-        plot.subtitle = element_markdown(lineheight=1.5),
-        plot.title.position = "plot",
-        panel.background = element_blank(),
-        panel.grid.major = element_blank(),
-        legend.direction = "horizontal",
-        legend.text = element_text(size=9, family="Helvetica"),
-        legend.key.height = unit(0.2, 'cm'),
-        legend.key.size = unit(0.9, 'cm'),
-        legend.position = c(0.25,1.1),
-        legend.title = element_text(size=11, family="Calibri"),
-        axis.text = element_blank(),
-        axis.ticks = element_blank()
-        ) +
-  guides(fill = guide_colorbar(title.position = "top"), colour = guide_legend(title.position= "right"))+
-  scale_fill_binned(breaks = c(10, 20, 30, 40, 50),
-                    low = "#C7E6FD", high = "#15346F", 
-                    na.value="#d6d6d6",
-                    limits=c(0, 60)
-            )
-
-
+                      filter(NAME_PINGY != "Taiwan Sheng")
+         
+         
+join_map_data <-  china_map1 %>% left_join(chinadissent, by="code") %>% select(COUNT, geometry)
 ```
 
-##Second Plot
-```{r}
 
-china_data <- read_delim ("dissent.csv", delim=",", skip=0)
+```{r include=FALSE}
 
+## data forn the second chart
 
-x <- c("Others", "Corruption", "State violence", "Fund withdrawal freeze", "Land rights", "Building disputes", "School disputes",
-       "Fraud", "Pay and benefits",  "COVID-19 pandemic policies", "Delayed housing project")
+x <- c("COVID-19 pandemic policies", "Delayed housing project","State violence", "Fund withdrawal", "Pay and benefits"  ,"Building disputes","School disputes", "Land rights", "Corruption", "Fraud", "Others")
 
-china_data1 <- china_data %>% 
+china_data <- chinacsv %>% 
                 transmute (
-                  Issue=issue,
+                  Date=`beginning date`,
                   reason_dissent = case_when( 
-                    issue %in% c("delayed housing project", "delayed housing project, building quality",
-                              "delayed housing project, fraud","delayed housing project, project plan violation",
-                              "delayed housing project, school district disputes") ~ "Delayed housing project",
-                    issue %in% c("pay and benefits") ~ "Pay and benefits",
                     issue %in% c("fraud", "fraud, building quality", "fraud, contract breach", "fraud, corruption",
                               "fraud, investment disputes", "fraud, land rights", "fraud, land rights, corruption",
                               "fraud, property management disputes", "fraud, school district disputes",
                               "fraud, state violence", "fraud, state violence, corruption") ~ "Fraud",
+                    issue %in% c("delayed housing project", "delayed housing project, building quality",
+                              "delayed housing project, fraud","delayed housing project, project plan violation",
+                              "delayed housing project, school district disputes", 
+                              "delayed housing project, fraud, building quality") ~ "Delayed housing project",
+                    issue %in% c("pay and benefits") ~ "Pay and benefits",
                     issue %in% c("COVID-19 pandemic policies", "COVID-19 pandemic policies, censorship", 
                               "COVID-19 pandemic policies, pay and benefits",
                               "COVID-19 pandemic policies, political change",
                               "COVID-19 pandemic policies, state violence",
-                              "COVID-19 pandemic policies, censorship, political change") ~ "COVID-19 pandemic policies",
-                    issue %in% c("building quality", "building quality, illegal property handover",
-                              "building quality, property pricing") ~ "Building disputes",
+                              "COVID-19 pandemic policies, censorship, political change", 
+                              "COVID-19 pandemic policies, school health and safety", 
+                              "COVID-19 pandemic policies, utility issues") ~ "COVID-19 pandemic policies",
                     issue %in% c("school bullying", "school district disputes",
                               "school district disputes, building quality", 
                               "school district disputes, building quality, service and management Issues",
                               "school policy") ~ "School disputes",
-                    issue %in% c("land rights", "land rights, corruption", "land rights, project plan violation") ~ "Land rights",
-                    issue %in% c("fund withdrawal freeze", "fund withdrawal freeze, corruption") ~ "Fund withdrawal freeze",
-                    issue %in% c("corruption", "corruption, abusing authority") ~ "Corruption",
+                    issue %in% c("building quality", "building quality, illegal property handover",
+                              "building quality, property pricing") ~ "Building disputes",
+                    issue %in% c("fund withdrawal freeze", "fund withdrawal freeze, corruption") ~ "Fund withdrawal",
+                    issue %in% c("land rights", "land rights, corruption", "land rights, project plan violation") ~ 
+                                  "Land rights",
                     issue %in% c("state violence", "state violence, land rights, corruption", 
-                                 "state violence, verdict disputes") ~ "State violence",
+                                 "state violence, verdict disputes", "state violence, verdict/sanction disputes"
+                                 ) ~ "State violence",
+                    issue %in% c("corruption", "corruption, abusing authority") ~ "Corruption",
                     issue %in% c("abusing authority", "agricultural rights","confiscation of assets",
                               "debt disputes", "drug safety", "environmental pollution or damage", 
                               "family policies", "missing persons","food safety", "forced eviction", "freedom of belief", 
@@ -173,44 +149,105 @@ china_data1 <- china_data %>%
                               "project plan violation", "property management disputes", 
                               "property management disputes, environmental pollution or damage", 
                               "property pricing", "utility issues","verdict disputes", "video games", "censorship",
-                              "investment disputes", "medical disputes", "contract breach", "family policies, missing persons",
-                               "verdict disputes") ~ "Others"
+                              "investment disputes", "medical disputes", "contract breach", "family policies, 
+                              missing persons", "verdict disputes", "product safety", "investment dispute", 
+                              "service and management Issues", "school health and safety", "verdict/sanction disputes",
+                              "women's rights") ~ "Others" 
                               )
-                            ) %>% 
-                    group_by(reason_dissent) %>%
-                    count() %>%  
+                            ) %>%
+                    drop_na() %>%
+                    group_by(reason_dissent,Date) %>%
+                    count() %>%
+                    filter(Date >="2022-09-01") %>% 
+                    group_by(reason_dissent) %>% 
+                    mutate(cumulative_n = cumsum(n)) %>% 
                     transmute(
                           reason_dissent = factor (reason_dissent, levels = x),
-                          n_cases= n) %>%
-                    arrange(reason_dissent) %>% 
-                    drop_na()
+                          cumulative_n,
+                          Date)
 
+# map
 
-  
-
-
-final_plot <- ggplot(china_data1) +
-  aes(n_cases, reason_dissent, aes(x = longitude*0.1)) +
-  geom_col(fill="#15387A", width = 0.45)+
-  labs(
-    x=NULL,
-    y=NULL,
-    title=quote(bold("By reason for dissent")),
-    caption = ("Source: Freedom's House China Dissent Monitor")
-    )+
-  scale_x_continuous(position = "top") +
-  theme(plot.title = element_text(size = (8.5)),
+final_map <- join_map_data %>% ggplot() +
+  geom_sf(aes(fill=COUNT), color="white",lwd=0.2, )  + 
+  coord_sf(ylim=c(-1.7e+06, 2e+06), xlim=(c(-3.3e+06, 2e+06)))+
+labs(
+    fill=quote(bold("By province")),
+    title = quote(bold("Do you hear the people sing?")),
+    subtitle =("<span style='font-size: 10pt; font-family:Helvetica;'>China, number of protests</font><br>
+                <span style='font-size: 9pt; font-family:Helvetica;'> September 1st to December 31th, 2022</font>")
+    ) + 
+  theme(
+        plot.title = element_text(size = 12, family="Calibri", hjust=-0.015),
+        plot.subtitle = element_markdown(lineheight=1.5, hjust=-0.01),
         panel.background = element_blank(),
-        panel.grid.major.x = element_line(color= "grey"),
-        plot.title.position = "plot",
-        axis.ticks= element_blank(),
-        axis.text.y = element_text(hjust=0, size=7.7),
-        aspect.ratio = 2.5,
-        plot.caption = element_text(hjust = 2.45, size=7, color="grey"))
+        panel.grid.major = element_blank(),
+        legend.direction = "horizontal",
+        legend.text = element_text(size=9, family="Helvetica"),
+        legend.key.height = unit(0.18, 'cm'),
+        legend.key.size = unit(0.6, 'cm'),
+        legend.position = c(0.125,0.89),
+        legend.title = element_text(size=9, family="Helvetica"),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        legend.spacing.x = unit(8.0, 'cm')
+        ) +
+  guides(
+        fill = guide_colorbar(title.position = "top"))+
+  scale_fill_binned(
+        breaks = c(75, 100, 125, 150),
+        low = "#C7E6FD", high = "#004776", 
+        na.value="#d6d6d6",
+        limits=c(50, 175)
+            )
+
+# second plot
+
+cols <- c("#146c9b", "#eacbab", "#d49c4c", "#acdbdb" , "#040404","#9c947c" , "#ce9f5d", "#498caa", "#546466","#729499" )
 
 
+final_plot<-ggplot(china_data) +
+  aes(Date,cumulative_n) +
+  ggstream::geom_stream(
+      aes(fill=reason_dissent),
+      type="proportional")+
+  labs(
+      title=quote(bold("Anti-lockdown protests boost due to zero-Covid strategy")),
+      fill=quote(bold("By Issue")),
+      caption = ("Source: Freedom's House China Dissent Monitor"),
+      y = quote(bold("Percentage of protests")))+
+  theme(
+      plot.title = element_text(size = 12, family="Calibri", 
+                                margin=margin(0,0,5,0)),
+      panel.background = element_blank(),
+      plot.margin=unit(c(0,0,0,0),"cm"),
+      plot.title.position = "plot",
+      axis.text.y = element_text(hjust=0, size=11, family="Helvetica", color="black"),
+      axis.text.x = element_text(size=11, 
+                                 family="Helvetica", color="black"),
+      axis.title.x = element_blank(),
+      aspect.ratio = 0.68,
+      plot.caption = element_text(hjust = -1.25, size=10, color="grey"),
+      legend.text = element_text(size=9, family="Helvetica"),
+      legend.key.height = unit(0.27, 'cm'),
+      legend.key.width  = unit(0.27, 'cm'),
+      legend.key.size = unit(0.9, 'cm'),
+      legend.position = "bottom",
+      legend.title = element_text(size=9, family="Helvetica"))+
+  scale_x_date(date_breaks = "months", date_labels = "%m-%Y", expand = c(0.01, 0))+
+  scale_y_continuous(labels= c("0%", "25%", "50%", "75%", "100%"), expand = c(0.10, 0))+
+  guides(fill = guide_legend(title.position = "top"))+
+  scale_fill_manual(values = cols)
+```
+
+
+```{r echo=FALSE, fig.align='center'}
+final_map
+```
+```{r echo=FALSE, fig.align='center'}
 final_plot
 ```
+
 
 
 
