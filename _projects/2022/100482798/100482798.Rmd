@@ -1,7 +1,7 @@
 ---
-title: "China Dissent"
+title: "Social Dissent in China by ‘The Economist’: How Frequent are Protests in the Country?"
 description: |
-  Representing social dissent in China geospatially and by issue.
+  An explanation of my layer-by-layer construction of a chart representing social dissent in China geospatially and by issue. This article consists in the replication of a plot made by The Economist's, continuing with an alternative representation using similar data. The critique of the strengths and weaknesses of the original chart and the successive transformations pf the chart are fundamented in data visualization theory.
 categories: "2022"
 author: Gabriel Rodríguez Molina
 date: "`r Sys.Date()`"
@@ -11,19 +11,42 @@ output:
     toc: true
 ---
 
+The current social and political environment in China is complex and dynamic. The Land of the Dragon is usually misunderstood by the Western countries whose vision is usually biased or distorted due to all the contradictory narratives hiding international political dynamics of power. Differently to what many people think, protests are very usual in the People's Republic. However, due to the lack of transparency it's not such an easy thing to measure. This is a subject that is worth exploring for those who are interested in gaining a deeper understanding about the controversial economic giant. Studying the trends of the protests in China and the motivations behind them, it is possible to acquire insight about the current state of affairs in the country. Additionally, understanding the role that China's government plays in responding to and facilitating protests can provide further knowledge about the country's current political and social environment.
 
-```{r include=FALSE}
+I will work on the next chart extracted from the article ["How common are protests in China?"](https://www.economist.com/graphic-detail/2022/11/16/how-common-are-protests-in-china) by The Economist, which aims to represent the different demonstrations of discontent in the country. It is made of two charts which assess popular manifestations geographically and depending on the issue. Scores are calculated using the data supplied by the [China Dissent Monitor](https://chinadissent.net/), a webpage owned by the neo-liberal think thank [Freedom House](https://freedomhouse.org/). The data lists one by one all the monitored cases of dissent and different variables including dates, provinces, issues, descriptions, number of participants...
+
+<center>
+![“Do you hear the people sing?” The Economist’s chart](https://www.economist.com/media-assets/image/20221203_WOF002.png){width=40% height=40%} 
+</center>
+
+## Step One: Replication of the chart
+
+### Data collection and processing
+
+```{r echo=TRUE}
+# Load libraries
+
 library (distill)
 library (tidyverse)
-library (tmap)
 library (sf)
 library(ggplot2)
 library(ggtext)
+```
 
-## read data
-chinacsv <- read_delim ("dissent_last.csv", delim=",", skip=0) 
+As it was explained, the data has been obtained from the China Dissent monitor, made by the Freedom House. The second data set is a .shp document that allow us to geospatially reproduce the whole map of china, including cities and provinces. 
 
-## creating codes to join the data and the map
+```{r}
+# Read data
+
+chinacsv <- read_delim ("dissent.csv", delim=",", skip=0)
+china_map <- st_read("province.shp")
+```
+
+
+To represent the data it's necessary to first merge both data sets. In order to accomplish that it is necessary to create a similar ID code for each of the provinces. The code is not shown due to its excessive longitude, but it only uses "mutate" and "case_when" to assign a number to each province in both data frames.
+
+```{r include=FALSE}
+
 chinadissent <- chinacsv %>% 
                   mutate (
                     code = case_when(
@@ -55,14 +78,8 @@ chinadissent <- chinacsv %>%
                       province %in% c("Xinjiang") ~ "25",
                       province %in% c("Ningxia") ~ "26"
                       )
-                  )  %>% 
-                  select(code) %>% 
-                  mutate(across(c(code), as.numeric)) %>% 
-                  count(code) %>% 
-                  drop_na() 
-
-## code for the map
-china_map <- st_read("province.shp")
+                  ) 
+         
 
 china_map1 <- china_map  %>% mutate (
                   code= case_when( 
@@ -92,21 +109,623 @@ china_map1 <- china_map  %>% mutate (
                             NAME_PINGY %in% c("Zhejiang Sheng") ~ "23",
                             NAME_PINGY %in% c("Xinjiangweiwu'erzu Zizhiqu") ~ "25",
                             NAME_PINGY %in% c("Qinghai Sheng") ~ "24",
-                            NAME_PINGY %in% c("Ningxiahuizu Zizhiqu") ~ "26"
-                       ))   %>%
-                      mutate(across(c(code), as.numeric)) %>% 
-                      filter(NAME_PINGY != "Taiwan Sheng")
+                            NAME_PINGY %in% c("Ningxiahuizu Zizhiqu") ~ "26")
+                  ) %>%
+                  mutate(across(c(code), as.numeric)) %>% 
+                  filter(NAME_PINGY != "Taiwan Sheng")
+
+ 
          
-         
-join_map_data <-  china_map1 %>% left_join(chinadissent, by="code") %>% select(COUNT, geometry)
+```
+
+
+Before combining both data frames, a few transformations have to be done. First, the "code" column is changed to numeric value and then the "count" function is used to score and group the cases of dissent by province. As a result we have only two columns left related to each object: the province with an ID code assigned to it and the number of cases in each province. 
+
+```{r}
+chinadissent %>%
+    select(code) %>% 
+    mutate(across(c(code), as.numeric)) %>% 
+    count(code) 
+
+```
+
+```{r include=FALSE}
+china_dissent <- chinadissent %>%
+                    select(code) %>% 
+                    mutate(across(c(code), as.numeric)) %>% 
+                    count(code) 
+
+```
+
+
+Similar adjustments have to be made for the second data set corresponding the geospatial data. In this case, grouping was not needed since there is only one row per province. Taiwan was removed from the map as it doesn't appear in the original chart.
+
+```{r}
+china_map1 <- china_map1 %>%
+                  mutate(across(c(code), as.numeric)) %>% 
+                  filter(NAME_PINGY != "Taiwan Sheng")
+```
+
+
+It's time to join both data frames using left_join function. We only keep the code representing the provinces and the geospatial information about each of these provinces.
+
+```{r}
+china_map1 %>% 
+  left_join(china_dissent, by="code") %>% 
+  select(n, geometry)
+```
+```{r include=FALSE}
+join_map_data <-  china_map1 %>% 
+  left_join(china_dissent, by="code") %>% 
+  select(n, geometry) 
+```
+
+It is also necessary to modify the data for the second chart. As there are many different variations of each of the issues introduced  in the data set we have to group them in wider categories. For example, to represent the variable "Fraud," we are using "fraud, building quality", "fraud corruption"...etc. This code is very extensive so it is not being shown either, it includes again "transmute" combined with "case_when" function. 
+
+```{r include=FALSE}
+x <- c("Others", "Corruption","State violence", "Fund withdrawal freeze", "Land rights"  ,"School disputes","Building disputes", "Fraud", "COVID-19 pandemic policies", "Pay and benefits", "Delayed housing project")
+
+china_data <- chinacsv %>% 
+                transmute (
+                  Issue=issue,
+                  reason_dissent = case_when( 
+                    issue %in% c("fraud", "fraud, building quality", "fraud, contract breach", "fraud, corruption",
+                              "fraud, investment disputes", "fraud, land rights", "fraud, land rights, corruption",
+                              "fraud, property management disputes", "fraud, school district disputes",
+                              "fraud, state violence", "fraud, state violence, corruption") ~ "Fraud",
+                    issue %in% c("delayed housing project", "delayed housing project, building quality",
+                              "delayed housing project, fraud","delayed housing project, project plan violation",
+                              "delayed housing project, school district disputes") ~ "Delayed housing project",
+                    issue %in% c("pay and benefits") ~ "Pay and benefits",
+                    issue %in% c("COVID-19 pandemic policies", "COVID-19 pandemic policies, censorship", 
+                              "COVID-19 pandemic policies, pay and benefits",
+                              "COVID-19 pandemic policies, political change",
+                              "COVID-19 pandemic policies, state violence",
+                              "COVID-19 pandemic policies, censorship, political change") ~ "COVID-19 pandemic policies",
+                    issue %in% c("school bullying", "school district disputes",
+                              "school district disputes, building quality", 
+                              "school district disputes, building quality, service and management Issues",
+                              "school policy") ~ "School disputes",
+                    issue %in% c("building quality", "building quality, illegal property handover",
+                              "building quality, property pricing") ~ "Building disputes",
+                    issue %in% c("fund withdrawal freeze", "fund withdrawal freeze, corruption") ~ "Fund withdrawal freeze",
+                    issue %in% c("land rights", "land rights, corruption", "land rights, project plan violation") ~ 
+                                  "Land rights",
+                    issue %in% c("state violence", "state violence, land rights, corruption", 
+                                 "state violence, verdict disputes") ~ "State violence",
+                    issue %in% c("corruption", "corruption, abusing authority") ~ "Corruption",
+                    issue %in% c("abusing authority", "agricultural rights","confiscation of assets",
+                              "debt disputes", "drug safety", "environmental pollution or damage", 
+                              "family policies", "missing persons","food safety", "forced eviction", "freedom of belief", 
+                              "illegal property handover", "interior finish disputes", "occupational injury", 
+                              "occupational safety", "personal safety", "petition rights", "political change", "poverty",
+                              "project plan violation", "property management disputes", 
+                              "property management disputes, environmental pollution or damage", 
+                              "property pricing", "utility issues","verdict disputes", "video games", "censorship",
+                              "investment disputes", "medical disputes", "contract breach", "family policies, 
+                              missing persons", "verdict disputes") ~ "Others" 
+                              )
+                            )
+```
+
+
+Subsequent changes include creating a new column counting the number of cases for each case of dissent. The column "reason_dissent" is changed into a factor so labels can be ordered when building the plot. It wouldn't be necessary to use factors if the data had just to be ordered alphabetically or in a descendant/ascendant order. However, the original plot locates the "Others" label in last place even though it's not the least frequent variable.
+
+```{r}
+china_data %>% 
+        group_by(reason_dissent) %>%
+        count() %>%  
+        transmute(
+            reason_dissent = factor (reason_dissent, levels = x),
+            n_cases= n) %>% 
+        drop_na()
+```
+```{r include=FALSE}
+china_data <- china_data %>% 
+        group_by(reason_dissent) %>%
+        count() %>%  
+        transmute(
+            reason_dissent = factor (reason_dissent, levels = x),
+            n_cases= n) %>% 
+        drop_na()
+```
+
+
+### Building the plot.
+
+
+We start by filling our geom_sf using the values in n, which provides data about the amount of protests by province. We locate the map in the center reducing the background using the "ylim" and "xlim" functions. Borders are changed to white and its thickness can be controlled with "lwd" function.
+
+```{r echo=TRUE}
+join_map_data %>% 
+  ggplot() +
+    geom_sf(aes(fill=n), color="white",lwd=0.2, )  + 
+    coord_sf(ylim=c(-1.7e+06, 2e+06), xlim=(c(-2.45e+06, 2.1e+06)))
+```
+
+```{r echo=FALSE}
+final_map <- join_map_data %>% 
+  ggplot() +
+    geom_sf(aes(fill=n), color="white",lwd=0.2, )  + 
+    coord_sf(ylim=c(-1.7e+06, 2e+06), xlim=(c(-2.45e+06, 2.1e+06)))
+```
+
+
+The title and a subtitle are included in this part. We use the R Markdown language to generate two lines in the subtitle. It is a very useful tool in the case it's necessary to change the color, size or type of letter, however in this case that is not required. To use it correctly we must include element markdown in the theme.
+
+```{r}
+final_map +
+    labs(
+        title = quote(bold("Do you hear the people sing?")),
+        subtitle =("<span style='font-size: 9pt; font-family:Helvetica;'>
+                    China, number of protests</font><br>
+                    <span style='font-size: 9pt; font-family:Helvetica;'>
+                    May 18th-Nov 22th 2022</font>
+                   <br><br><br>"),
+        fill=quote(bold("By province"))
+        )+
+  theme(
+        plot.subtitle = element_markdown(lineheight=1.5)
+        )
+
+```
+```{r include=FALSE}
+final_map <- final_map+
+    labs(
+        title = quote(bold("Do you hear the people sing?")),
+        subtitle =("<span style='font-size: 9pt; font-family:Helvetica;'>
+                    China, number of protests</font><br>
+                    <span style='font-size: 9pt; font-family:Helvetica;'>
+                    May 18th-Nov 22th 2022</font>
+                    <br><br><br>"),
+        fill=quote(bold("By province"))
+        )+
+  theme(
+        plot.subtitle = element_markdown(lineheight=1.5)
+        )
+```
+
+
+Our variable and the scale to represent it is not discrete nor continuous but binned. "Scale_fill_binned" also allow us to change colors and establish breaks for the legend.
+
+```{r}
+final_map +
+    scale_fill_binned(
+        breaks = c(20, 40, 60, 80),
+        low = "#C7E6FD", high = "#004776", 
+        limits=c(0, 100)
+    )
+```
+```{r include=FALSE}
+final_map <- final_map+
+    scale_fill_binned(
+        breaks = c(20, 40, 60, 80),
+        low = "#C7E6FD", high = "#004776", 
+        na.value="#d6d6d6",
+        limits=c(0, 100)
+    )
+```
+
+
+The plot is very minimalist so in both charts we are removing the background, the grids and the ticks and text of the axis. Many different features are modified here to change sizes and type of letters, the position of the legend and the title and spacing between different objects. In this case we are not adding the NAs in the legend because we don't have any.
+
+```{r}
+final_map + 
+  theme(
+        plot.title = element_text(size = 11, family="Calibri"),
+        plot.subtitle = element_markdown(lineheight=1.5),
+        plot.title.position = "plot",
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        legend.direction = "horizontal",
+        legend.text = element_text(size=8, family="Helvetica"),
+        legend.key.height = unit(0.27, 'cm'),
+        legend.key.size = unit(0.9, 'cm'),
+        legend.position = c(0.28,1.1),
+        legend.title = element_text(size=9, family="Helvetica"),
+        axis.text = element_blank(),
+        axis.ticks = element_blank()
+        ) +
+  guides(
+        fill = guide_colorbar(title.position = "top"))
+```
+```{r include=FALSE}
+final_map <- final_map + 
+  theme(
+        plot.title = element_text(size = 11, family="Calibri"),
+        plot.subtitle = element_markdown(lineheight=1.5),
+        plot.title.position = "plot",
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        legend.direction = "horizontal",
+        legend.text = element_text(size=8, family="Helvetica"),
+        legend.key.height = unit(0.27, 'cm'),
+        legend.key.size = unit(0.9, 'cm'),
+        legend.position = c(0.28,1.1),
+        legend.title = element_text(size=9, family="Helvetica"),
+        axis.text = element_blank(),
+        axis.ticks = element_blank()
+        )+
+  guides(
+        fill = guide_colorbar(title.position = "top"))
+```
+
+
+The second plot is an horizontal bar chart which can be build using "geom_col". The x axis represents the number of issues and the y axis each of those issues. 
+
+```{r}
+china_data %>% 
+  ggplot() +
+    aes(n_cases, reason_dissent) +
+    geom_col(fill="#195B87", width = 0.45)
+```
+```{r include=FALSE}
+final_plot <- china_data %>% 
+  ggplot() +
+    aes(n_cases, reason_dissent) +
+    geom_col(fill="#195B87", width = 0.45)
+```
+
+
+In this step title and caption are added and the labels for the y axis are explicitly named to put "COVID-19 pandemic policies" in bold. 
+
+```{r}
+final_plot +
+  labs(
+    x=NULL,
+    y=NULL,
+    title=quote(bold("By reason for dissent")),
+    caption = ("Source: Freedom's House China Dissent Monitor")
+    ) +
+  scale_y_discrete(labels = c("Others",
+                              "State violence",
+                              "Corruption",
+                              "Fund withdrawal freeze",
+                              "Land rights",
+                              "School disputes",
+                              "Building disputes",
+                              expression(bold("COVID-19 pandemic policies")),
+                              "Fraud",
+                              "Pay and benefits",
+                              "Delayed housing project"))
+```
+```{r include=FALSE}
+final_plot <- final_plot +
+  labs(
+    x=NULL,
+    y=NULL,
+    title=quote(bold("By reason for dissent")),
+    caption = ("Source: Freedom's House China Dissent Monitor")
+    ) +
+  scale_y_discrete(labels = c("Others",
+                              "State violence",
+                              "Corruption",
+                              "Fund withdrawal freeze",
+                              "Land rights",
+                              "School disputes",
+                              "Building disputes",
+                              expression(bold("COVID-19 pandemic policies")),
+                              "Fraud",
+                              "Pay and benefits",
+                              "Delayed housing project"))
+```
+
+
+Following the minimalist aesthetic, the background and the axis ticks are eliminated; word's size, type and colour is modified; and the x axis is placed on top. The "aspect.ratio" function allows us to make the plot longer and fit the previous one. The breaks for the x axis are also made explicit with "scale_x_continuous".
+
+```{r}
+final_plot +
+  theme(
+    plot.title = element_text(size = 9, family="Helvetica"),
+    panel.background = element_blank(),
+    panel.grid.major.x = element_line(color= "grey"),
+    plot.title.position = "plot",
+    axis.ticks= element_blank(),
+    axis.text.y = element_text(hjust=0, size=8, family="Helvetica", color="black"),
+    axis.text.x = element_text(size=8, family="Helvetica", color="black"),
+    aspect.ratio = 2.2,
+    plot.caption = element_text(hjust = 1.3, size=9, color="grey")
+    ) +
+  scale_x_continuous(breaks = c(0,50,100,150,200,250), position = "top")
 ```
 
 
 ```{r include=FALSE}
+final_plot <- final_plot +
+  theme(
+    plot.title = element_text(size = 9, family="Helvetica"),
+    panel.background = element_blank(),
+    panel.grid.major.x = element_line(color= "grey"),
+    plot.title.position = "plot",
+    axis.ticks= element_blank(),
+    axis.text.y = element_text(hjust=0, size=8, family="Helvetica", color="black"),
+    axis.text.x = element_text(size=8, family="Helvetica", color="black"),
+    aspect.ratio = 2.2,
+    plot.caption = element_text(hjust = 1.3, size=9, color="grey")
+    ) +
+  scale_x_continuous(breaks = c(0,50,100,150,200,250), position = "top")
+```
 
-## data forn the second chart
+If we compare this plot with the original one made by The Economist we can realize the data doesn't match accurately. This is because Freedom House eventually updates the data for the graph. It has been attempted to filter earlier dates or reduce the case ID but none of them are giving us the exact same pattern than the one presented. What's more, filtering until November 22nd gives a much more different output in relation to the original chart than in the present case. Doing a general filtering in the data set does not allow us to replicate the chart, it would be necessary to exclude some cases one by one.  However, even though the values are not the exact same, the essential aspects of its visual representation are not really affected and the message is the same. In our case NAs label was not added because all provinces have more than 0 cases.
 
-x <- c("COVID-19 pandemic policies", "Delayed housing project","State violence", "Fund withdrawal", "Pay and benefits"  ,"Building disputes","School disputes", "Land rights", "Corruption", "Fraud", "Others")
+In order to plot the charts together patchworks deformed too much the final result. In our case we are just placing one chart over the next one and adjusting all parameters correctly make them match. This is the final replication:
+
+```{r echo=FALSE}
+final_map
+```
+
+
+```{r echo=FALSE}
+final_plot
+```
+
+### Criticsms to the plot.
+
+I think the main message these two charts plotted together are sending is that China's regime is not as robust as we usually think. Western imaginary tends to conceive the pros and cons of their political system taking into account two sides of the same coin: On the one had, their lack of political and individual rights in an autocratic environment is negative, while the absence of popular grievances, open public debates and other democratic procedures allows the country to be more efficient and united in order to achieve common goals and an exponential economic growth. However, this plot tell us that political claims and cases of dissent are much more frequent than we think, and these popular demonstrations are widespread all over the country concerning many different issues. I think this charts perfectly accomplish this purpose.
+
+The original chart, which has been presented at the beginning, was published by The Economist on November 28th. It is an update of a previous plot which contained less data and was exactly the same visually. Besides this, the only change which was made is putting "Covid-19 pandemic policies" in bold, a change that makes sense taking into account the whole article in which this plot is included, where they explain the undergoing situation in the country. Nevertheless, I think the graph is not informative in this context. Visual representation aims to communicate a message by itself regardless of the information beyond the plot. The Economist wanted to express how numerous anti-lockdown protests were being due to the general questioning of zero-Covid strategy, which has resulted to be an absolute failure. Using a barplot does not seem to be useful to show this huge exponential increase of covid-19 protests, and someone who hasn't been aware of this political dynamics would not understand why that concrete label is in bold being the 4th issue in the ranking. 
+
+I will propose a modification taking into account this argumentary.
+
+
+## Step Two: New visualization of the chart
+
+### Managing data
+
+My first approach consisted on exploring the best way of showing the difference in cases of Covid-19 between the two plots made by The Economist. Filtering the data I could manage to represent the previous plot (the one which was launched by The Economist but is no longer uploaded) and the current update.
+
+```{r include=FALSE}
+china_data_filter <- chinacsv %>%
+                filter(`Case ID`<669) %>% 
+                transmute (
+                  Issue=issue,
+                  reason_dissent = case_when( 
+                    issue %in% c("delayed housing project", "delayed housing project, building quality",
+                              "delayed housing project, fraud","delayed housing project, project plan violation",
+                              "delayed housing project, school district disputes") ~ "Delayed housing project",
+                    issue %in% c("pay and benefits") ~ "Pay and benefits",
+                    issue %in% c("fraud", "fraud, building quality", "fraud, contract breach", "fraud, corruption",
+                              "fraud, investment disputes", "fraud, land rights", "fraud, land rights, corruption",
+                              "fraud, property management disputes", "fraud, school district disputes",
+                              "fraud, state violence", "fraud, state violence, corruption") ~ "Fraud",
+                    issue %in% c("COVID-19 pandemic policies", "COVID-19 pandemic policies, censorship", 
+                              "COVID-19 pandemic policies, pay and benefits",
+                              "COVID-19 pandemic policies, political change",
+                              "COVID-19 pandemic policies, state violence",
+                              "COVID-19 pandemic policies, censorship, political change") ~ "COVID-19 pandemic policies",
+                    issue %in% c("building quality", "building quality, illegal property handover",
+                              "building quality, property pricing") ~ "Building disputes",
+                    issue %in% c("school bullying", "school district disputes",
+                              "school district disputes, building quality", 
+                              "school district disputes, building quality, service and management Issues",
+                              "school policy") ~ "School disputes",
+                    issue %in% c("land rights", "land rights, corruption", "land rights, project plan violation") ~ 
+                                  "Land rights",
+                    issue %in% c("fund withdrawal freeze", "fund withdrawal freeze, corruption") ~ "Fund withdrawal freeze",
+                    issue %in% c("corruption", "corruption, abusing authority") ~ "Corruption",
+                    issue %in% c("state violence", "state violence, land rights, corruption", 
+                                 "state violence, verdict disputes") ~ "State violence",
+                    issue %in% c("abusing authority", "agricultural rights","confiscation of assets",
+                              "debt disputes", "drug safety", "environmental pollution or damage", 
+                              "family policies", "missing persons","food safety", "forced eviction", "freedom of belief", 
+                              "illegal property handover", "interior finish disputes", "occupational injury", 
+                              "occupational safety", "personal safety", "petition rights", "political change", "poverty",
+                              "project plan violation", "property management disputes", 
+                              "property management disputes, environmental pollution or damage", 
+                              "property pricing", "utility issues","verdict disputes", "video games", "censorship",
+                              "investment disputes", "medical disputes", "contract breach", "family policies, 
+                              missing persons", "verdict disputes") ~ "Others"
+                              )
+                              ) %>% 
+                   group_by(reason_dissent) %>%
+                    count() %>%  
+                    transmute(
+                          reason_dissent = factor (reason_dissent, levels = x),
+                          n_cases= n) %>%
+                    arrange(reason_dissent) %>% 
+                    drop_na()
+```
+
+In this context, the filtered data set and the full one can be merged, each one containing a different amount of cases per issue to be represented.
+
+```{r echo=TRUE}
+china_data %>% 
+  full_join (china_data_filter, by = "reason_dissent") %>% 
+  transmute(
+    reason_dissent,
+    before = n_cases.y,
+    after = n_cases.x
+  )
+```
+```{r include=FALSE}
+diff_data <- china_data %>% 
+  full_join (china_data_filter, by = "reason_dissent") %>% 
+  mutate(
+    before = n_cases.y,
+    after = n_cases.x
+  )
+```
+
+
+### Making an alternative representation: First attempt
+
+Lollipops seem to be a good way to show the differences between both data sets representing at the same time the absolute values as the previous chart did. In this case, I repeated all geoms twice filtering it the second time to give covid-19 protest a different colour.
+
+```{r echo=TRUE}
+diff_data %>% ggplot() +
+  aes(after, reorder(reason_dissent, after, sum)) +
+  geom_segment(
+              aes(
+                xend=before, yend=reason_dissent), 
+                color="#195B87", 
+                size=0.7) +
+  geom_segment(
+    aes(xend=before, yend=reason_dissent), 
+        color="#B10000", size=1, data = diff_data %>% 
+        filter(reason_dissent == "COVID-19 pandemic policies")) +
+  geom_point(size=2, color="#195B87") +
+  geom_point(aes(before), size=0.7, color="#195B87") +
+  geom_point(
+    aes(before, reason_dissent), size=1, 
+    color="#B10000", data = diff_data %>% 
+    filter(reason_dissent == "COVID-19 pandemic policies")) +
+  geom_point(
+    aes(after, reason_dissent), size=2.3, 
+        color="#B10000", data = diff_data %>% 
+        filter(reason_dissent == "COVID-19 pandemic policies"))
+```
+
+
+The result of the two charts merged together look like this:
+
+```{r echo=FALSE}
+join_map_data %>% ggplot() +
+  geom_sf(aes(fill=n), color="white",lwd=0.2, )  + 
+  coord_sf(ylim=c(-1.7e+06, 2e+06), xlim=(c(-2.45e+06, 2e+06)))+
+labs(
+    fill=quote(bold("By province")),
+    title = quote(bold("Do you hear the people sing?")),
+    subtitle =("<span style='font-size: 13pt; font-family:Helvetica;'>China, number of protests</font><br>
+                <span style='font-size: 12pt; font-family:Helvetica;'>May 18th-Nov 22th 2022</font><br><br><br><br>")
+    ) + 
+  theme(
+        plot.title = element_text(size = rel(1.3), family="Calibri", hjust=-0.5),
+        plot.subtitle = element_markdown(lineheight=1.5, hjust=-0.4),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        legend.direction = "horizontal",
+        legend.text = element_text(size=11, family="Helvetica"),
+        legend.key.height = unit(0.27, 'cm'),
+        legend.key.size = unit(0.9, 'cm'),
+        legend.position = c(0.22,1.1),
+        legend.title = element_text(size=11, family="Helvetica"),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        legend.spacing.x = unit(8.0, 'cm')
+        ) +
+  guides(
+        fill = guide_colorbar(title.position = "top"))+
+  scale_fill_binned(
+        breaks = c(20, 40, 60, 80),
+        low = "#C7E6FD", high = "#004776", 
+        na.value="#d6d6d6",
+        limits=c(0, 100)
+            )
+```
+
+
+```{r echo=FALSE}
+diff_data %>% ggplot() +
+  aes(after, reorder(reason_dissent, after, sum)) +
+  geom_segment(
+              aes(
+                xend=before, yend=reason_dissent), 
+                color="#195B87", 
+                size=0.7) +
+  geom_segment(aes(xend=before, yend=reason_dissent), color="#B10000", size=1, 
+               data = diff_data %>% filter(reason_dissent == "COVID-19 pandemic policies")) +
+  geom_point(size=2, color="#195B87") +
+  geom_point(aes(before), size=0.7, color="#195B87") +
+  geom_point(aes(before, reason_dissent), size=1, color="#B10000", 
+             data = diff_data %>% filter(reason_dissent == "COVID-19 pandemic policies")) +
+  geom_point(aes(after, reason_dissent), size=2.3, color="#B10000", 
+             data = diff_data %>% filter(reason_dissent == "COVID-19 pandemic policies"))+
+  labs(
+    y=NULL,
+    x=NULL,
+    title=quote(bold("By reason for dissent")),
+    caption = ("Source: Freedom's House China Dissent Monitor")
+    ) +
+  scale_x_continuous(position = "top", breaks = c(0,50,100,150,200,250)) +
+  theme(plot.title = element_text(size = 11, family="Helvetica"),
+        panel.background = element_blank(),
+        panel.grid.major.x = element_line(color= "grey"),
+        plot.title.position = "plot",
+        axis.ticks= element_blank(),
+        axis.text.y = element_text(hjust=0, size=9, family="Helvetica", color="black"),
+        axis.text.x = element_text(size=9, family="Helvetica", color="black"),
+        aspect.ratio = 2.5,
+        plot.caption = element_text(hjust = 2, size=7, color="grey")
+        )+
+  expand_limits(x=0)
+```
+
+The main problem of this chart is that dates are not shown, but even if they were added it would be quite arbitrary to just represent two dates corresponding to two different releases of The Economist. Also the map above is problematic as the lollipops are representing two absolute values and its difference, but a map can not show all these features and the interpretation can be misleading. What should be added to the map? Only the data concerning the difference? The absolute value of the second date? 
+
+This is why a second attempt was made, representing this time how the cases for each issue change through time and showing at the same time the exponential covid-19 rise of dissent. 
+
+```{r include=FALSE}
+china_dissent <- chinacsv %>% 
+                  filter(`beginning date`>="2022-09-01") %>% 
+                  mutate (
+                    code = case_when(
+                      province %in%  c("Anhui") ~ "0" ,
+                      province %in%  c("Fujian") ~ "1" ,
+                      province %in%  c("Gansu") ~ "2" ,
+                      province %in%  c("Guangdong") ~ "3" ,
+                      province %in%  c("Guangxi") ~ "4" ,
+                      province %in%  c("Guizhou") ~ "5" ,
+                      province %in%  c("Hainan") ~ "6" ,
+                      province %in%  c("Hebei") ~ "7" ,
+                      province %in%  c("Heilongjiang") ~ "8" ,
+                      province %in%  c("Henan") ~ "9" ,
+                      province %in%  c("Hubei") ~ "10" ,
+                      province %in%  c("Hunan") ~ "11" ,
+                      province %in%  c("Inner Mongolia") ~ "12" ,
+                      province %in%  c("Jiangsu") ~ "13" ,
+                      province %in%  c("Jiangxi") ~ "14" ,
+                      province %in%  c("Jilin") ~ "15" ,
+                      province %in%  c("Liaoning") ~ "16" ,
+                      province %in%  c("Shaanxi") ~ "17",
+                      province %in%  c("Shandong") ~ "18",
+                      province %in%  c("Shanxi") ~ "19",
+                      province %in%  c("Sichuan") ~ "20",
+                      province %in%  c("Tibet") ~ "21",
+                      province %in%  c("Yunnan") ~ "22",
+                      province %in%  c("Zhejiang") ~ "23",
+                      province %in% c("Qinghai") ~ "24",
+                      province %in% c("Xinjiang") ~ "25",
+                      province %in% c("Ningxia") ~ "26"
+                      ) 
+                  )  %>% 
+                  mutate(across(c(code), as.numeric)) %>% 
+                  count(code)
+
+china_map1 <- china_map  %>% mutate (
+                  code= case_when( 
+                            NAME_PINGY %in% c("Anhui Sheng") ~ "0",
+                            NAME_PINGY %in% c("Fujian Sheng") ~ "1",
+                            NAME_PINGY %in% c("Gansu Sheng") ~ "2",
+                            NAME_PINGY %in% c("Guangdong Sheng") ~ "3",
+                            NAME_PINGY %in% c("Guangxizhuangzu Zizhiqu") ~ "4",
+                            NAME_PINGY %in% c("Guizhou Sheng") ~ "5",
+                            NAME_PINGY %in% c("Hainan Sheng") ~ "6",
+                            NAME_PINGY %in% c("Hebei Sheng") ~ "7",
+                            NAME_PINGY %in% c("Heilongjiang Sheng") ~ "8",
+                            NAME_PINGY %in% c("Henan Sheng") ~ "9",
+                            NAME_PINGY %in% c("Hubei Sheng") ~ "10",
+                            NAME_PINGY %in% c("Hunan Sheng") ~ "11",
+                            NAME_PINGY %in% c("Neimenggu Zizhiqu") ~ "12",
+                            NAME_PINGY %in% c("Jiangsu Sheng") ~ "13",
+                            NAME_PINGY %in% c("Jiangxi Sheng") ~ "14",
+                            NAME_PINGY %in% c("Jilin Sheng") ~ "15",
+                            NAME_PINGY %in% c("Liaoning Sheng") ~ "16",
+                            NAME_PINGY %in% c("Shaanxi Sheng") ~ "17",
+                            NAME_PINGY %in% c("Shandong Sheng") ~ "18",
+                            NAME_PINGY %in% c("Shanxi Sheng") ~ "19",
+                            NAME_PINGY %in% c("Sichuan Sheng") ~ "20",
+                            NAME_PINGY %in% c("Xizang Zizhiqu") ~ "21",
+                            NAME_PINGY %in% c("Yunnan Sheng") ~ "22",
+                            NAME_PINGY %in% c("Zhejiang Sheng") ~ "23",
+                            NAME_PINGY %in% c("Xinjiangweiwu'erzu Zizhiqu") ~ "25",
+                            NAME_PINGY %in% c("Qinghai Sheng") ~ "24",
+                            NAME_PINGY %in% c("Ningxiahuizu Zizhiqu") ~ "26")
+                  ) %>%
+                  mutate(across(c(code), as.numeric)) %>% 
+                  filter(NAME_PINGY != "Taiwan Sheng")
+
+
+join_map_data <-  china_map1 %>% left_join(china_dissent, by="code") %>% select(n, geometry)
 
 china_data <- chinacsv %>% 
                 transmute (
@@ -154,22 +773,46 @@ china_data <- chinacsv %>%
                               "service and management Issues", "school health and safety", "verdict/sanction disputes",
                               "women's rights") ~ "Others" 
                               )
-                            ) %>%
-                    drop_na() %>%
-                    group_by(reason_dissent,Date) %>%
-                    count() %>%
-                    filter(Date >="2022-09-01") %>% 
-                    group_by(reason_dissent) %>% 
-                    mutate(cumulative_n = cumsum(n)) %>% 
-                    transmute(
-                          reason_dissent = factor (reason_dissent, levels = x),
-                          cumulative_n,
-                          Date)
+                            )
 
-# map
+x <- c("COVID-19 pandemic policies", "Delayed housing project","State violence", "Fund withdrawal", "Pay and benefits"  ,"Building disputes","School disputes", "Land rights", "Corruption", "Fraud", "Others")
 
+
+
+```
+
+
+### Managing data II
+
+In this case we calculated the cumulative of the protests depending on the dates and the reason for dissent, so we can represent what's the number of protest each day depending on the issue. As we want to incise in the high number of anti-lock down covid-19 protests we are filtering information after September. Taking a very long time lapse hides this change, so both charts are being filtered.
+
+```{r echo=TRUE}
+china_data %>% 
+      group_by(reason_dissent,Date) %>%
+      count() %>%
+      filter(Date >="2022-09-01") %>% 
+      group_by(reason_dissent) %>% 
+      mutate(cumulative_n = cumsum(n)) %>% 
+      transmute(
+          reason_dissent = factor (reason_dissent, levels = x),
+          cumulative_n,
+          Date)
+```
+```{r include=FALSE}
+china_data <- china_data %>% 
+      group_by(reason_dissent,Date) %>%
+      count() %>%
+      filter(Date >="2022-09-01") %>% 
+      group_by(reason_dissent) %>% 
+      mutate(cumulative_n = cumsum(n)) %>% 
+      transmute(
+          reason_dissent = factor (reason_dissent, levels = x),
+          cumulative_n,
+          Date)
+```
+```{r include=FALSE}
 final_map <- join_map_data %>% ggplot() +
-  geom_sf(aes(fill=COUNT), color="white",lwd=0.2, )  + 
+  geom_sf(aes(fill=n), color="white",lwd=0.2, )  + 
   coord_sf(ylim=c(-1.7e+06, 2e+06), xlim=(c(-3.3e+06, 2e+06)))+
 labs(
     fill=quote(bold("By province")),
@@ -195,27 +838,85 @@ labs(
   guides(
         fill = guide_colorbar(title.position = "top"))+
   scale_fill_binned(
-        breaks = c(75, 100, 125, 150),
+        breaks = c(10, 15, 20, 25),
         low = "#C7E6FD", high = "#004776", 
         na.value="#d6d6d6",
-        limits=c(50, 175)
+        limits=c(5, 30)
             )
-
-# second plot
 
 cols <- c("#146c9b", "#eacbab", "#d49c4c", "#acdbdb" , "#040404","#9c947c" , "#ce9f5d", "#498caa", "#546466","#729499" )
 
+```
 
-final_plot<-ggplot(china_data) +
+
+### Making an alternative representation: Second attempt
+
+In this case it was possible to represent this data using a linear chart, but using a stream in a proportional way seemed to be an even better option to show the rise in covid-19 protests. In this context, "geom_stream" from ggstream package was used.
+
+```{r}
+ggplot(china_data) +
   aes(Date,cumulative_n) +
   ggstream::geom_stream(
       aes(fill=reason_dissent),
-      type="proportional")+
-  labs(
+      type="proportional")
+```
+```{r include=FALSE}
+final_plot <- ggplot(china_data) +
+  aes(Date,cumulative_n) +
+  ggstream::geom_stream(
+      aes(fill=reason_dissent),
+      type="proportional")
+```
+
+
+In this part we use titles not just in a descriptive way but trying to help interpretation in terms of the centrality we want covid-19 to have. The map chart is very long, so having the legend at the right is not an option if we want both charts to fit well together. Besides, colours seem to be very confusing. 
+
+```{r}
+final_plot + labs(
       title=quote(bold("Anti-lockdown protests boost due to zero-Covid strategy")),
       fill=quote(bold("By Issue")),
       caption = ("Source: Freedom's House China Dissent Monitor"),
-      y = quote(bold("Percentage of protests")))+
+      y = quote(bold("Percentage of protests")))
+```
+```{r include=FALSE}
+final_plot <- final_plot + labs(
+      title=quote(bold("Anti-lockdown protests boost due to zero-Covid strategy")),
+      fill=quote(bold("By Issue")),
+      caption = ("Source: Freedom's House China Dissent Monitor"),
+      y = quote(bold("Percentage of protests")))
+```
+
+
+As always, the theme is used to adjust many different things. The most challenging aspect here was to adjust all parameters to make both charts fit, as this one looked better horizontally but has to substitute a vertical one. 
+
+```{r}
+final_plot +  theme(
+      plot.title = element_text(size = 12, family="Calibri", 
+                                margin=margin(0,0,5,0)),
+      panel.background = element_blank(),
+      plot.margin=unit(c(0,0,0,0),"cm"),
+      plot.title.position = "plot",
+      axis.text.y = element_text(hjust=0, size=11, family="Helvetica", color="black"),
+      axis.text.x = element_text(size=11, 
+                                 family="Helvetica", color="black"),
+      axis.title.x = element_blank(),
+      aspect.ratio = 0.68,
+      plot.caption = element_text(hjust = -1.25, size=10, color="grey"),
+      legend.text = element_text(size=9, family="Helvetica"),
+      legend.key.height = unit(0.27, 'cm'),
+      legend.key.width  = unit(0.27, 'cm'),
+      legend.key.size = unit(0.9, 'cm'),
+      legend.position = "bottom",
+      legend.title = element_text(size=9, family="Helvetica"))+
+  scale_x_date(date_breaks = "months", date_labels = "%m-%Y", expand = c(0.01, 0))+
+  scale_y_continuous(labels= c("0%", "25%", "50%", "75%", "100%"), expand = c(0.10, 0))+
+  guides(fill = guide_legend(title.position = "top"))+
+  scale_fill_manual(values = cols)
+```
+
+
+```{r include=FALSE}
+final_plot <- final_plot + 
   theme(
       plot.title = element_text(size = 12, family="Calibri", 
                                 margin=margin(0,0,5,0)),
@@ -240,6 +941,8 @@ final_plot<-ggplot(china_data) +
   scale_fill_manual(values = cols)
 ```
 
+
+As we can observe, the map also suffered many modifications to fit well the second chart. I think the final result allows a better comprehension of the data as we have included the dimension of transformation of the data over time. This way it's not just about the different issues and their total frequency but about how the social demands are proportionally changing depending on the matter. In this context, understanding the  recent rise of covid-19 protests is also easier to analyze.
 
 ```{r echo=FALSE, fig.align='center'}
 final_map
