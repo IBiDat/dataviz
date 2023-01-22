@@ -1,0 +1,209 @@
+---
+title: "Steph Curry's 3 - Points Record in Context: Off the Charts"
+description: |
+  In my project I will explain how to replicate a graph where are presented the 
+  three-point field goals made over the course of a season for every player in a
+  set range of time." The graph shows a relevant difference in cumulative sums between 
+  the current seasons and the previous ones.
+  In this first part I will clean the dataset according to the variables that I need.
+categories: "2022"
+author: Nicola Ricciardi
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: true
+    toc: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r cars}
+library(nbastatR)
+library(BasketballAnalyzeR)
+library(jsonlite)
+library(janitor)
+library(extrafont)
+library(ggrepel)
+library(teamcolors)
+library(zoo)
+library(future)
+library(lubridate)
+library(tidyverse)
+library(dplyr)
+```
+
+
+Run the below commands to load the libraries we use. We also increase the vroom connection size to accomodate for the large file we read.
+```{fig.height=7, fig.width=6, fig.align='center}
+Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 2)
+```
+
+Select the Seasons useful for the graph.
+```{fig.height=7, fig.width=6, fig.align='center}
+selectedSeasons <- c(1978:2017)
+```
+
+
+
+Extract data from the function game_logs. I used *selectedSeason* to indicate the range of time, *NBA* to select the league, *player* and the type of season as *Regular Season*. 
+```{fig.height=7, fig.width=6, fig.align='center}
+P_gamelog_reg <- suppressWarnings(game_logs(seasons = selectedSeasons, league = "NBA", result_types = "player", season_types = "Regular Season"))
+
+```
+
+
+
+```{fig.height=7, fig.width=6, fig.align='center}
+aa <- P_gamelog_reg%>%
+  dplyr::filter(slugSeason>= ("1979-80") & slugSeason <= ("2015-16"))%>%
+  select(yearSeason,slugSeason, namePlayer, dateGame, slugMatchup, fg3m, fg3a)%>%
+  arrange(slugSeason, namePlayer, dateGame)
+
+```
+
+It results that Eddie Johnson played in two teams at the same time, for this reason I select only the games when he played in Cleveland.
+```{fig.height=7, fig.width=6, fig.align='center}
+Eddie_ATL <- ifelse(aa$namePlayer=="Eddie Johnson"& !grepl("ATL|CLE", aa$slugMatchup)==F, 1,0)
+
+Ed <- cbind(aa,Eddie_ATL)
+
+Edd <- Ed%>%
+  filter(Eddie_ATL==0)%>%
+  select(-c(Eddie_ATL))%>%
+  view()
+```
+
+I Create a column in which I compute the cumulative sum of the number of three point shoots made.
+```{fig.height=7, fig.width=6, fig.align='center}
+Edd <- Edd%>%
+  group_by(namePlayer, slugSeason)%>%
+  dplyr::mutate(P3M=sum(fg3m), P3A=sum(fg3a), "cum_sum"=cumsum(fg3m))%>%
+  ungroup()%>%
+  group_by(slugSeason)%>%
+  arrange(desc(P3M), .by_group = T)%>%
+  ungroup()%>%   
+  view()
+
+```
+
+
+I create two new columns, one for ID players and one for the first 20 players in the ID column.
+```{fig.height=7, fig.width=6, fig.align='center}
+player_id2 <- Edd%>%
+  select(namePlayer)%>%distinct()%>%mutate(Id_player=row_number())
+
+top_20_2 <- Edd%>%
+  select(c(slugSeason, namePlayer,P3M))%>%
+  arrange(slugSeason, desc(P3M))%>% distinct()%>%
+  group_by(slugSeason)%>%
+  mutate(top_20=row_number())%>%
+  filter(top_20<=20)%>%
+  select(-c(P3M))%>%
+  ungroup%>%
+  view()
+
+top_20_x <- top_20_2%>%
+  mutate(ID=row_number())%>%
+  view()
+```
+
+
+I merge three datasets in order to obtain Id_player and top_20 columns
+```{fig.height=7, fig.width=6, fig.align='center}
+merge.player = merge(x=Edd,player_id2,by="namePlayer",all.Edd=TRUE)
+merge.20 <-  merge(merge.player, top_20_2, all=TRUE)
+```
+
+
+I select the variables of interest and then I order by *slugSeason*, *top_20* and *dategame*. I compute the cumulative sum of three points field goals made.
+```{fig.height=7, fig.width=6, fig.align='center}
+merge.df1 <- merge.20%>%
+  select(c(slugSeason, namePlayer, dateGame, slugMatchup, P3M, fg3m, Id_player, top_20))%>%
+  arrange(slugSeason, top_20, dateGame)%>%
+  group_by(namePlayer,slugSeason)%>%
+  dplyr::mutate(P3M=sum(fg3m), "cum_sum"=cumsum(fg3m))%>%
+  distinct()%>%
+  #arrange(slugSeason, namePlayer, top_20)%>%
+  filter(!is.na(top_20))%>%
+  filter(top_20<=20)%>%
+  view()
+```
+
+
+
+I create the final dataset adding a new column for the number of games (#82 in a season).
+```{fig.height=7, fig.width=6, fig.align='center}
+ff <- merge.df1%>%
+  group_by(slugSeason,namePlayer)%>%
+  mutate("N_games"= row_number())
+```
+
+
+This is the final dataset with another column to annotate the name of the players in the right part of the graph.
+```{fig.height=7, fig.width=6, fig.align='center}
+ff1 <- ff%>%
+  mutate(aa = 
+           substring(slugSeason, 3, 7))%>%
+  mutate(aa1 = namePlayer)
+
+
+ff <- unite(ff1, col='n-d-3', c('aa1', 'aa'), sep=" '")
+
+ff <- ff%>%
+  rename(pp = 'n-d-3')
+
+ff
+
+```
+
+Saving dataset
+```{fig.height=7, fig.width=6, fig.align='center}
+write.table(ff, file = "ff",
+            sep = "\t", row.names = F)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
