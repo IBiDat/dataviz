@@ -1,5 +1,5 @@
 ---
-title: "Use of Social Media Platforms in 2021 (U.S) by demographic group"
+title: "Use of Social Media Platforms in 2021 (U.S.) by Demographic Group"
 description: |
   Replication and alternative version of a heatmap from 'Social Media Use in
   2021' (Pew Research Center).
@@ -19,6 +19,7 @@ knitr::opts_chunk$set(fig.showtext=TRUE,
 ```
 
 ## Introduction
+
 This project is based on a graph from the article ["Social Media Use in 2021"](https://www.pewresearch.org/internet/2021/04/07/social-media-use-in-2021/),
 published by Brooke Auxier and Monica Anderson in April, 2021. In this article,
 the authors focus on the differences in the use of social media platforms
@@ -29,7 +30,7 @@ The platforms under study are: YouTube, Facebook, Instagram, Pinterest,
 LinkedIn, Snapchat, Twitter, Whatsapp, TikTok, Reddit and Nextdoor. Regarding
 the demographic groups and divided at the same time in subgroups, we find:
 gender (Men and Women), race/ethnicity (Black, White and Hispanic), age 
-(18-19 y/o, 30-49 y/o, 50-64 y/o and 65+ y/o), income(<\$30K, \$30K-\$49,999,
+(18-19 y/o, 30-49 y/o, 50-64 y/o and 65+ y/o), income (<\$30K, \$30K-\$49,999,
 \$50K-\$74,999 and \$75K+), education (High School or less, Some College,
 College+) and place (Urban, Suburban and Rural), as well as the total (that
 from now on, we will be considering when talking about this categories).
@@ -44,23 +45,25 @@ But, let's get visual. The plot I chose from this article is a heatmap that
 represents the percentage of people from several socioeconomic groups that 
 actually use each platform. Here you can see the original plot:
 
-![Original plot](./original_plot.png){.external width="100%"}
+![Original plot](original_plot.png){.external width="100%"}
+
 I found this plot interesting to work with since this kind of matrix
 distribution of the elements was slightly different from the graphs we are use to
 plot and since it had many aspects to practice: the text annotation of values
 inside the matrix had different aesthetics (white and bold and black and plain),
 the facets could be challenging and the font use seemed elaborated.
-```{r include=FALSE}
+
+```{r}
 # Load needed libraries
 library(tidyverse)
-library(dplyr)
-library(ggplot2)
 library(tidytext)
 library(ggtext)
 ```
 
-## Collection and processing data
+## Collection and data processing
+
 ### Collection of data
+
 First, we need to download the raw data file from the original article page (we
 need to log-in to the PEW RESEARCH CENTER website first to access the dataset
 and the documentation of the methodology). We can find the data .csv file in
@@ -73,6 +76,7 @@ data <- read.csv("./documentation/Jan 25-Feb 8, 2021 - Core Trends Survey - CSV.
 ```
 
 ### Cleaning and processing data
+
 When we take a look at the data, we find a total of 89 columns and 1502 rows,
 where each observation represents the answers of one participant). The high
 amount of columns (apart from being in wide format) is due to the fact that the
@@ -90,11 +94,11 @@ we need to compute them by using the values of the platforms and the weights
 understand which variables are the ones we are looking for and which values
 represent what, it is essential that we read carefully the documentation
 ([Jan 25-Feb 8, 2021 - Core Trends Survey - Questionnaire.docx](./Jan 25-Feb 8, 2021 - Core Trends Survey - Questionnaire.docx)):
-- Socioeconomic categories: gender, racecmb, hisp, age, educ2, usr, income
-- weight:  weight
-- Platforms =  web1a (Twitter), web1b (Instagram), web1c (Facebook), web1d
-(Snapchat), web1e (YouTube), web1f (Whatsapp), web1g (Pinterest), web1h
-(LinkedIn), web1i (Reddit)
+    - Socioeconomic categories: gender, racecmb, hisp, age, educ2, usr, income
+    - weight:  weight
+    - Platforms =  web1a (Twitter), web1b (Instagram), web1c (Facebook), web1d
+    (Snapchat), web1e (YouTube), web1f (Whatsapp), web1g (Pinterest), web1h
+    (LinkedIn), web1i (Reddit)
 
 3. Rename platforms columns, pivot longer the platforms and create dummy
 variables of subgroups when needed.
@@ -115,18 +119,21 @@ clean_data <- data %>%
                names_to = "Platform", # One column for the name of the platform 
                values_to = "YesNo" ) %>% # Another for the values (1=Yes, 0=No)
   transform(YesNo = as.numeric(YesNo)) %>% 
-  # PLACE: Create 3 columns, one for each of the Urban/Suburban/Rural values of the usr column
+  # PLACE: Create 3 columns, one for each of the Urban/Suburban/Rural values
+  # of the usr column
   mutate(Urban = case_when(usr == "U" ~ "1", usr != "U" ~ "0"),
          Suburban = case_when(usr == "S" ~ "1", usr != "S" ~ "0"),
          Rural = case_when(usr == "R" ~ "1", usr != "R" ~ "0"),
          USR_nas = case_when(usr == " " ~ "1", usr != " " ~ "0")
   ) %>% 
-  # AGE: Create 4 columns, one for each of the age ranges of the graph (from age column)
+  # AGE: Create 4 columns, one for each of the age ranges of the graph
+  # (from age column)
   mutate(X18_29 = case_when(age <= 29 ~ 1),
          X30_49 = case_when(age <= 49 & age >= 30 ~ 1),
          X50_64 = case_when(age >= 50 & age <= 64 ~ 1),
          X65. = case_when(age >= 65 & age <= 97 ~ 1)) %>% 
-  # EDUCATION: Create 3 columns, one for each of the education ranges of the graph (from educ2 column)
+  # EDUCATION: Create 3 columns, one for each of the education ranges of the graph
+  # (from educ2 column)
   mutate(HS_or_less = case_when(educ2 == 1 ~ 1 ,educ2 == 2 ~ 1, educ2 == 3 ~ 1),
          Some_College = case_when(educ2 == 4 ~1, educ2 == 5 ~1),
          College = case_when(educ2 == 6 ~1, educ2 == 7 ~1, educ2 == 8 ~1 )) %>% 
@@ -134,7 +141,8 @@ clean_data <- data %>%
             Rural = as.numeric(Rural), USR_nas = as.numeric(USR_nas)) 
 ```
 
-4. Compute the percentage of each demographic subgroup by :
+4. Compute the percentage of each demographic subgroup by:
+
 ```{r}
 # Calculating the percentages displayed in the graph
 
@@ -148,10 +156,12 @@ clean_data <- clean_data %>%
   summarise(
     # TOTAL: Percentage of people in the sample that uses sometimes each platform 
     Total    = perc(weight, YesNo==1, rep(1, n())),
-    # GENDER: Create 2 columns, one for each of the gender categories of the graph (from gender column)
+    # GENDER: Create 2 columns, one for each of the gender categories of the graph
+    # (from gender column)
     Men      = perc(weight, YesNo==1, gender==1),
     Women    = perc(weight, YesNo==1, gender==2),
-    # RACE: Create 3 columns, one for each of the race groups of the graph (from racecmb and hisp columns)
+    # RACE: Create 3 columns, one for each of the race groups of the graph
+    # (from racecmb and hisp columns)
     White    = perc(weight, YesNo==1, racecmb==1 & hisp!=1),
     Black    = perc(weight, YesNo==1, racecmb==2 & hisp!=1),
     Hispanic = perc(weight, YesNo==1, hisp==1),
@@ -160,7 +170,8 @@ clean_data <- clean_data %>%
     X30_49   = perc(weight, YesNo==1, !is.na(X30_49)),
     X50_64   = perc(weight, YesNo==1, !is.na(X50_64)),
     X65.     = perc(weight, YesNo==1, !is.na(X65.)),
-    # INCOME: Create 4 columns, one for each of the income ranges of the graph (from income column)
+    # INCOME: Create 4 columns, one for each of the income ranges of the graph
+    # (from income column)
     `Income_30K`        = perc(weight, YesNo==1, income <= 3),
     `Income_30K_49.999` = perc(weight, YesNo==1, (income <= 5 & income > 3)),     
     `Income_50K_74.999` = perc(weight, YesNo==1, income == 6),
@@ -178,12 +189,14 @@ clean_data <- clean_data %>%
 ```
 
 ### Storing the new dataframe
-For future work, it may be convenient to save the new clean and organised
-dataframe: `write_csv(clean_data, "clean_data.csv")`
 
-## Replication HEATMAP
+For future work, it may be convenient to save the new clean and organised
+dataframe: `write_csv(clean_data, "clean_data.csv")`.
+
+## Replication: heatmap
 
 ### Changing the name and ordering X axis labels 
+
 Before creating the heatmap, we need to fix some aspects like the names of the 
 columns. In some cases R has changed the names for dealing with white spaces
 and numbers at the beginning ("X18_19", "HS_or_less"...). Also, we can order
@@ -203,6 +216,7 @@ clean_data <-clean_data %>%
 ```
 
 ### Y axis labels order, padding and pre-faceting
+
 Now let's work the Y axis labels. We need to:
 
 1. **Create a reference vector**. We will create and use a reference vector
@@ -238,7 +252,8 @@ rep <- clean_data %>%
   # Turning the row names to a column "Platform"
   tibble::rownames_to_column("Platform") %>%
   
-  # Collecting columns (demographic subgroups, excluding platform column) as one column called "key"
+  # Collecting columns (demographic subgroups, excluding platform column)
+  # as one column called "key"
   # Collecting the previous columns' values as one column called "value"
   gather("key", "value", -Platform) %>%
   
@@ -262,8 +277,11 @@ rep <- clean_data %>%
   )
 
 ```
+
 ### Building the plot: geom_tile()
+
 Among all the options available to generate a heatmap, I chose `geom_tile()`.
+
 ```{r}
 
 repl <- ggplot(rep, aes(reorder(Platform, value, decreasing=TRUE), key,
@@ -276,7 +294,8 @@ repl
 ```
 
 ### Facetting
-We will use column "group" to stablish the facets. For this, we create another
+
+We will use column "group" to establish the facets. For this, we create another
 reference vector (as we did for y axis labels) to order the items in column 
 "group". This vector "categories" will act as the levels (and order) of the 
 group column.
@@ -298,6 +317,7 @@ repli
 ```
  
 ### X axis and legend scale
+
 For the legend I used `scale_fill_stepsn()` for selecting individual colors for
 each discrete ranges of values (percentages). In order to add the % symbol to
 only the 0 value we can create a function called labeller that will take the
@@ -341,48 +361,46 @@ repli
 ```
 
 ### Title, subtitle, caption and tag
+
 Introducing the title, subtitle, caption and tag with labs() , adding `\n` for 
 newlines and `\`for special characters (like "") 
-```{r}
+
+```{r, fig.width=8, fig.asp=0.7}
 
 repli <- repli+
-  labs(title = "Use of online platforms, apps varies — sometimes widely — by demographic group",
-       subtitle = "\n% of U.S. adults in each demographic group who say they ever use...",
-       caption = 'Note: White and Black adults include those who report being only one race and are not Hispanic. Hispanics are of any race. Not all numerical\ndifferences between groups shown are statistically significant (e.g., there are no statistically significant differences between the shares of\nWhite, Black or Hispanic Americans who say the use Facebook). Respondents who did not give an answer are not shown.\nSource: Survey of U.S. adults conducted Jan. 25-Feb. 8, 2021.\n\"Social Media Use in 2021\"\n',
-       tag = "PEW RESEARCH CENTER",
-       # No x or y axis title
-       x=NULL, y = NULL)
+  labs(
+    title = "Use of online platforms, apps varies — sometimes widely — by demographic group",
+    subtitle = "\n% of U.S. adults in each demographic group who say they ever use...",
+    caption = paste0(
+      'Note: White and Black adults include those who report being only one ',
+      'race and are not Hispanic. Hispanics are of any race. Not all numerical',
+      '\ndifferences between groups shown are statistically significant (e.g.,',
+      ' there are no statistically significant differences between the shares ',
+      'of\nWhite, Black or Hispanic Americans who say the use Facebook). ',
+      'Respondents who did not give an answer are not shown.\nSource: Survey ',
+      'of U.S. adults conducted Jan. 25-Feb. 8, 2021.\n\"Social Media Use in 2021\"\n'),
+    tag = "PEW RESEARCH CENTER",
+    # No x or y axis title
+    x=NULL, y = NULL)
 repli
 
 ```
 
-### Fonts and Theme 
+### Fonts and theme
 
--**Fonts**
 Regarding the fonts, initially I used similar fonts by analyzing the typography
 with [whatfontis.com](https://www.whatfontis.com/?s2o). However, for license 
 reasons, I then selected similar Google fonts.
-```{r include= FALSE}
-library(extrafont)
-# Problem with importing fonts. Error: "No FontName. Skipping". Solved using the following code:
-library(remotes)
-#remotes::install_version("Rttf2pt1", version = "1.3.8")
-
-# For rendering fonts:
-library(showtext)
-library(sysfonts)
-```
 
 Download the .ttf files of the correspondent font type, load import it from the
 correct path and load them. Then add each font to each label, determining the
 .ttf file path for each face of the font. Finally, render the fonts with 
-`showtext_auto()`
-```{r}
-#FONTS
-# Import and load the fonts from the selected folder
-font_import("./fonts") # Import form .ttf file path
-loadfonts(device= "win") # Load fonts
+`showtext_auto()`.
 
+```{r}
+library(extrafont)
+library(showtext)
+library(sysfonts)
 
 ## Add the font with the corresponding font faces:
 
@@ -415,9 +433,9 @@ showtext::showtext_auto()
 
 ```
 
--**Theme**
 Add the setting of the theme relative to:
-```{r}
+
+```{r, fig.width=13, fig.asp=1}
 repli <- repli+
   theme(
     # Labels of the facets (no visible)
@@ -458,73 +476,48 @@ repli
 ```
 
 Also, set the theme settings for the background and general aesthetics:
-```{r}
+
+```{r, fig.width=13, fig.asp=1}
 repli <- repli+
   theme(
     # Panel and plot (spacing and grid)
     panel.spacing=unit(10, "pt"),
-    panel.background = element_rect(fill='transparent', color="white"), #transparent panel bg
-    plot.background = element_rect(fill='transparent', color="white"), #transparent plot bg
+    #transparent panel and plot bg
+    panel.background = element_rect(fill='transparent', color="white"), 
+    plot.background = element_rect(fill='transparent', color="white"),
     panel.grid.major = element_blank(), #remove major gridlines
     panel.grid.minor = element_blank(), #remove minor gridlines
     # Legend
     legend.background = element_rect(color="white"), # white legend bg
     legend.box.background = element_rect(color="white"),#no legend panel
-    legend.key.width = unit(32, 'pt'),
-    legend.key.height = unit(8, 'pt'),
+    legend.key.width = unit(48, 'pt'),
+    legend.key.height = unit(12, 'pt'),
     legend.margin = margin(5, 0, 0, 0)
   )
 
+repli
 ```
-
-- **Applying theme with Google fonts**:
-![Fonts different from Google Fonts](./rep_fonts.png){width="100%"}
 
 ### Annotation
 
-Annotation of the values inside the matrix is applied using `Geom_text()`. 
+Annotation of the values inside the matrix is applied using `geom_text()`. 
 When the values are above 40(%) the font is in white and in bold, when they are
 below, they are in black and in plain text. Color selection is created with an
 individual scale. Bold/plain font is applied by an `ifelse` condition.
 
-```{r}
+```{r final, layout="l-body-outset", preview=TRUE, fig.width=13, fig.asp=1}
 repli <- repli+
   geom_text(aes(color = value >= 40), family= "Libre Franklin",
             fontface= ifelse(repl$data$value < 40, "plain", "bold"),
             size = 6, vjust = "center", hjust = "center",
   )+
   scale_color_manual(guide = "none", values = c("grey20", "white"))
+
+repli
 ```
 
-### Exporting the plot
-To export the plot in png we can use the `{ragg}` library. Use the width and
-height from the original plot (1260x1280 px)
-```{r include= FALSE}
-library(ragg)
-```
+## Alternative: parallel coordinates
 
-```{r titled, layout="l-body-outset", preview=TRUE}
-#EXPORT PLOT 
-pngfile <- fs::path(knitr::fig_path(),  "rep_fonts.png")
-agg_png(pngfile,
-        width = 1260,
-        height = 1280,
-        units = "px",
-        res = 144)
-invisible(dev.off())
-plot(repli)
-knitr::include_graphics(pngfile)
-
-
-```
-### Final result
-Comparing the final output:
-![Fonts different from Google Fonts](./rep_fonts.png){width="100%"}
-
-With the original plot:
-![Original plot](./original_plot.png){width="100%"}
-
-## Replication PARALLEL COORDINATES
 Thinking about an alternative version of the original plot, we can say that, in 
 general terms, the graph is good. Some minor details could be implemented: some
 colors of the color scale (legend) could have more extreme values to distinguish
@@ -561,8 +554,8 @@ dataK <- dataK %>%
   # Filter
   filter(key %in% c("Total", "Men", "Women", "White", "Black", "Hispanic",
                     "18-29", "30-49", "50-64", "65+","<$30K",
-                    "$30K-49.9K", "$50K-74.9K", "$75K+", "HS or less", "Some college",
-                    "College+", "Urban", "Suburban", "Rural")) |>
+                    "$30K-49.9K", "$50K-74.9K", "$75K+", "HS or less",
+                    "Some college", "College+", "Urban", "Suburban", "Rural")) |>
   # Create a "group" column
   mutate(group = case_when(
     key == "Total" ~ "total",
@@ -580,7 +573,8 @@ dataK <- dataK %>%
 ```
 
 
-# Building the plots: ggparcoord() 
+### Building the plots: ggparcoord()
+
 The idea to do this is creating individual parallel coordinate plots for each
 demographic group, using an individual color scale for each one (color-hue 
 scales). We will use `ggparcoord()` for this purpose.
@@ -588,17 +582,17 @@ scales). We will use `ggparcoord()` for this purpose.
 We will need to discard the percentage values (geom_text()) since they
 will be barely read.
 
-
 We will repeat almost the same process: filter dataframe by the group, building
 the ggplot (x axis the platforms, y axis the percentages) and seeting the line
 size. In some cases we will need a reference vector to order the variables in
 the legend.
 
-```{r include=FALSE}
+```{r}
 library(ggrepel)
 library(GGally)
 ```
-- **Total**
+
+#### Total
 
 ```{r}
 total <- dataK%>%
@@ -618,7 +612,9 @@ total <- dataK%>%
 total
 
 ```
-- **Gender**
+
+#### Gender
+
 ```{r}
 gender <- dataK%>%
   filter(group == "gender") %>% 
@@ -634,7 +630,9 @@ gender <- dataK%>%
   geom_line(size= 1.2)
 gender
 ```
-- **Race/Ethnicity**
+
+#### Race/Ethnicity
+
 ```{r}
 race <- dataK%>%
   filter(group == "race") %>% 
@@ -650,7 +648,9 @@ race <- dataK%>%
   geom_line(size=1)
 race
 ```
-- **Age**
+
+#### Age
+
 ```{r}
 age <- dataK%>%
   filter(group == "age") %>% # Filtering by age
@@ -666,7 +666,9 @@ age <- dataK%>%
   geom_line(size=1)
 
 ```
-- **Income**
+
+#### Income
+
 ```{r}
 order_inc <- c("<$30K", "$30K-49.9K", "$50K-74.9K", "$75K+")
 income <- dataK%>%
@@ -686,10 +688,10 @@ income <- dataK%>%
              alphaLines = 0.7,
   )+
   geom_line(size=1)
-
-
 ```
-- **Education**
+
+#### Education
+
 ```{r}
 order_educ <- c("HS or less", "Some college", "College+") # Ordered levels vector
 education <- dataK%>%
@@ -709,7 +711,9 @@ education <- education %>%
   geom_line(size=1)
 
 ```
-- **Place**
+
+#### Place
+
 ```{r}
 place <- dataK%>%
   filter(group == "place") %>% 
@@ -725,33 +729,6 @@ place <- dataK%>%
   geom_line(size=1)
 ```
 
-### Fonts
-Almost the same as in the replication plot:
-```{r}
-#Title font (main plot)
-font_add("Libre Franklin Black",
-         regular = "./fonts/LibreFranklin-Black.ttf",
-         bold = "./fonts/LibreFranklin-Black.ttf")
-
-# Subtitle font (main plot)
-font_add("Libre Franklin Medium",
-         regular = "./fonts/LibreFranklin-MediumItalic.ttf",
-         italic = "./fonts/LibreFranklin-MediumItalic.ttf")
-
-# Y and X axis labels and Caption text
-font_add("Libre Franklin",
-         regular = "./fonts/LibreFranklin-Regular.ttf", # caption and X labels
-         bold = "./fonts/LibreFranklin-SemiBold.ttf")
-
-# Tag text (main plot)
-font_add("Libre Franklin Bold",
-         regular = "./fonts/LibreFranklin-Bold.ttf")
-
-## Automatically use showtext to render plots
-showtext::showtext_auto()
-
-```
-
 ### Color scales and theme
 
 At the beginning I tried to use mostly hue-colors palettes with
@@ -765,7 +742,8 @@ I tried to keep the horizontal lines as subtle as possible (in order to help
 the reader interpret the percentages) while giving emphasis to the vertical 
 lines.
 
-- **Total**
+#### Total
+
 ```{r}
 # Grid annotations (horizontal, x axis)
 total <- total+
@@ -817,7 +795,9 @@ total <- total +
 total
 
 ```
-- **Gender**
+
+#### Gender
+
 ```{r}
 gender <- gender+
   geom_line(aes(y = 40), color = "grey50", linetype = "dotted")+
@@ -861,11 +841,11 @@ gender <- gender +
   ) 
 gender
 ```
-- **The rest**
-```{r include=FALSE}
-library(colorspace)
-```
+
+#### The rest
+
 ```{r}
+library(colorspace)
 
 #RACE
 
@@ -1094,62 +1074,54 @@ place <- place +
   ) 
 
 ```
-### Patchwork an general theme
+
+### Patchwork and general theme
+
 We need to paste all the individual plots together with `{Patchwork}`, add the
 title, subtitle and caption with `plot_annotation()` and add the aesthetics with
 `theme()`. We should keep some coherence in the aesthetics so we will recycle
 some elements from the theme of the replication.
-```{r include=FALSE}
-library(patchwork)
-```
 
-```{r}
+```{r, layout="l-body-outset", fig.width=16, fig.asp=0.7}
+library(patchwork)
+
 global <-gender+race+age+income+
   education+place+total+
   plot_layout(ncol = 3)+
-  plot_annotation(title = "Use of online platforms, apps varies — sometimes widely — by demographic group",
-                  subtitle = "% of U.S. adults in each demographic group who say the ever use...",
-                  caption = 'Note: White and Black adults include those who report being only one race and are not Hispanic. Hispanics are of any race. Not all numerical differences between groups\nshown are statistically significant (e.g., there are no statistically significant differences between the shares of White, Black or Hispanic Americans who say the use\nFacebook). Respondents who did not give an answer are not shown.\nSource: Survey of U.S. adults conducted Jan. 25-Feb. 8, 2021. \n\"Social Media Use in 2021\"\n\nPEW RESEARCH CENTER',
-                  theme= theme(plot.margin = margin(17,4,22,4),
-                               plot.title = element_text(color = "black", size = 28,
-                                                         family = "Libre Franklin Black",
-                                                         face = "bold"),
-                               plot.subtitle = element_text(color = "grey40", size = 21,
-                                                            lineheight = 0.2,
-                                                            family = "Libre Franklin Medium",
-                                                            face = "italic"),
-                               plot.title.position = "plot",
-                               plot.caption.position = "plot",
-                               plot.caption = element_text(color = "grey30", size= 14, face="plain",
-                                                           lineheight = 0.8,
-                                                           family = "Libre Franklin",
-                                                           hjust = 0, vjust = 0)
-                               )
-                  )
+  plot_annotation(
+    title = "Use of online platforms, apps varies — sometimes widely — by demographic group",
+    subtitle = "% of U.S. adults in each demographic group who say the ever use...",
+    caption = paste0(
+      'Note: White and Black adults include those who report being only one ',
+      'race and are not Hispanic. Hispanics are of any race. Not all numerical',
+      '\ndifferences between groups shown are statistically significant (e.g.,',
+      ' there are no statistically significant differences between the shares ',
+      'of\nWhite, Black or Hispanic Americans who say the use Facebook). ',
+      'Respondents who did not give an answer are not shown.\nSource: Survey ',
+      'of U.S. adults conducted Jan. 25-Feb. 8, 2021.\n\"Social Media Use in 2021\"',
+      '\n\nPEW RESEARCH CENTER'),
+    theme= theme(plot.margin = margin(17,4,22,4),
+                 plot.title = element_text(color = "black", size = 28,
+                                           family = "Libre Franklin Black",
+                                           face = "bold"),
+                 plot.subtitle = element_text(color = "grey40", size = 21,
+                                              lineheight = 0.2,
+                                              family = "Libre Franklin Medium",
+                                              face = "italic"),
+                 plot.title.position = "plot",
+                 plot.caption.position = "plot",
+                 plot.caption = element_text(color = "grey30", size= 14, face="plain",
+                                             lineheight = 0.8,
+                                             family = "Libre Franklin",
+                                             hjust = 0, vjust = 0)
+                 )
+    )
   
 global
 ```
 
-
-### Exporting the plot
-```{r}
-pngfile <- fs::path(knitr::fig_path(),  "alternative_plot.png")
-agg_png(pngfile,
-        width = 1560,
-        height = 1300,
-        units = "px",
-        res = 144)
-invisible(dev.off())
-knitr::include_graphics(pngfile)
-
-```
-
-### Result
-This is the final alternative version of the original plot:
-
-![Alternative plot](./alternative_plot.png){width="100%"}
-
 ## Conclusions
+
 Apart from the put-in-practice opportunity of what was seen during the course of
 Data Visualization, I would like to highlight some findings and messages for my
 future self:
@@ -1168,4 +1140,3 @@ and it's easier to control bugs.
 - Leave the fonts and the export size for the last stage (even if it's hard to
 watch). Otherwise, you may invest too much time in doing this process 
 iteratively. And don't forget to render them before trying the next one.
-
