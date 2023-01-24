@@ -18,7 +18,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(fig.height=7, fig.width=6, fig.align="center")
+knitr::opts_chunk$set(fig.width=9, fig.asp=1, fig.align="center")
 ```
 
 ## Getting the data
@@ -28,6 +28,7 @@ Run the below commands to load the libraries we use. We also increase the vroom 
 ```{r, eval=FALSE}
 library(nbastatR)
 library(tidyverse)
+
 Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 2)
 ```
 
@@ -40,9 +41,10 @@ selectedSeasons <- c(1978:2017)
 Extract data from the function game_logs. I used *selectedSeason* to indicate the range of time, *NBA* to select the league, *player* and the type of season as *Regular Season*. 
 
 ```{r, eval=FALSE}
-P_gamelog_reg <- suppressWarnings(game_logs(
-  seasons = selectedSeasons, league = "NBA", result_types = "player",
-  season_types = "Regular Season"))
+P_gamelog_reg <- suppressWarnings(game_logs(seasons = selectedSeasons,
+                                            league = "NBA",
+                                            result_types = "player",
+                                            season_types = "Regular Season"))
 ```
 
 ```{r, eval=FALSE}
@@ -80,11 +82,14 @@ I create two new columns, one for ID players and one for the first 20 players in
 
 ```{r, eval=FALSE}
 player_id2 <- Edd%>%
-  select(namePlayer)%>%distinct()%>%mutate(Id_player=row_number())
+  select(namePlayer)%>%
+  distinct()%>%
+  mutate(Id_player=row_number())
 
 top_20_2 <- Edd%>%
   select(c(slugSeason, namePlayer,P3M))%>%
-  arrange(slugSeason, desc(P3M))%>% distinct()%>%
+  arrange(slugSeason, desc(P3M))%>% 
+  distinct()%>%
   group_by(slugSeason)%>%
   mutate(top_20=row_number())%>%
   filter(top_20<=20)%>%
@@ -93,33 +98,35 @@ top_20_2 <- Edd%>%
 
 top_20_x <- top_20_2%>%
   mutate(ID=row_number())
+
 ```
 
 I merge three datasets in order to obtain Id_player and top_20 columns
 
 ```{r, eval=FALSE}
-merge.player = merge(x=Edd,player_id2,by="namePlayer",all.Edd=TRUE)
-merge.20 <-  merge(merge.player, top_20_2, all=TRUE)
+merge.player1 = merge(x=Edd,player_id2,by="namePlayer",all.Edd=TRUE)
+merge.201 <-  merge(merge.player1, top_20_x, all=TRUE)
 ```
 
 I select the variables of interest and then I order by *slugSeason*, *top_20* and *dategame*. I compute the cumulative sum of three points field goals made.
 
 ```{r, eval=FALSE}
-merge.df1 <- merge.20%>%
-  select(c(slugSeason, namePlayer, dateGame, slugMatchup, P3M, fg3m, Id_player, top_20))%>%
-  arrange(slugSeason, top_20, dateGame)%>%
+merge.df11 <- merge.201%>%
+  select(yearSeason,slugSeason, namePlayer, dateGame, slugMatchup, P3M, fg3m,
+         Id_player, top_20, ID)%>%
+  arrange(slugSeason, top_20, dateGame,ID)%>%
   group_by(namePlayer,slugSeason)%>%
   mutate(P3M=sum(fg3m), "cum_sum"=cumsum(fg3m))%>%
   distinct()%>%
-  #arrange(slugSeason, namePlayer, top_20)%>%
   filter(!is.na(top_20))%>%
   filter(top_20<=20)
+
 ```
 
 I create the final dataset adding a new column for the number of games (#82 in a season).
 
 ```{r, eval=FALSE}
-ff <- merge.df1%>%
+ff <- merge.df11%>%
   group_by(slugSeason,namePlayer)%>%
   mutate("N_games"= row_number())
 ```
@@ -140,7 +147,9 @@ ff <- ff%>%
 Saving dataset:
 
 ```{r, eval=FALSE}
-write.table(ff, file = "ff.txt", sep = "\t", row.names = F)
+write.csv(ff, file = "ff2.csv", 
+          sep = "\t", 
+          row.names = F)
 ```
 
 ## Replicating the chart
@@ -152,14 +161,9 @@ For the regular season 2015 - 2016 Stephen Curry is an outlier compare with the 
 
 ```{r}
 library(tidyverse)
-#library(hrbrthemes)
-#library(GGally)
-#library(viridis)
 library(ggrepel)
-#library(ggtext)
-#library(showtext)
 
-ff <- read.delim("ff.txt", header=TRUE)
+ff <- read.delim("ff.csv.gz", sep =",", header=TRUE)
 ```
 
 Here, I create a function to expand the scale color I select in *my favourite colours*. In cvi_palettes I select n = 37 according to the range time of the graph. I need to set type as "continuous".
@@ -184,27 +188,111 @@ cvi_palettes = function(name, n, all_palettes = cvi_colours, type = c("discrete"
   structure(out, name = name, class = "palette")
 }
 
-scale_colour_cvi_c = function(name) {
-  ggplot2::scale_colour_gradientn(colours = cvi_palettes(name = name,
-                                                         type = "continuous"))
-}
-
-scale_fill_cvi_c = function(name) {
-  ggplot2::scale_fill_gradientn(colours = cvi_palettes(name = name,
-                                                       type = "continuous"))
-}
-
-scale_color_cvi_c = scale_colour_cvi_c
-
-cvi_palettes("my_favourite_colours", type = "continuous", n = 37)
-
-col = c("#CD9B9B", "#CF9F9B", "#D2A39B", "#D5A89C", "#D8AC9C", "#DAB09D",
-        "#DDB49E", "#E0B99E", "#E3BD9F", "#E5C29F", "#E8C6A0", "#EBCAA0",
-        "#EECFA1", "#E4CE9D", "#DBCE9A", "#D1CE97", "#C8CE94", "#BECE91",
-        "#B4CE8E", "#ABCD8B", "#A2CD88", "#98CD85", "#8FCD82", "#85CD7F",
-        "#7CCD7C", "#71C47D", "#67BC7E", "#5DB37F", "#52AB81", "#48A282",
-        "#3E9A83", "#339284", "#298985", "#1F8187", "#147888", "#0A7089", "#00688B")
+col <- cvi_palettes("my_favourite_colours", type = "continuous", n = 37)
 ```
+
+
+At this point, I tried to replicate the graph without the original colors and axis labels, but I encountered some problems related with annotations. In fact, when I plot the names for each player at the top 1 in every season, I have several overlaps. Using the parameter *check_overlap = T* in the function *geom_text*  I lose a lot of players, for this reason I decided to improve the graph using the function *geom_text_repel* that plot the labels with rows to avoid overlaps.
+
+```{r}
+n1 <- ggplot(ff, xlim=c(0, 97), ylim=c(0, 420)) + 
+  
+  geom_segment(
+    aes(
+      x=0, xend=0,
+      y=0, yend=0
+    )
+  ) + geom_segment(
+    aes(
+      x=0, xend=97,
+      y=50, yend=50
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=10, xend=97,
+      y=100, yend=100
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=27, xend=97,
+      y=150, yend=150
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=37, xend=97,
+      y=200, yend=200
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=46, xend=97,
+      y=250, yend=250
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=55, xend=97,
+      y=300, yend=300
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=65, xend=97,
+      y=350, yend=350
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=75, xend=97,
+      y=400, yend=400
+    ), color = "grey90"
+  )
+
+
+n1 <- n1 + geom_step(aes(x = ff$N_games, y = cum_sum, group = ID, color = yearSeason),
+                   linetype = "solid", alpha = 1, size = 1.08)
+
+n1 <-  n1 + geom_segment(aes(x=0, xend=83, y=0, yend=0), size=1) 
+
+n1<-  n1 + coord_fixed(ratio=1/3)
+
+n1 <- n1 + ggtitle("Stephen Curry's 3-Point Record in Context: Off the Charts")
+
+n1 <- n1 +  geom_text(data = ff%>%
+              select(yearSeason,slugSeason, namePlayer, P3M, top_20, N_games, cum_sum, pp)%>%
+              filter(top_20 == 1)%>%
+              group_by(yearSeason, slugSeason, pp,namePlayer, P3M)%>%
+              summarise(
+                P3M1 = sum(cum_sum)
+              )%>%
+              select(-P3M1),
+            aes(x = 82, y = P3M, colour = yearSeason, label=pp), 
+            family = "Palatino",
+            fontface = "plain",
+            size = 2,
+            direction = "y",
+            hjust = "left",
+            nudge_x = 0
+            )
+
+n1 <- n1 +  guides(colour = guide_colourbar(title = substitute(paste(bold("Cumulative 
+three-point field 
+goals made over 
+the course of a 
+season"))), barwidth = 0.8, barheight = 7))
+
+n1 <- n1 + theme(
+     plot.title = element_text(size = 15, family = "serif", face = "plain", hjust = 0.8),
+     plot.background = element_rect(fill = "white", colour = NA),
+        panel.background = element_rect(fill = "white", colour = NA),
+   panel.grid.major.x = element_blank(),
+ legend.position="left",
+
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  axis.ticks.length.x = unit(-.2, "cm"),
+  axis.ticks.y = element_blank(),
+  axis.text.y = element_text(vjust = -1)) 
+n1
+```
+
+## Improve the Graph
 
 Here, I set the coordinates of my graph according to x - axis that represent the number of games in a regular season, and y - axis that marks how many three point shoots made by a player.
 
@@ -305,19 +393,8 @@ n <- n + geom_text_repel(data = ff%>%
             fontface = "plain",
             size = 3,
             direction = "y",
-            #xlim = c(83, NA),
             hjust = "left",
-            #force = 2,
-           #box.padding = unit(0.5, "lines"),
-            #segment.size = .7,
-            #segment.alpha = .5,
-            #segment.linetype = "dotted",
-            #box.padding = .4,
-            #segment.curvature = -0.1,
-            #segment.ncp = 3,
-            #segment.angle = 20
             nudge_x = 9
-            #check_overlap = T
             )
 n
 ```
@@ -365,14 +442,13 @@ n
 In this part I use some functions to modify the title, customize the background or set the position of the legend.
 According to the original graph I remove the axis title and the ticks from the y - axis.
 
-```{r}
+```{r, preview=TRUE}
 n <- n + theme(
-     plot.title = element_text(size = 15, family = "serif", face = "plain", hjust = 0.8),
-     plot.background = element_rect(fill = "white", colour = NA),
-        panel.background = element_rect(fill = "white", colour = NA),
-   panel.grid.major.x = element_blank(),
- legend.position="left",
-
+  plot.title = element_text(size = 15, family = "serif", face = "plain", hjust = 0.8),
+  plot.background = element_rect(fill = "white", colour = NA),
+  panel.background = element_rect(fill = "white", colour = NA),
+  panel.grid.major.x = element_blank(),
+  legend.position="left",
   axis.title.x = element_blank(),
   axis.title.y = element_blank(),
   axis.ticks.length.x = unit(-.2, "cm"),
