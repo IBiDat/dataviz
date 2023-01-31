@@ -2242,6 +2242,11 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
 
   d-article li {
     margin-bottom: 0.1em;
+  }
+
+  .posts-list .post-preview .thumbnail {
+    max-height: 300px;
+    overflow: hidden;
   }</style>
   <style type="text/css">
   /* base style */
@@ -2398,7 +2403,7 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
     color: var(--hover-color, white);
   }</style>
   <!--/radix_placeholder_distill-->
-  <script src="site_libs/header-attrs-2.17/header-attrs.js"></script>
+  <script src="site_libs/header-attrs-2.19/header-attrs.js"></script>
   <script src="site_libs/popper-2.6.0/popper.min.js"></script>
   <link href="site_libs/tippy-6.2.7/tippy.css" rel="stylesheet" />
   <link href="site_libs/tippy-6.2.7/tippy-light-border.css" rel="stylesheet" />
@@ -2448,141 +2453,328 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
 <!--radix_placeholder_site_before_body-->
 <!--/radix_placeholder_site_before_body-->
 <!--radix_placeholder_article_listing-->
-
-
-<script type="application/javascript">
-
-function init_posts_list() {
-
-  function load_image(img) {
-    var src = $(img).attr('data-src');
-    if (src) {
-      $(img).attr('src', src);
-      $(img).on("load", function() {
-        img.removeAttribute('data-src');
-      });
-    }
-  }
-
-  function set_posts_visible(posts, visible) {
-    if (visible) {
-
-      // show bottom border by default
-      $(posts).removeClass('post-preview-last');
-
-      // apply limits if need be
-      var max_posts = 25;
-      var apply_limits = $('.posts-container').hasClass('posts-apply-limit');
-      if (apply_limits && posts.length > max_posts) {
-        posts = $(posts).slice(0, max_posts);
-      } else {
-        $('.posts-more a').addClass('hidden');
-      }
-
-      // apply last style
-      $(posts.slice(-1)[0]).addClass('post-preview-last');
-
-      $(posts).removeClass('hidden');
-      $(posts).find('img[data-src]').each(function(i, img) {
-        load_image(img);
-      });
-    } else {
-      $(posts).addClass('hidden');
-    }
-  }
-
-  function apply_hash_filter() {
-
-    // clear active state
-    $('.categories .active').removeClass('active');
-
-    // mark all posts invisible to start
-    set_posts_visible($('.posts-list').children('a'), false);
-
-    // if we have a hash filter
-    if (window.location.hash && window.location.hash.startsWith("#category:")) {
-
-      // mark posts that match the category visible
-      var page_category = window.location.hash.replace(/^#category:/, "");
-      page_category = decodeURIComponent(page_category)
-      var posts = $('.post-metadata').map(function(idx, script) {
-        var metadata = $.parseJSON($(script).html());
-        var post = null;
-        $.each(metadata.categories, function(idx, category) {
-          category = category.replace(/ /g,"_");
-          if ((page_category || '').toLowerCase() === "articles" || category === page_category) {
-            post = $(script).parent().get();
-            return false;
-          }
-        });
-        return post;
-      });
-      set_posts_visible(posts, true);
-
-      // mark the hash active
-      $('.categories li>a[href="' + decodeURIComponent(window.location.hash) + '"]').addClass('active');
-
-      // update the list_caption
-      var list_caption = $('.posts-list-caption');
-      var caption = (page_category || '').toLowerCase() === "articles"
-        ? list_caption.attr('data-caption')
-        : ('Category: ' + page_category.replace(/_/g," "));
-      list_caption.text(caption);
-
-    } else {
-
-      // no hash filter, make all posts visible (subject to max display)
-      set_posts_visible($('.posts-list').children(), true);
-
-      // reset list caption
-      var list_caption = $('.posts-list-caption');
-      list_caption.text(list_caption.attr('data-caption'));
-
-
-    }
-  }
-
-  // more articles
-  function apply_post_limits(apply) {
-    if (apply) {
-      $('.posts-container').addClass('posts-apply-limit');
-      $('.posts-more a').removeClass('hidden');
-    } else {
-      $('.posts-container').removeClass('posts-apply-limit');
-      $('.posts-more a').addClass('hidden');
-    }
-  }
-
-  // click handling for tags
-  $('.dt-tag').click(function(ev) {
-    window.location.hash = '#category:' + $(this).text().replace(/ /g, "_");
-    return false;
-  })
-
-  // hash filter handling
-  apply_hash_filter();
-  $(window).on('hashchange',function() {
-    apply_post_limits(true);
-    apply_hash_filter();
-  });
-
-  // more articles link
-  $('.posts-more a').click(function(e) {
-    e.preventDefault();
-    apply_post_limits(false);
-    apply_hash_filter();
-    return false;
-  });
-
-}
-
-</script>
-
-
+
+
+<script type="application/javascript">
+
+function init_posts_list() {
+
+  function load_image(img) {
+    var src = $(img).attr('data-src');
+    if (src) {
+      $(img).attr('src', src);
+      $(img).on("load", function() {
+        img.removeAttribute('data-src');
+      });
+    }
+  }
+
+  function set_posts_visible(posts, visible) {
+    if (visible) {
+
+      // show bottom border by default
+      $(posts).removeClass('post-preview-last');
+
+      // apply limits if need be
+      var max_posts = 25;
+      var apply_limits = $('.posts-container').hasClass('posts-apply-limit');
+      if (apply_limits && posts.length > max_posts) {
+        posts = $(posts).slice(0, max_posts);
+      } else {
+        $('.posts-more a').addClass('hidden');
+      }
+
+      // apply last style
+      $(posts.slice(-1)[0]).addClass('post-preview-last');
+
+      $(posts).removeClass('hidden');
+      $(posts).find('img[data-src]').each(function(i, img) {
+        load_image(img);
+      });
+    } else {
+      $(posts).addClass('hidden');
+    }
+  }
+
+  function apply_hash_filter() {
+
+    // clear active state
+    $('.categories .active').removeClass('active');
+
+    // mark all posts invisible to start
+    set_posts_visible($('.posts-list').children('a'), false);
+
+    // if we have a hash filter
+    if (window.location.hash && window.location.hash.startsWith("#category:")) {
+
+      // mark posts that match the category visible
+      var page_category = window.location.hash.replace(/^#category:/, "");
+      page_category = decodeURIComponent(page_category)
+      var posts = $('.post-metadata').map(function(idx, script) {
+        var metadata = $.parseJSON($(script).html());
+        var post = null;
+        $.each(metadata.categories, function(idx, category) {
+          category = category.replace(/ /g,"_");
+          if ((page_category || '').toLowerCase() === "articles" || category === page_category) {
+            post = $(script).parent().get();
+            return false;
+          }
+        });
+        return post;
+      });
+      set_posts_visible(posts, true);
+
+      // mark the hash active
+      $('.categories li>a[href="' + decodeURIComponent(window.location.hash) + '"]').addClass('active');
+
+      // update the list_caption
+      var list_caption = $('.posts-list-caption');
+      var caption = (page_category || '').toLowerCase() === "articles"
+        ? list_caption.attr('data-caption')
+        : ('Category: ' + page_category.replace(/_/g," "));
+      list_caption.text(caption);
+
+    } else {
+
+      // no hash filter, make all posts visible (subject to max display)
+      set_posts_visible($('.posts-list').children(), true);
+
+      // reset list caption
+      var list_caption = $('.posts-list-caption');
+      list_caption.text(list_caption.attr('data-caption'));
+
+
+    }
+  }
+
+  // more articles
+  function apply_post_limits(apply) {
+    if (apply) {
+      $('.posts-container').addClass('posts-apply-limit');
+      $('.posts-more a').removeClass('hidden');
+    } else {
+      $('.posts-container').removeClass('posts-apply-limit');
+      $('.posts-more a').addClass('hidden');
+    }
+  }
+
+  // click handling for tags
+  $('.dt-tag').click(function(ev) {
+    window.location.hash = '#category:' + $(this).text().replace(/ /g, "_");
+    return false;
+  })
+
+  // hash filter handling
+  apply_hash_filter();
+  $(window).on('hashchange',function() {
+    apply_post_limits(true);
+    apply_hash_filter();
+  });
+
+  // more articles link
+  $('.posts-more a').click(function(e) {
+    e.preventDefault();
+    apply_post_limits(false);
+    apply_hash_filter();
+    return false;
+  });
+
+}
+
+</script>
+
+
 
 <div class="posts-container posts-with-sidebar posts-apply-limit l-screen-inset">
 <div class="posts-list">
 <h1 class="posts-list-caption" data-caption="Project archive">Project archive</h1>
+<a href="projects/2022/100470958/" class="post-preview">
+<script class="post-metadata" type="text/json">{"categories":["2022"]}</script>
+<div class="metadata">
+<div class="publishedDate">Jan. 30, 2023</div>
+<div class="dt-authors">
+<div class="dt-author">Freddy Andrés Camargo</div>
+</div>
+</div>
+<div class="thumbnail">
+<img src="projects/2022/100470958/100470958_files/figure-html5/unnamed-chunk-12-1.png"/>
+</div>
+<div class="description">
+<h2>Satellite images defy economic data of authoritarian regimes</h2>
+<div class="dt-tags">
+<div class="dt-tag">2022</div>
+</div>
+<p>Highly customized dumbbell chart that compares official GDP against satellite-based estimation of GDP, across 103 countries.</p>
+</div>
+</a>
+<a href="projects/2022/100483841/" class="post-preview">
+<script class="post-metadata" type="text/json">{"categories":[]}</script>
+<div class="metadata">
+<div class="publishedDate">Jan. 11, 2023</div>
+<div class="dt-authors">
+<div class="dt-author">Victoria Costas Salamanca</div>
+</div>
+</div>
+<div class="thumbnail">
+<img src="projects/2022/100483841/100483841_files/figure-html5/unnamed-chunk-4-1.png"/>
+</div>
+<div class="description">
+<h2>Population Perspectives</h2>
+<div class="dt-tags"></div>
+<p>A graph about population in 2017 and 2100 will be replicated and an alternative way of visualizing this graph will be presented.</p>
+</div>
+</a>
+<a href="projects/2022/100376720/" class="post-preview">
+<script class="post-metadata" type="text/json">{"categories":[]}</script>
+<div class="metadata">
+<div class="publishedDate">Jan. 9, 2023</div>
+<div class="dt-authors">
+<div class="dt-author">Edgar Chicurel</div>
+</div>
+</div>
+<div class="thumbnail">
+<img src="projects/2022/100376720/original.png"/>
+</div>
+<div class="description">
+<h2>Education Attainment Graph</h2>
+<div class="dt-tags"></div>
+<p>This project consists in the replicaion and alternative representation of a graph from a New York Times article called "Where Education Drives Mobility".</p>
+</div>
+</a>
+<a href="projects/2022/100385586/" class="post-preview">
+<script class="post-metadata" type="text/json">{"categories":["2022"]}</script>
+<div class="metadata">
+<div class="publishedDate">Jan. 8, 2023</div>
+<div class="dt-authors">
+<div class="dt-author">Alejandro Aísa</div>
+</div>
+</div>
+<div class="thumbnail">
+<img src="projects/2022/100385586/100385586_files/figure-html5/unnamed-chunk-4-1.png"/>
+</div>
+<div class="description">
+<h2>Restrictions on religion among the most populated countries across time</h2>
+<div class="dt-tags">
+<div class="dt-tag">2022</div>
+</div>
+<p>A replication of a graph from Pew Research Center on the 
+restrictions on religion among the 25 most populous countries.</p>
+</div>
+</a>
+<a href="projects/2022/100386498/" class="post-preview">
+<script class="post-metadata" type="text/json">{"categories":["2022"]}</script>
+<div class="metadata">
+<div class="publishedDate">Jan. 8, 2023</div>
+<div class="dt-authors">
+<div class="dt-author">Isabela Zeberio</div>
+</div>
+</div>
+<div class="thumbnail">
+<img src="projects/2022/100386498/100386498_files/figure-html5/unnamed-chunk-16-1.png"/>
+</div>
+<div class="description">
+<h2>The World Bank's Richer Countries Tend to Have Higher National Poverty Lines Chart</h2>
+<div class="dt-tags">
+<div class="dt-tag">2022</div>
+</div>
+<p>The aim of this project is to recreate and improve a chart from the first Atlas of Sustainable Development Goals.</p>
+</div>
+</a>
+<a href="projects/2022/100392586/" class="post-preview">
+<script class="post-metadata" type="text/json">{"categories":["2022"]}</script>
+<div class="metadata">
+<div class="publishedDate">Jan. 8, 2023</div>
+<div class="dt-authors">
+<div class="dt-author">Emma Perez Hernandez</div>
+</div>
+</div>
+<div class="thumbnail">
+<img data-src="projects/2022/100392586/100392586_files/figure-html5/unnamed-chunk-14-1.png"/>
+</div>
+<div class="description">
+<h2>HDI - What a time to be alive</h2>
+<div class="dt-tags">
+<div class="dt-tag">2022</div>
+</div>
+<p>Using the United Nation's Human Development Index (HDI) data to produce The Economist's map and other visualizations.</p>
+</div>
+</a>
+<a href="projects/2022/100383017/" class="post-preview">
+<script class="post-metadata" type="text/json">{"categories":["2022"]}</script>
+<div class="metadata">
+<div class="publishedDate">Jan. 5, 2023</div>
+<div class="dt-authors">
+<div class="dt-author">Nacho Pulido Ruiz</div>
+</div>
+</div>
+<div class="thumbnail">
+<img data-src="projects/2022/100383017/images/original_plot.png"/>
+</div>
+<div class="description">
+<h2>Country Convergence</h2>
+<div class="dt-tags">
+<div class="dt-tag">2022</div>
+</div>
+<p>This project enables the user to recreate a specific graph in OurWorldinData on GDP per capita layer by layer. It also introduces two alternative representations resorting to the same data.</p>
+</div>
+</a>
+<a href="projects/2022/100481925/" class="post-preview">
+<script class="post-metadata" type="text/json">{"categories":["2022"]}</script>
+<div class="metadata">
+<div class="publishedDate">Jan. 5, 2023</div>
+<div class="dt-authors">
+<div class="dt-author">Carolina Cornejo Castellano</div>
+</div>
+</div>
+<div class="thumbnail">
+<img data-src="projects/2022/100481925/images/replica.png"/>
+</div>
+<div class="description">
+<h2>Bump chart: How Americans spend their money</h2>
+<div class="dt-tags">
+<div class="dt-tag">2022</div>
+</div>
+<p>Code to replicate the graph in `ggplot2` and some improvements.</p>
+</div>
+</a>
+<a href="projects/2022/100483607/" class="post-preview">
+<script class="post-metadata" type="text/json">{"categories":["2022"]}</script>
+<div class="metadata">
+<div class="publishedDate">Jan. 5, 2023</div>
+<div class="dt-authors">
+<div class="dt-author">Pablo Arroyo Rodriguez</div>
+</div>
+</div>
+<div class="thumbnail">
+<img data-src="projects/2022/100483607/ccaa470.jpg"/>
+</div>
+<div class="description">
+<h2>Distribution of state investment by autonomous communities</h2>
+<div class="dt-tags">
+<div class="dt-tag">2022</div>
+</div>
+<p>This following page is a guide, of how to reproduce step by step, the plot of "El Mundo Gráficos" done by the student Pablo Arroyo as a final project for the subject.</p>
+</div>
+</a>
+<a href="projects/2022/100489635/" class="post-preview">
+<script class="post-metadata" type="text/json">{"categories":["2022"]}</script>
+<div class="metadata">
+<div class="publishedDate">Jan. 5, 2023</div>
+<div class="dt-authors">
+<div class="dt-author">Elena Yustres</div>
+</div>
+</div>
+<div class="thumbnail">
+<img data-src="projects/2022/100489635/economist.png"/>
+</div>
+<div class="description">
+<h2>GDP Forecasts for China's Cities by 'The Economist': Coastal Areas Have the Highest Growth Potential</h2>
+<div class="dt-tags">
+<div class="dt-tag">2022</div>
+</div>
+<p>A layer-by-layer construction of a map of China containing information on forecasted GDP growth and population for over 100 cities.</p>
+</div>
+</a>
 <a href="projects/gapminder/" class="post-preview">
 <script class="post-metadata" type="text/json">{"categories":["gapminder"]}</script>
 <div class="metadata">
@@ -2592,7 +2784,7 @@ function init_posts_list() {
 </div>
 </div>
 <div class="thumbnail">
-<img src="projects/gapminder/gapminder_files/figure-html5/titled-1.png"/>
+<img data-src="projects/gapminder/gapminder_files/figure-html5/titled-1.png"/>
 </div>
 <div class="description">
 <h2>Gapminder's World Health Chart</h2>
@@ -2610,7 +2802,11 @@ and serves as an example project for this course</p>
 <ul>
 <li>
 <a href="#category:articles">articles</a>
-<span class="category-count">(1)</span>
+<span class="category-count">(11)</span>
+</li>
+<li>
+<a href="#category:2022">2022</a>
+<span class="category-count">(8)</span>
 </li>
 <li>
 <a href="#category:gapminder">gapminder</a>
@@ -2623,7 +2819,7 @@ and serves as an example project for this course</p>
 <a href="#">More articles &raquo;</a>
 </div>
 </div>
-<!--/radix_placeholder_article_listing-->
+<!--/radix_placeholder_article_listing-->
 
 <div class="d-title">
 <h1>Project archive</h1>
