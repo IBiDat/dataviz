@@ -1,0 +1,195 @@
+---
+title: "Worldwide Top 10 Listened Songs in Spotify"
+description: |
+   This project is about a visualization of the ten most listened songs between
+   June and August 2022 in Spotify.
+categories: "2022"
+author: Jorge Pascual Segovia
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+For this project, I decided to select Spotify worldwide data about the most listened songs between June and August from [Newtral's webpage](https://www.newtral.es/cancion-quevedo-bizarrap/20220825/).
+At first, we can find the codes for the data cleaning, the replication plot and the alternative plot. Then I will go step by step explaining each of the decisions I took during the replication plot and the alternative plot.
+
+```{r}
+#### Libraries
+library(tidyverse)
+library(lubridate)
+library(gganimate)
+```
+
+## Data cleaning
+
+```{r}
+#### Read the Dataset
+spoti<-read_csv("spotify-data.csv", skip = 2,
+                col_names = c("Date",
+                              "As It Was",
+                              "Despechá",
+                              "Me Porto Bonito",
+                              "Pink Venom",
+                              "Quevedo: Bzrp Music Sessions, Vol. 52",
+                              "Tití Me Preguntó"))
+```
+
+Here, I noticed that I needed to create the columns of my variable by pivoting the dataframe so I obtain columns for the date, the ranking position and the name of the song:
+
+```{r}
+#Pivot long the Song
+spoti <- spoti %>% 
+  tidyr::pivot_longer(-Date,
+               names_to = "Song",
+               values_to = "Ranking")
+spoti
+```
+
+Then, I wanted the Date column to be date type so it's easier to handle.
+
+```{r}
+#Transform Date column into "date type" 
+spoti$Date <- paste(spoti$Date, "2022",sep="-")
+spoti$Date<-  gsub("jul",07,spoti$Date)
+spoti$Date<-  gsub("ago",08,spoti$Date)
+spoti$Date <- dmy(spoti$Date)
+spoti
+```
+
+Also, I realized that the font was Roboto, which is in the Google's font package, so I loaded it as we learnt in the course. 
+
+```{r}
+#### First theme settings
+theme_set(theme_minimal()) #Set the minimal theme
+sysfonts::font_add_google("Roboto") #Adding a google font type
+```
+
+## Replicating the plot
+
+```{r}
+p <- ggplot(spoti) +
+  aes(Date, Ranking) + #set x and y axis
+  geom_line(aes(color=Song), size = 1) + #set the visualization mark
+  theme(text = element_text(family="Roboto")) #set the font
+p
+
+```
+
+To follow with, I realized that the plot is upside down so I needed to adjust the axis' scales:
+
+```{r}
+p <- p +
+  #set the order of y axis guides
+  scale_y_continuous(trans = "reverse", n.breaks = 10) +               
+  scale_x_date(
+    #set the date format of the y tickmarks
+    date_labels = "%d-%b",                                               
+    breaks = seq(as.Date("2022-07-11"), as.Date("2022-08-25"), by = 6))
+p
+  
+```
+
+Then I introduced the title and subtitle and set the format for them. To get the code of the specific color, I used this very useful webpage: https://imagecolorpicker.com/. The size was guessed by playing with the code until I got the same format. 
+
+```{r}
+  p <- p +
+  labs(
+    title="Evolución diaria del ránking en Spotify", 
+    subtitle = "Posición de las seis canciones más escuchadas en la plataforma a nivel mundial") +
+  theme(plot.title = element_text(face = "bold", size = 16.5)) + # Format of titles
+  labs(x = NULL, y = NULL, color = NULL) # Remove the labels from the axis
+p
+```
+
+Here is the tricky part, the theme settings to make this graph look identically as the original one, step by step. I didn't write the code at once. I added things while I was advancing with the plot and realizing of needed theme features.
+
+```{r}
+p <- p +
+  # size and color of the axis components
+  theme(axis.text.y = element_text(colour = "#a8a8a8", size = 10), 
+        axis.line.y = element_line(size = 0, color = "#eeeeee"),
+        axis.text.x = element_text(colour = "#a8a8a8", size = 10),
+        panel.grid.minor.y = element_blank(), # remove some grid lines
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        legend.position="none") #remove the legend
+p
+```
+
+As I removed the legend, I needed to add information to know which song is represented by each visualization mark. I started trying it with annotations but then figured out that 'geom_text' was more simple and easy. Once I got the labels, I only needed to adjust the limits so it fitted:
+
+```{r}
+#for the location of the legend annotations
+df.labs <- spoti %>% 
+  filter(Date == "2022-08-23") 
+
+p <- p +
+  geom_text(aes(
+    label=Song, colour = Song), df.labs, hjust=0, nudge_x=0.7) + #Annotations for legend
+  expand_limits(x= as.Date("2022-9-1")) + #Create space for the annotations
+  expand_limits(y= 9) 
+p
+```
+
+Finally, I only needed to fit the colors of the original plot.
+
+```{r, preview=TRUE}
+p <- p +
+  scale_color_manual(values=c( 
+  "#8dc7ad", "#5cb689", "#267d59", "#54b182", "#c71e1d", "#4ea07c"))  
+p
+```
+
+## Alternative plot
+
+At first, I considered that I could add more information as the color visualization mark was almost not giving information apart of which song is the spanish one. As I didn't have the resources to get more data from Spotify. 
+
+```{r}
+spotig <- spoti %>% 
+  mutate("Genre" = case_when(
+    endsWith(Song, "52") ~ "Pop",
+    endsWith(Song, "As It Was") ~ "Pop",
+    endsWith(Song, "Pink Venom") ~ "K-Pop",
+    endsWith(Song, "Me Porto Bonito") ~ "Reggaeton/Latino",
+    endsWith(Song, "Tití Me Preguntó") ~ "Reggaeton/Latino",
+    endsWith(Song, "Despechá") ~ "Reggaeton/Latino"
+  ))
+spotig
+```
+
+Creating an alternative plot that wasn't like the replication was tough as the best way to visualize a timeline is with a line and the time on the x axis. I decided to use an animation as I realized that the second most common type of timelines were animation with bubbles. Bubbles were okay but I thought that the best visualization mark for the names had to be done with 'geom_text' with the name of the song. The time would be represented by each frame of the animation and the Genre by color. 
+The toughest thing to find was how to label the date of each frame until I found the argument 'frame_time' between brackets. 
+Finally, I wanted the theme to be similar as the last one, so I chose many similar options. Here is the result:
+
+```{r}
+pa <- ggplot(spotig) +
+  aes(Song, Ranking) +
+  geom_text(aes(color = Genre, label = Song)) + # Assign Genre as the color of the text
+  scale_y_continuous(trans = "reverse", n.breaks = 9) +
+  expand_limits(x=c(0, 7)) +
+  labs(
+    title="Evolución diaria del ránking en Spotify", 
+    subtitle = "Evolución de las 6 canciones más escuchadas mundialmente en verano de 2022",
+    tag = "Date: 
+    {frame_time}", # To tag the Date variable written
+    x = NULL, y = NULL
+  ) +
+  transition_time(Date) + # Date as the variable represented by the animation 
+  ease_aes('linear') + # Make the animation smoother
+  theme(
+    plot.title = element_text(face = "bold", size = 16.5),
+    plot.subtitle = element_text(size = 10.5, colour = "#6f6f6f"),
+    plot.tag.position = c(0.836,0.65),
+    plot.tag = element_text(face = "bold", size = 12, hjust = 0),
+    legend.title = element_text(face = "bold", size = 12, hjust = 0),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(color = "light grey"),
+    axis.text.x = element_blank()
+  ) 
+
+pa
+```

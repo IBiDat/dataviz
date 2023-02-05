@@ -1,7 +1,8 @@
 ---
 title: "Satellite images defy economic data of authoritarian regimes"
 description: |
-  Highly customized dumbbell chart that compares official GDP against satellite-based estimation of GDP, across 103 countries.
+  Highly customized dumbbell chart that compares official GDP against
+  satellite-based estimation of GDP, across 103 countries.
 categories: "2022"
 author: Freddy Andrés Camargo
 date: "`r Sys.Date()`"
@@ -72,11 +73,13 @@ c
 
 We want to draw a vertical dumbbell chart. As a consequence, we specify two sets of coordinates in the Y-axis, one for the GDP-NTL growth, and the other for the GDP-official growth. In order to connect both points, we add a segment that evidences how big is the distance between them. Then, we create a dumbbell per country.
 
-We scale the size of each point to show the size of the economy, according to the respective methodology. 
+We scale the size of each point to show the size of the economy, according to the respective methodology. In the beginning, we create a horizontal reference line where Y is equal to 0, below the data points.
 
 ```{r fig.align="center"}
 
-c <- c + geom_segment() +
+c <- c + 
+  geom_hline(yintercept = 0, linewidth = 0.25) +
+  geom_segment() +
   geom_point(aes(xend = order, y = GDP.var.R, size = GDP.in.2015.USD.R/1e+12), 
              shape = 21, fill = "#C7C5BD", color = "white") +
   geom_point(aes(size = GDP.in.2015.USD.NTL / 1e+12, fill = FIW.Status), 
@@ -117,10 +120,10 @@ The Economist's chart has a minimalist and clean design. We use the corresponden
 sysfonts::font_add_google("PT Sans")
 showtext::showtext_auto()
 ```
-We assign a white background, and remove the divisions between facets, as well as its titles, to integrate the canvas. Observe that we reduce the grid linewidth and change its color, to highlight the dumbbells. Now, the bottom line is not a frame of the chart, while a horizontal reference line is created where Y is equal to 0.
+We assign a white background, and remove the divisions between facets, as well as its titles, to integrate the canvas. Observe that we reduce the grid linewidth and change its color, to highlight the dumbbells. Now, the bottom line is not a frame of the chart.
 
 ```{r out.width="100%"}
-c <- c + geom_hline(yintercept = 0, linewidth = 0.5) + 
+c <- c + 
   theme_economist_white() + 
   theme(
     plot.background = element_rect(fill = "white"),
@@ -139,11 +142,11 @@ We remove the titles from both axis. Besides, we withdraw texts and ticks from X
 c <- c + theme(
   axis.title.x = element_blank(), 
   axis.title.y = element_blank(), 
-  axis.text.y = element_text(vjust = -0.5), 
+  axis.text.y = element_text(vjust = -0.5, color = "#2C2E2E"), 
   axis.text.x = element_blank(),
   axis.ticks.x = element_blank(),
   legend.background = element_rect(fill = "white"),
-  legend.position = c(0,0.81),
+  legend.position = c(0,0.85),
   legend.direction = "horizontal",
   legend.justification = c(0, 1),
   legend.key = element_rect(fill = "transparent"),
@@ -178,7 +181,7 @@ pinset <- ggplot(z, aes(x, y)) +
   geom_point(data=v,size=2, color="grey")+
   geom_text(aes(label=name), hjust= -0.1, size=4, lineheight = .5) +
   geom_text(data=v,aes(label=name), hjust= -0.2, size=4) + 
-  lims(x = c(2.9, 4), y = c(4.7, 7.3)) +
+  lims(x = c(2.9, 4), y = c(4.6, 7.3)) +
   ggtitle("Change in GDP, 2002-21, %*", ) +
   theme_void() + 
   theme(
@@ -212,16 +215,18 @@ titles <- data.frame(
 )
 
 countriestxt <- data.frame(
-  labels = c("Japan", "Britain", "United States", "China"),
-  FIW.Status = c("F", "F", "F", "NF"),
-  order = c(4, 11, 20, 34),
-  GDP.var.NTL = c(-6, 14, 25, 175),
-  GDP.var.R = c(-6, 14, 25, 175)
+  labels = c("Japan", "Britain", "United States", "China", "Australia", 
+             "Ireland", "India", "Russia", "Mexico", "Peru"),
+  FIW.Status = c("F", "F", "F", "NF", "F", "F", "PF", "NF", "PF", "F"),
+  order = c(5, 11, 21, 34, 27, 35, 41, 10, 5, 34),
+  GDP.var.NTL = c(-6, 11, 25, 175, 56, 144, 159, 27, 17, 112),
+  GDP.var.R = c(-6, 11, 25, 175, 56, 144, 159, 27, 17, 112)
   )
 
 c <- c +
    geom_text(data = DF%>% filter(label == 1 & 
-          !(Country.Name %in% c("Japan", "Britain","United States", "China"))), 
+          !(Country.Name %in% c("Japan", "Britain","United States", "China",
+            "Australia", "Ireland", "India", "Russia", "Mexico", "Peru"))), 
             aes(label = Country.Name), color = "#454545",
             vjust = 1.5, hjust = -0.1, check_overlap = T) +
   geom_text(data= countriestxt, aes(label = labels), color="#454545", hjust=0)+
@@ -281,7 +286,7 @@ c
 ```
 The autocratic category summary and the caption are added. We highlight that the summary is incorporated just to one facet. It means that we should specify the level of the factor that we want to use. To conclude, we combine the inset with the "Patchwork" library, specifying the desired position.
 
-```{r out.width="100%", preview=TRUE, layout="l-page"}
+```{r out.width="100%", preview=TRUE, layout="l-body-outset"}
 sumQuote <- data.frame(
   text = "↓ Autocratic countries reported\nGDP growth of 147% on average.
 Satellite imagery suggests the\ntrue figure is 76%",
@@ -324,7 +329,7 @@ lineAnnotations <- data.frame(
 
 Ecountrieslbl <- data.frame(
   labels = c("Japan", "Britain", "United States", "China","Russia", 
-             "Turkiye", "Mexico", "Philippines", "India"),
+             "Turkey", "Mexico", "Philippines", "India"),
   FIW.Status = c("F", "F", "F", "NF","NF", "NF", "PF", "PF", "PF"),
   GDP.var.R = c(-5, 10, 30, 390, 83, 179, 50, 135, 228),
   GDP.var.NTL = c(18, 31, 58, 149, 16, 92, 4, 110, 173)
@@ -333,18 +338,20 @@ Ecountrieslbl <- data.frame(
 captiontxt <- paste("\n",
   "*Countries with over 5m people, freedom status in 2021",
             "†In 2021 $ at market exchange rates,",
-            "assuming reported 1992 GDP figures are accurate", sep=" "
+            "assuming reported 1992 GDP figures are accurate.",
+            "'PP' means Percentage Points.",
+            sep=" "
             )
 
 DF$FIW.Status <- factor(DF$FIW.Status, levels=c("F", "PF", "NF"))
 ```
 
-```{r out.width="100%", layout="l-page"}
+```{r out.width="100%", layout="l-body-outset"}
 ggplot(DF, aes(GDP.var.NTL, GDP.var.R, fill= FIW.Status)) + 
   geom_abline(slope = 1, intercept = 0, linetype="dashed") +
-  geom_abline(slope = 1, intercept = 50, linetype=2, size=0.1) +
-  geom_abline(slope = 1, intercept = 100, linetype=2, size=0.1) +
-  geom_abline(slope = 1, intercept = 200, linetype=2, size=0.1) +
+  geom_abline(slope = 1, intercept = 50, linetype=2, linewidth=0.1) +
+  geom_abline(slope = 1, intercept = 100, linetype=2, linewidth=0.1) +
+  geom_abline(slope = 1, intercept = 200, linetype=2, linewidth=0.1) +
   geom_point(aes(size=GDP.in.2015.USD.NTL/1e+12), shape=21, alpha=0.8) + 
   geom_text(data = DF%>% filter(label == 1 & (Country.Name %in% 
             c("Greece", "Australia", "South Korea", "Ghana","Poland", 
@@ -379,7 +386,8 @@ ggplot(DF, aes(GDP.var.NTL, GDP.var.R, fill= FIW.Status)) +
     axis.line.x.bottom = element_line(color = "#F3F0EA"),
     axis.line.y.left  = element_line(color = "#F3F0EA"),
     plot.title = element_text(face = "bold", hjust = 0, size= 15, vjust = 3),
-    plot.caption = element_text(hjust = 0, color ="#454545", size = 8)
+    plot.caption = element_text(hjust = 0, color ="#454545", size = 8),
+    plot.margin = unit(c(10,5.5,5.5,5.5), 'pt')
   )
 
 ```

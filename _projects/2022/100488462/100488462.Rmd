@@ -1,0 +1,458 @@
+---
+title: "Steph Curry's 3-Point Record in Context: Off the Charts"
+description: |
+  In this project, I will explain how to replicate a graph of the three-point
+  field goals made over the course of a season for every player in a range of
+  time. The graph shows a relevant difference in cumulative sums between 
+  the current seasons and the previous ones.
+  First, I will clean the dataset according to the variables that I need.
+  Second, I will present step by step how to reproduce the graph using
+  ggplot2 package.
+categories: "2022"
+author: Nicola Ricciardi
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=9, fig.asp=1, fig.align="center")
+```
+
+## Getting the data
+
+Run the below commands to load the libraries we use. We also increase the vroom connection size to accomodate for the large file we read.
+
+```{r, eval=FALSE}
+library(nbastatR)
+library(tidyverse)
+
+Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 2)
+```
+
+Select the Seasons useful for the graph.
+
+```{r, eval=FALSE}
+selectedSeasons <- c(1978:2017)
+```
+
+Extract data from the function game_logs. I used *selectedSeason* to indicate the range of time, *NBA* to select the league, *player* and the type of season as *Regular Season*. 
+
+```{r, eval=FALSE}
+P_gamelog_reg <- suppressWarnings(game_logs(seasons = selectedSeasons,
+                                            league = "NBA",
+                                            result_types = "player",
+                                            season_types = "Regular Season"))
+```
+
+```{r, eval=FALSE}
+aa <- P_gamelog_reg%>%
+  filter(slugSeason>= ("1979-80") & slugSeason <= ("2015-16"))%>%
+  select(yearSeason,slugSeason, namePlayer, dateGame, slugMatchup, fg3m, fg3a)%>%
+  arrange(slugSeason, namePlayer, dateGame)
+```
+
+It results that Eddie Johnson played in two teams at the same time, for this reason I select only the games when he played in Cleveland.
+
+```{r, eval=FALSE}
+Eddie_ATL <- ifelse(aa$namePlayer=="Eddie Johnson"& !grepl("ATL|CLE", aa$slugMatchup)==F, 1,0)
+
+Ed <- cbind(aa,Eddie_ATL)
+
+Edd <- Ed%>%
+  filter(Eddie_ATL==0)%>%
+  select(-c(Eddie_ATL))
+```
+
+I Create a column in which I compute the cumulative sum of the number of three point shoots made.
+
+```{r, eval=FALSE}
+Edd <- Edd%>%
+  group_by(namePlayer, slugSeason)%>%
+  mutate(P3M=sum(fg3m), P3A=sum(fg3a), "cum_sum"=cumsum(fg3m))%>%
+  ungroup()%>%
+  group_by(slugSeason)%>%
+  arrange(desc(P3M), .by_group = T)%>%
+  ungroup()
+```
+
+I create two new columns, one for ID players and one for the first 20 players in the ID column.
+
+```{r, eval=FALSE}
+player_id2 <- Edd%>%
+  select(namePlayer)%>%
+  distinct()%>%
+  mutate(Id_player=row_number())
+
+top_20_2 <- Edd%>%
+  select(c(slugSeason, namePlayer,P3M))%>%
+  arrange(slugSeason, desc(P3M))%>% 
+  distinct()%>%
+  group_by(slugSeason)%>%
+  mutate(top_20=row_number())%>%
+  filter(top_20<=20)%>%
+  select(-c(P3M))%>%
+  ungroup()
+
+top_20_x <- top_20_2%>%
+  mutate(ID=row_number())
+
+```
+
+I merge three datasets in order to obtain Id_player and top_20 columns
+
+```{r, eval=FALSE}
+merge.player1 = merge(x=Edd,player_id2,by="namePlayer",all.Edd=TRUE)
+merge.201 <-  merge(merge.player1, top_20_x, all=TRUE)
+```
+
+I select the variables of interest and then I order by *slugSeason*, *top_20* and *dategame*. I compute the cumulative sum of three points field goals made.
+
+```{r, eval=FALSE}
+merge.df11 <- merge.201%>%
+  select(yearSeason,slugSeason, namePlayer, dateGame, slugMatchup, P3M, fg3m,
+         Id_player, top_20, ID)%>%
+  arrange(slugSeason, top_20, dateGame,ID)%>%
+  group_by(namePlayer,slugSeason)%>%
+  mutate(P3M=sum(fg3m), "cum_sum"=cumsum(fg3m))%>%
+  distinct()%>%
+  filter(!is.na(top_20))%>%
+  filter(top_20<=20)
+
+```
+
+I create the final dataset adding a new column for the number of games (#82 in a season).
+
+```{r, eval=FALSE}
+ff <- merge.df11%>%
+  group_by(slugSeason,namePlayer)%>%
+  mutate("N_games"= row_number())
+```
+
+This is the final dataset with another column to annotate the name of the players in the right part of the graph.
+
+```{r, eval=FALSE}
+ff1 <- ff%>%
+  mutate(aa = substring(slugSeason, 3, 7))%>%
+  mutate(aa1 = namePlayer)
+
+ff <- unite(ff1, col='n-d-3', c('aa1', 'aa'), sep=" '")
+
+ff <- ff%>%
+  rename(pp = 'n-d-3')
+```
+
+Saving dataset:
+
+```{r, eval=FALSE}
+write.csv(ff, file = "ff2.csv", 
+          sep = "\t", 
+          row.names = F)
+```
+
+## Replicating the chart
+
+It is a graph from the Sunday Sports cover celebrating 3-point records of Stephen Curry during the last years.
+The graph has 740 lines, one for each player who was in the top 20 in 3-point shoot made starting from 1980. The best record is established by Stephen Curry with 402 3 pointers.
+The colors scale highlights a a clear difference in cumulative sum during the range of time.
+For the regular season 2015 - 2016 Stephen Curry is an outlier compare with the other records.
+
+```{r}
+library(tidyverse)
+library(ggrepel)
+
+ff <- read.delim("ff.csv.gz", sep =",", header=TRUE)
+```
+
+Here, I create a function to expand the scale color I select in *my favourite colours*. In cvi_palettes I select n = 37 according to the range time of the graph. I need to set type as "continuous".
+
+```{r}
+cvi_colours = list(
+  cvi_purples = c("#381532", "#4b1b42", "#5d2252", "#702963",
+                  "#833074", "#953784", "#a83e95"),
+  my_favourite_colours = c("#CD9B9B", "#EECFA1",  "#7CCD7C", "#00688B")
+)
+
+cvi_palettes = function(name, n, all_palettes = cvi_colours, type = c("discrete", "continuous")) {
+  palette = all_palettes[[name]]
+  if (missing(n)) {
+    n = length(palette)
+  }
+  type = match.arg(type)
+  out = switch(type,
+               continuous = grDevices::colorRampPalette(palette)(n),
+               discrete = palette[1:n]
+  )
+  structure(out, name = name, class = "palette")
+}
+
+col <- cvi_palettes("my_favourite_colours", type = "continuous", n = 37)
+```
+
+
+At this point, I tried to replicate the graph without the original colors and axis labels, but I encountered some problems related with annotations. In fact, when I plot the names for each player at the top 1 in every season, I have several overlaps. Using the parameter *check_overlap = T* in the function *geom_text*  I lose a lot of players, for this reason I decided to improve the graph using the function *geom_text_repel* that plot the labels with rows to avoid overlaps.
+
+```{r}
+n1 <- ggplot(ff, xlim=c(0, 97), ylim=c(0, 420)) + 
+  
+  geom_segment(
+    aes(
+      x=0, xend=0,
+      y=0, yend=0
+    )
+  ) + geom_segment(
+    aes(
+      x=0, xend=97,
+      y=50, yend=50
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=10, xend=97,
+      y=100, yend=100
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=27, xend=97,
+      y=150, yend=150
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=37, xend=97,
+      y=200, yend=200
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=46, xend=97,
+      y=250, yend=250
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=55, xend=97,
+      y=300, yend=300
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=65, xend=97,
+      y=350, yend=350
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=75, xend=97,
+      y=400, yend=400
+    ), color = "grey90"
+  )
+
+
+n1 <- n1 + geom_step(aes(x = ff$N_games, y = cum_sum, group = ID, color = yearSeason),
+                   linetype = "solid", alpha = 1, size = 1.08)
+
+n1 <-  n1 + geom_segment(aes(x=0, xend=83, y=0, yend=0), size=1) 
+
+n1<-  n1 + coord_fixed(ratio=1/3)
+
+n1 <- n1 + ggtitle("Stephen Curry's 3-Point Record in Context: Off the Charts")
+
+n1 <- n1 +  geom_text(data = ff%>%
+              select(yearSeason,slugSeason, namePlayer, P3M, top_20, N_games, cum_sum, pp)%>%
+              filter(top_20 == 1)%>%
+              group_by(yearSeason, slugSeason, pp,namePlayer, P3M)%>%
+              summarise(
+                P3M1 = sum(cum_sum)
+              )%>%
+              select(-P3M1),
+            aes(x = 82, y = P3M, colour = yearSeason, label=pp), 
+            family = "Palatino",
+            fontface = "plain",
+            size = 2,
+            direction = "y",
+            hjust = "left",
+            nudge_x = 0
+            )
+
+n1 <- n1 +  guides(colour = guide_colourbar(title = substitute(paste(bold("Cumulative 
+three-point field 
+goals made over 
+the course of a 
+season"))), barwidth = 0.8, barheight = 7))
+
+n1 <- n1 + theme(
+     plot.title = element_text(size = 15, family = "serif", face = "plain", hjust = 0.8),
+     plot.background = element_rect(fill = "white", colour = NA),
+        panel.background = element_rect(fill = "white", colour = NA),
+   panel.grid.major.x = element_blank(),
+ legend.position="left",
+
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  axis.ticks.length.x = unit(-.2, "cm"),
+  axis.ticks.y = element_blank(),
+  axis.text.y = element_text(vjust = -1)) 
+n1
+```
+
+## Improve the Graph
+
+Here, I set the coordinates of my graph according to x - axis that represent the number of games in a regular season, and y - axis that marks how many three point shoots made by a player.
+
+```{r}
+n <- ggplot(ff, xlim=c(0, 83), ylim=c(0, 420)) + 
+  
+  geom_segment(
+    aes(
+      x=0, xend=0,
+      y=0, yend=0
+    )
+  ) + geom_segment(
+    aes(
+      x=0, xend=83,
+      y=50, yend=50
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=10, xend=83,
+      y=100, yend=100
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=27, xend=83,
+      y=150, yend=150
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=37, xend=83,
+      y=200, yend=200
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=46, xend=83,
+      y=250, yend=250
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=55, xend=83,
+      y=300, yend=300
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=65, xend=83,
+      y=350, yend=350
+    ), color = "grey90"
+  ) + geom_segment(
+    aes(
+      x=75, xend=83,
+      y=400, yend=400
+    ), color = "grey90"
+  )
+n
+```
+
+I visualize the cumulative sum of three points shoot through geom_step, where for the x - axis there is the number of games, in the y - axis there is the cumulative sum, the group and the colour change according to ID and yearSeason.
+
+```{r}
+n <- n + geom_step(aes(x = ff$N_games, y = cum_sum, group = ID, color = yearSeason),
+                   linetype = "solid", alpha = 1, size = 1.08)
+n
+```
+
+Here, I visualize the x - axis representing the number of games in a season.
+
+```{r}
+n <-  n + geom_segment(aes(x=0, xend=83, y=0, yend=0), size=1) 
+n
+```
+
+A fixed coordinate system forces a specified ratio between the physical representation of data units on the axes. The ratio is equal to 1/3, it means that one unit on the x - axis is 1/3 of one unit on the y - axis.
+
+```{r}
+n <-  n + coord_fixed(ratio=1/3)
+n
+```
+
+Here, I visualize the title according to the original graph.
+
+```{r}
+n <- n + ggtitle("Stephen Curry's 3-Point Record in Context: Off the Charts")
+n
+```
+
+I use geom_text_repel to annotate the name of the first player for every. This is a good option to increase the visualization of the graph, in fact it is possible to highlight different players with different colours and plot arrows to increase clarity and avoid overlaps.
+
+```{r}
+n <- n + geom_text_repel(data = ff%>%
+              select(yearSeason,slugSeason, namePlayer, P3M, top_20, N_games, cum_sum, pp)%>%
+              filter(top_20 == 1)%>%
+              group_by(yearSeason, slugSeason, pp,namePlayer, P3M)%>%
+              summarise(
+                P3M1 = sum(cum_sum)
+              )%>%
+              select(-P3M1),
+            aes(x = 82, y = P3M, colour = yearSeason, label=pp), 
+            family = "Palatino",
+            fontface = "plain",
+            size = 3,
+            direction = "y",
+            hjust = "left",
+            nudge_x = 9
+            )
+n
+```
+  
+Here I define the color scale I created previously. I have 37 seasons for 37 different shades. According to the visualization, it is possible observe that the cumulative sum increases over the years. The exception is Stephen Curry who is off the charts with more than 400 three points shoots made over the season.
+
+```{r}
+n <- n + scale_colour_gradientn(colours = col, breaks = c(1980, 2016), labels =c("1979-80", "2015-16"))
+n
+```
+
+I define the labels for the x - axis and the y - axis. The first axis has a label every 10 games, while y - axis has a label every 50 three - point field goals.
+
+```{r}
+n <-  n + scale_x_continuous(expand = c(0,0), 
+                     breaks =c(1:82), limits = c(0,110), 
+                     labels = c("1st game","", "","","","","","","",
+                                "10th","","","","","","","","","",
+                                "20th","","","","","","","","","",
+                                "30th","","","","","","","","","",
+                                "40th","","","","","","","","","",
+                                "50th","","","","","","","","","",
+                                "60th", "","","","","","","","","",
+                                "70th", "","","","","","","","","",
+                                "80th","","")
+                     ) + 
+  scale_y_continuous(expand = c(0,4),
+                     breaks = c(0,50, 100, 150, 200, 250, 300, 350, 400),
+                     labels = c("", "50", "100", "150", "200", "250", "300", "350", "400"),
+                     limits = c(0,420))
+n
+```
+
+In this part I define the legend title for the plot, customizing the legend's size.
+
+```{r}
+n <- n +  guides(colour = guide_colourbar(title = substitute(paste(bold("Cumulative 
+three-point field 
+goals made over 
+the course of a 
+season"))), barwidth = 0.8, barheight = 7))
+n
+```
+
+In this part I use some functions to modify the title, customize the background or set the position of the legend.
+According to the original graph I remove the axis title and the ticks from the y - axis.
+
+```{r, preview=TRUE}
+n <- n + theme(
+  plot.title = element_text(size = 15, family = "serif", face = "plain", hjust = 0.8),
+  plot.background = element_rect(fill = "white", colour = NA),
+  panel.background = element_rect(fill = "white", colour = NA),
+  panel.grid.major.x = element_blank(),
+  legend.position="left",
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  axis.ticks.length.x = unit(-.2, "cm"),
+  axis.ticks.y = element_blank(),
+  axis.text.y = element_text(vjust = -1)) 
+n
+```

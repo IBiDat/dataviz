@@ -32,6 +32,7 @@ library(showtext)
 
 ```
 
+
 ## Prerequisites for the graph
 
 ### Adapting the database 
@@ -85,20 +86,20 @@ title <- paste ("Restrictions on religion among the 25 most populous countries,"
                 "2007-2020", sep = "\n")
 
 subtitle  <- paste ( 
-  "Among the 25 most populous countries, India, Egypt, Pakistan, Indonesia",
-  "and Nigeria had the highest levels of overall restrictions on\n",
-  "religion in 2020, while Japan, the United States, Italy, the Democratic",
-  "Republic of the Congo and Tanzania had the fewest restrictions.\n", 
-  "Click play to see how restrictions have changed in each country since 2007.",
-  "Read the full report.\nYear: {closest_state}")
+"Among the 25 most populous countries, India, Egypt, Pakistan, Indonesia and Nigeria had the highest levels of overall restrictions on", 
+"religion in 2020, while Japan, the United States, Italy, the Democratic Republic of the Congo and Tanzania had the fewest restrictions.", 
+"Click play to see how restrictions have changed in each country since 2007. Read the full report.", 
+"Year: {closest_state}", 
+sep = "\n") # The phrases have to be written independently and separated with the \n function. 
+
 
 X <- "Government Restrictions Index (GRI)"
 Y <- "Social Hostilities Index (SHI)"
 
 caption <- paste(
-  "Note, Population data comes from United Nations 2020 population estimates.", 
-  "Source of the original graph: Pew Research Center, 2022", 
-  sep = "\n")
+"Note, Population data comes from United Nations 2020 population estimates.", 
+"Source of the original graph: Pew Research Center, 2022", 
+sep = "\n")
 ```
 
 #### Breaks and aesthetics 
@@ -212,6 +213,7 @@ p
 
 ```
 
+
 ## The Graph(s)
 
 ### Visual features and information transmitted
@@ -224,11 +226,13 @@ Lastly, we have to include the most important characteristics of the graph. Whil
 
 This evolutionary feature is provided by GGanimated. Notice how each country change the colour depending on the position within the graph. 
 
-```{r, fig.align='center', fig.height = 5, fig.width = 9.5, preview=TRUE}
-p + transition_states(year) 
+```{r, fig.align='center', fig.height = 5, fig.width = 9.5}
+p <- p + transition_states(year) 
+
+p
 ```
 
-### Unachieved features
+### Unachieved features 
 
 Apart from the interactivity, there are some issues that could not not be fully replicated: 
 
@@ -238,7 +242,7 @@ Apart from the interactivity, there are some issues that could not not be fully 
 4. It was not possible to include the link in the last part of the subtitle. 
 
 
-### Interactive options with plotly
+### Interactive options with plotly 
 
 The library that may be used to provide interactivity to the graph is Plotly via  ggplotly(p). However, some technical issues arise when we include this option: 
 
@@ -248,13 +252,153 @@ More importantly, when the time animation is included, some geom_points get lost
 
 
 
-```{r plotly, echo=TRUE, fig.height = 5, fig.width = 9.5}
+```{r, echo=TRUE, fig.height = 5, fig.width = 9.5}
 
 fig <- ggplotly(p) %>% 
 config(displayModeBar = FALSE) %>% 
 animation_slider(currentvalue = {"year"}) 
 fig
 
+```
+
+### Proposed enhacements 
+
+The first alternative of the graph involve re-scaling the graph. As the two main variables are measured in the same scale, it would be suitable to have both axis on the same scale. 
+
+To do that, we only have to do small changes, such as changing the position of the breaks in the Y axis and the sizes of the fonts. 
+
+```{r}
+
+
+breaks_y1 <- c(0.1, 1.3, 3.7, 6, 9.9, 10)
+
+The_graph2 <- ggplot(religion) + 
+  aes(GRI, SHI) + 
+  geom_point(aes(size = Pop, colour = pos, group = Country)) + 
+  scale_size_area(max_size = 16)+
+  geom_text(aes(label=Country), size = 1.6)+
+  scale_colour_manual(values = pal, l = 20)+
+  scale_x_continuous(   
+    limits =  c(0, 10), 
+    expand = c(0, 0), 
+    breaks = breaks_x, 
+    labels = labels_x)+ 
+  scale_y_continuous(
+    limits = c(0, 10), 
+    expand = c(0, 0), 
+    breaks = breaks_y1, 
+    labels = labels_y)+
+  labs(
+    title = title,  
+    subtitle = subtitle,
+    caption = caption, 
+    x = X, 
+    y = Y) +
+  theme_classic()+  
+  theme( 
+    plot.title = element_text(face = "bold", 
+                              family = "playfair display", size = 12),
+    plot.subtitle = element_text(face = "italic", 
+                              family = "playfair display", size = 6),
+    plot.caption =  element_text(hjust = 0, size = 8), 
+    axis.title.x = element_text(face = "bold", size = 8), 
+    axis.title.y = element_text(face = "bold", hjust = 0.45, size = 8), 
+    axis.text.x = element_text(size = 6.5), 
+    axis.text.y = element_text(angle = 90, hjust = 1.9, size = 6.5), 
+    axis.line.x = element_blank(), 
+    axis.line.y = element_blank(),
+    axis.ticks.x = element_blank(), 
+    axis.ticks.y = element_blank())+
+  guides(   
+    size = "none", 
+    alpha = "none", 
+    colour = "none", 
+   ) + 
+  geom_vline(xintercept = c(2.3, 4.5, 6.6), alpha = 0.2)+  
+  geom_hline(yintercept = c(1.4, 3.5, 7.2, 10), alpha = 0.2)+
+  geom_hline(yintercept = 0, alpha = 0.3)+
+  aes(frame = year)
+
+
+
+```
+
+
+Finally, in the chunk options we specify that the height of the graph is the same as the width, to maintain equal proportions. 
+
+```{r fig.align='center', fig.height = 6, fig.width = 6}
+The_graph2 <- The_graph2 + 
+  transition_states(year) 
+The_graph2
+
+```
+
+### Second alternative 
+
+An additional option involves discarding the animated part, and faceting the display in four different graphs. For each facet we would be showing a particular year (2007-2012-2012-2016).
+
+The main objective of this alternative is about focusing on the evolution in time of the linear relationship between these variables. Then, we add the regression line via geom_smooth() along with other minor changes in breaks and labels. 
+
+```{r}
+years <- c(2007, 2012, 2016, 2020)
+
+religion_2 <- religion %>% filter(year %in% years)
+
+breaks_y2 <- c(0.1, 1.35, 5, 6, 9.9, 10)
+
+The_graph3 <- ggplot(religion_2) + 
+  aes(GRI, SHI) + 
+  geom_point(aes(size = Pop, colour = pos, group = Country)) + 
+  scale_size_area(max_size = 8)+
+  geom_text(aes(label=Country), size = 1)+
+  scale_colour_manual(values = pal, l = 20)+
+  scale_x_continuous(   
+    limits =  c(0, 10), 
+    expand = c(0, 0), 
+    breaks = breaks_x, 
+    labels = labels_x)+ 
+  scale_y_continuous(
+    limits = c(0, 10), 
+    expand = c(0, 0), 
+    breaks = breaks_y2, 
+    labels = labels_y)+
+  labs(
+    title = title,  
+    subtitle = "Years: 07', 12', 16' and 20'",
+    caption = caption, 
+    x = X, 
+    y = Y) +
+  theme_classic()+  
+  theme( 
+    plot.title = element_text(face = "bold", 
+                              family = "playfair display", size = 15),
+    plot.subtitle = element_text(face = "italic", 
+                              family = "playfair display", size = 12),
+    plot.caption =  element_text(hjust = 0, size = 8), 
+    axis.title.x = element_text(face = "bold", size = 8), 
+    axis.title.y = element_text(face = "bold", hjust = 0.45, size = 8), 
+    axis.text.x = element_text(size = 6.5), 
+    axis.text.y = element_text(angle = 90, hjust = 1.9, size = 7), 
+    axis.line.x = element_blank(), 
+    axis.line.y = element_blank(),
+    axis.ticks.x = element_blank(), 
+    axis.ticks.y = element_blank())+
+  guides(   
+    size = "none", 
+    alpha = "none", 
+    colour = "none", 
+   ) + 
+  geom_vline(xintercept = c(2.3, 4.5, 6.6), alpha = 0.2)+  
+  geom_hline(yintercept = c(1.4, 3.5, 7.2, 10), alpha = 0.2)+
+  geom_hline(yintercept = 0, alpha = 0.3)+ 
+  facet_wrap(~year)+
+  geom_smooth(method = lm, se = FALSE, col = "burlywood", 
+              alpha  = .3, linetype = "dotted")
+```
+
+```{r, echo=TRUE, fig.height= 6, fig.width=6, message=FALSE, warning=FALSE, preview=TRUE}
+
+The_graph3
 ```
 
 
