@@ -1,0 +1,1257 @@
+---
+title: Data Visualization
+subtitle: Chapter 4. Data Communication in R
+author: Iñaki Úcar
+institute:
+  - Department of Statistics | uc3m-Santander Big Data Institute
+  - Master in Computational Social Science
+date: >
+  Licensed under Creative Commons Attribution
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+  Last generated: `r Sys.Date()`
+output:
+  xaringan::moon_reader:
+    chakra: assets/remark-latest.min.js
+    lib_dir: assets
+    css: [default, metropolis, metropolis-fonts, assets/theme.css]
+    nature:
+      beforeInit: assets/macros.js
+      highlightStyle: vs
+      highlightLines: true
+      countIncrementalSlides: false
+---
+class: base24, middle, clear
+
+```{r child="ch4_0.Rmd"}
+```
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+</script>
+
+---
+class: inverse, center, middle
+
+# Version Control
+## git, GitHub, efficient collaboration
+
+---
+class: base24
+
+# Motivation
+
+.pull-left[
+[![](assets/img/ch4/phd101212s.gif)](https://phdcomics.com/comics/archive.php?comicid=1531)
+]
+
+.pull-right[
+## Common problem
+
+`git` helps with this!
+
+- Project evolution control
+- `git` as a _time machine_
+- Easy parallel collaboration
+- This is "how stuff gets done"
+
+We will focus on key operations
+
+## Prerequisites
+
+See [the tutorial](../tutorials/project/index.html#prerequisites) for the setup
+]
+
+---
+class: base24
+
+# Introduction
+
+The `diff` utility **compares** files **line by line**:
+
+--
+
+.pull-left.reset-margin[
+```bash
+$ cat celebrities.txt
+Larry Page
+Rovert De Niro
+Steve Jobs
+Mr. Potato
+Bill Gates
+```
+]
+
+--
+
+.pull-right.reset-margin[
+```bash
+$ cat celebrities_edited.txt
+Larry Page
+Robert De Niro
+Steve Jobs
+Bill Gates
+Barack Obama
+```
+]
+
+--
+
+```diff
+$ diff -u celebrities.txt celebrities_edited.txt
+--- celebrities.txt     2023-11-09 19:10:57.566008551 +0100
++++ celebrities_edited.txt      2023-11-09 19:11:13.947052617 +0100
+@@ -1,5 +1,5 @@
+ Larry Page
+-Rovert De Niro
++Robert De Niro
+ Steve Jobs
+-Mr. Potato
+ Bill Gates
++Barack Obama
+```
+
+---
+class: base24
+
+# Introduction
+
+The `patch` utility **edits** a file given a set of `diff` **instructions**:
+
+--
+
+```bash
+$ diff -u celebrities.txt celebrities_edited.txt > celebrities.patch # save
+$ patch celebrities.txt < celebrities.patch                          # apply
+patching file celebrities.txt
+```
+
+--
+
+```bash
+$ diff -u celebrities.txt celebrities_edited.txt                     # now equal
+```
+
+--
+
+.pull-left[
+```bash
+$ cat celebrities.txt
+Larry Page
+Robert De Niro
+Steve Jobs
+Bill Gates
+Barack Obama
+```
+]
+
+.pull-right[
+```bash
+$ cat celebrities_edited.txt
+Larry Page
+Robert De Niro
+Steve Jobs
+Bill Gates
+Barack Obama
+```
+]
+
+---
+class: base24
+
+# Introduction
+
+and if you can go _forward_, you can surely go **backwards**:
+
+--
+
+```bash
+$ patch -R celebrities.txt < celebrities.patch # note the -R to revert
+patching file celebrities.txt
+```
+
+--
+
+```diff
+$ diff -u celebrities.txt celebrities_edited.txt
+--- celebrities.txt     2023-11-09 19:10:57.566008551 +0100
++++ celebrities_edited.txt      2023-11-09 19:11:13.947052617 +0100
+@@ -1,5 +1,5 @@
+ Larry Page
+-Rovert De Niro
++Robert De Niro
+ Steve Jobs
+-Mr. Potato
+ Bill Gates
++Barack Obama
+```
+
+--
+
+and this is, basically, how `git` keeps track of your work.
+
+---
+class: base24
+
+# Introduction
+
+.footnote[Source: [What is Git?](https://git-scm.com/book/en/v2/Getting-Started-What-is-Git%3F)]
+
+.center[![:scale 75%](assets/img/ch4/deltas.png)]
+
+--
+
+.center[![:scale 75%](assets/img/ch4/snapshots.png)]
+
+---
+class: base24
+
+# Creating a New Repository
+
+Let's work with the terminal a bit to understand the basics:
+
+1. Open a new terminal
+  - Windows: right-click e.g. on your `Documents`, then **_Open Git Bash here_**
+
+2. Create a new folder for your repo and change to it
+  ```bash
+  $ mkdir test-repo
+  $ cd test-repo
+  ```
+
+3. Initialize your git repo
+  ```bash
+  $ git init
+  Initialized empty Git repository in [...]/test-repo/.git/
+  ```
+
+now there's an invisible `.git` folder where `git` keeps track of everything.
+
+---
+class: base24
+
+# How's My Repo?
+
+```{css, echo=FALSE}
+.wt {
+  background: #FFCCCB;
+  color: red;
+  padding: 2px 5px;
+}
+
+.sa {
+  background: #90EE90;
+  color: green;
+  padding: 2px 5px;
+}
+
+.lr {
+  background: #D3D3D3;
+  color: #303030;
+  padding: 2px 5px;
+}
+
+.rr {
+  background: #ADD8E6;
+  color: navy;
+  padding: 2px 5px;
+}
+```
+
+Your files may be in **three states**:
+
+- .wt[modified]: Untracked changes, i.e. new files, deletions or modifications.
+- .sa[staged]: Changes tracked by git; will be added to the next snapshot.
+- .lr[committed]: The data is safely stored in your local database.
+
+--
+
+This leads us to the main three sections of a git project:<br>
+the .wt[Working Tree], the .sa[Staging Area], and the .lr[Local Repo].
+
+--
+
+```bash
+$ git status
+```
+
+is one of the most important commands, because it tells us:
+
+- The current branch (more on that later)
+- .sa[Changes to be committed]
+- .wt[Untracked changes and files]
+
+---
+class: base24
+
+# First Step: Add
+
+Let's create a couple of files first:
+
+```bash
+$ touch file1.txt file2.txt # create two empty files
+$ ls -l                     # check that they are there
+$ git status                # the two files are untracked
+```
+
+--
+
+Now let's move one file to the staging area:
+
+.pull-left.reset-margin[
+```bash
+$ git add file1.txt
+```
+]
+.pull-right.reset-margin[
+.wt[Working Tree] ⮕ .sa[Staging Area]
+]
+
+--
+
+```console
+$ git status
+On branch master
+
+No commits yet
+
+Changes to be committed:
+  (use "git rm --cached <file>..." to unstage)
+        new file:   file1.txt
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        file2.txt
+```
+
+---
+class: base24
+
+# Second Step: Commit
+
+Let's commit `file1.txt`:
+
+.pull-left.reset-margin[
+```bash
+$ git commit -m "my first file"
+```
+]
+.pull-right.reset-margin[
+.sa[Staging Area] ⮕ .lr[Local Repo]
+]
+
+```console
+[master (root-commit) 1f3e2e5] my first file
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+ create mode 100644 file1.txt
+```
+
+--
+
+```console
+$ git status
+On branch master
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        file2.txt
+
+nothing added to commit but untracked files present (use "git add" to track)
+```
+
+--
+
+- Add files **selectively**, _units of work_
+- Use **meaningful commit messages**
+
+---
+class: base24
+
+# But... What is a Commit?
+
+A commit is an _entry_ in the git database containing:
+
+- A **diff** with the previous snapshot
+- Author, date, and descriptive **message**
+- A unique **hash**
+- A **link** to the _parent commit_
+
+<pre class="mermaid" style="zoom:1.5;width:22%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file" tag: "HEAD"
+</pre>
+
+--
+
+```bash
+$ git add file2.txt
+$ git commit -m "add file2"
+```
+
+<pre class="mermaid" style="zoom:1.5;width:22%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file"
+  commit id: "B: add file2" tag: "HEAD"
+</pre>
+
+--
+
+```bash
+# edit file1.txt
+$ git add file1.txt
+$ git commit -m "edit file1"
+```
+
+<pre class="mermaid" style="zoom:1.5;width:22%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file"
+  commit id: "B: add file2"
+  commit id: "C: edit file1" tag: "HEAD"
+</pre>
+
+--
+
+```bash
+# edit file1.txt, remove file2.txt
+$ git add .
+$ git commit -m "more edits"
+```
+
+<pre class="mermaid" style="zoom:1.5;width:22%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file"
+  commit id: "B: add file2"
+  commit id: "C: edit file1"
+  commit id: "D: more edits" tag: "HEAD"
+</pre>
+
+---
+class: base24
+
+# But... What is a Commit?
+
+<pre class="mermaid" style="zoom:1.5;width:22%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file"
+  commit id: "B: add file2"
+  commit id: "C: edit file1"
+  commit id: "D: more edits" tag: "HEAD"
+</pre>
+
+History of commits in reverse order (more recent first):
+
+```bash
+$ git log
+```
+
+with these details per commit:
+
+```
+commit D (HEAD -> main)
+Author: Iñaki Úcar <iucar@fedoraproject.org>
+Date:   Thu Nov 9 21:09:36 2023 +0100
+
+    more edits
+```
+
+--
+
+More concisely:
+
+```bash
+$ git log --graph --oneline
+D (HEAD -> main) more edits
+C edit file1
+B add file2
+A my first file
+```
+
+---
+class: base24
+
+# Inspecting Changes
+
+Usually, a simple `git status` is not enough to know what is going on.<br>
+We can inspect the `diff` for more information.
+
+<pre class="mermaid center">
+%%{init:{'themeCSS':'g:nth-of-type(1) rect.actor { stroke:transparent;fill:#D3D3D3; }; g:nth-of-type(2) rect.actor { stroke:transparent;fill:#90EE90; }; g:nth-of-type(3) rect.actor { stroke:transparent;fill:#FFCCCB; }; g:nth-of-type(4) rect.actor { stroke:transparent;fill:#D3D3D3; }; g:nth-of-type(5) rect.actor { stroke:transparent;fill:#90EE90; }; g:nth-of-type(6) rect.actor { stroke:transparent;fill:#FFCCCB; }; g:nth-of-type(4) line { stroke:#303030; }; g:nth-of-type(5) line { stroke:green; }; g:nth-of-type(6) line { stroke:red; };'}}%%
+sequenceDiagram
+  participant WT as Working Tree
+  participant SA as Staging Area
+  participant LR as Local Repo
+  Note over WT,SA: git diff
+  WT->>SA: git add
+  Note over SA,LR: git diff --staged
+  SA->>LR: git commit
+  Note over WT,LR: git diff HEAD
+</pre>
+
+---
+class: base24
+
+# Inspecting Changes
+
+Usually, a simple `git status` is not enough to know what is going on.<br>
+We can inspect the `diff` for more information.
+
+```bash
+# edit file1.txt, add "first line"
+$ git add .
+# edit file1.txt, add "second line"
+```
+
+--
+
+.pull-left.reset-margin[
+```bash
+$ git diff
++ second line
+```
+]
+.pull-right.reset-margin[
+.wt[Working Tree] ⮕ .sa[Staging Area]
+]
+
+--
+
+.pull-left.reset-margin[
+```bash
+$ git diff --staged
++ first line
+```
+]
+.pull-right.reset-margin[
+.sa[Staging Area] ⮕ .lr[Local Repo]
+]
+
+--
+
+.pull-left.reset-margin[
+```bash
+$ git diff HEAD
++ first line
++ second line
+```
+]
+.pull-right.reset-margin[
+.wt[Working Tree] ⮕ .lr[Local Repo]
+]
+
+---
+class: base24
+
+# Undoing Changes
+
+We start with "first line" in staging, and "second line" untracked.<br>
+Remove "first line" from staging:
+
+```bash
+$ git restore --staged file1.txt
+$ git status
+$ git diff
+
+```
+
+--
+
+Both lines untracked. Let's remove them completely:
+
+```bash
+$ git restore file1.txt
+$ git status
+```
+
+--
+
+We can also undo local commits:
+
+```bash
+$ git reset HEAD~1 # last commit
+$ git log
+$ git status
+$ git add . && git commit -m "more edits" # redo
+```
+
+<pre class="mermaid" style="zoom:1.5;width:22%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file" tag: "HEAD~3"
+  commit id: "B: add file2" tag: "HEAD~2"
+  commit id: "C: edit file1" tag: "HEAD~1"
+  commit id: "D: more edits" tag: "HEAD"
+</pre>
+
+---
+class: base24
+
+# Going Back, Tagging
+
+<pre class="mermaid" style="zoom:1.5;width:22%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file"
+  commit id: "B: add file2"
+  commit id: "C: edit file1"
+  commit id: "D: more edits" tag: "HEAD"
+</pre>
+
+We can go back to any commit:
+
+--
+
+```bash
+$ git log --graph --oneline # look A's hash
+$ git checkout <A>
+$ git status
+HEAD detached at <A>
+```
+
+<pre class="mermaid" style="zoom:1.5;width:22%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file" tag: "HEAD"
+  commit id: "B: add file2"
+  commit id: "C: edit file1"
+  commit id: "D: more edits"
+</pre>
+
+--
+
+But it is often easier to _tag_ versions of interest:
+
+```bash
+$ git tag v1.0 <B>
+```
+
+<pre class="mermaid" style="zoom:1.5;width:22%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file" tag: "HEAD"
+  commit id: "B: add file2" tag: "v1.0"
+  commit id: "C: edit file1"
+  commit id: "D: more edits"
+</pre>
+
+--
+
+```bash
+$ git checkout v1.0
+```
+
+<pre class="mermaid" style="zoom:1.5;width:22%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file"
+  commit id: "B: add file2" tag: "v1.0:HEAD"
+  commit id: "C: edit file1"
+  commit id: "D: more edits"
+</pre>
+
+--
+
+Go back:
+
+```bash
+$ git checkout main
+$ git status
+On branch main
+```
+
+<pre class="mermaid" style="zoom:1.5;width:22%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file"
+  commit id: "B: add file2" tag: "v1.0"
+  commit id: "C: edit file1"
+  commit id: "D: more edits" tag: "HEAD"
+</pre>
+
+---
+class: base24
+
+# Branches
+
+<pre class="mermaid" style="width:45%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file"
+  commit id: "B: add file2" tag: "v1.0"
+  commit id: "C: edit file1"
+  commit id: "D: more edits" tag: "HEAD"
+</pre>
+
+--
+
+```bash
+$ git checkout -b feature2
+$ touch file2.txt
+$ git add . && git commit -m "add file2"
+```
+
+<pre class="mermaid" style="width:45%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file"
+  commit id: "B: add file2" tag: "v1.0"
+  commit id: "C: edit file1"
+  commit id: "D: more edits"
+  branch feature2
+  commit id: "E: add file2" tag: "HEAD"
+</pre>
+
+--
+
+```bash
+$ git checkout main
+$ touch file0.txt
+$ git add . && git commit -m "add file0"
+```
+
+<pre class="mermaid" style="width:45%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file"
+  commit id: "B: add file2" tag: "v1.0"
+  commit id: "C: edit file1"
+  commit id: "D: more edits"
+  branch feature2
+  commit id: "E: add file2"
+  checkout main
+  commit id: "F: add file0" tag: "HEAD"
+</pre>
+
+--
+
+```bash
+$ git checkout -b feature3
+$ touch file3.txt
+$ git add . && git commit -m "add file3"
+```
+
+<pre class="mermaid" style="width:45%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file"
+  commit id: "B: add file2" tag: "v1.0"
+  commit id: "C: edit file1"
+  commit id: "D: more edits"
+  branch feature2
+  commit id: "E: add file2"
+  checkout main
+  commit id: "F: add file0"
+  branch feature3
+  commit id: "G: add file3" tag: "HEAD"
+</pre>
+
+--
+
+```bash
+$ git checkout feature2
+# edit file2.txt
+$ git add . && git commit -m "edit file2"
+```
+
+<pre class="mermaid" style="width:45%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file"
+  commit id: "B: add file2" tag: "v1.0"
+  commit id: "C: edit file1"
+  commit id: "D: more edits"
+  branch feature2
+  commit id: "E: add file2"
+  checkout main
+  commit id: "F: add file0"
+  branch feature3
+  commit id: "G: add file3"
+  checkout feature2
+  commit id: "H: edit file2" tag: "HEAD"
+</pre>
+
+--
+
+```bash
+$ git checkout main
+$ git merge feature3 # fast-forward
+$ git merge feature2 # merge commit
+```
+
+<pre class="mermaid" style="width:45%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file"
+  commit id: "B: add file2" tag: "v1.0"
+  commit id: "C: edit file1"
+  commit id: "D: more edits"
+  branch feature2
+  commit id: "E: add file2"
+  checkout main
+  commit id: "F: add file0"
+  branch feature3
+  commit id: "G: add file3"
+  checkout feature2
+  commit id: "H: edit file2"
+  checkout main
+  merge feature3
+  merge feature2 tag: "HEAD"
+</pre>
+
+---
+class: base24
+
+# Merges
+
+<pre class="mermaid" style="width:45%;position:fixed;top:80px;right:10px;background:#FAFAFA">
+gitGraph TB:
+  commit id: "A: my first file"
+  commit id: "B: add file2" tag: "v1.0"
+  commit id: "C: edit file1"
+  commit id: "D: more edits"
+  branch feature2
+  commit id: "E: add file2"
+  checkout main
+  commit id: "F: add file0"
+  branch feature3
+  commit id: "G: add file3"
+  checkout feature2
+  commit id: "H: edit file2"
+  checkout main
+  merge feature3
+  merge feature2 tag: "HEAD"
+</pre>
+
+.pull-left[
+Typically, git automagically merges branches without conflicts:
+
+- Merging `feature3` is a fast-forward, because there were no new commits in `main`
+- Merging `feature2` creates a (empty) merge commit to reconstruct the tree
+]
+.pull-right[]
+
+--
+
+.pull-left[
+Sometimes, there are **conflicts** when the same line(s) are modified in both branches.
+These must be manually [resolved](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/addressing-merge-conflicts/resolving-a-merge-conflict-using-the-command-line) and commited.
+]
+
+---
+class: base24
+
+# Remotes
+
+The real fun starts when there is a _remote_ to **share code** and **collaborate**.
+
+- **GitHub** is one of _the most_ popular platforms to host git projects
+- Free for open source projects (private projects allowed now too)
+- Think of GitHub <-> git as RStudio <-> R
+
+--
+
+New operations:
+
+- `git clone` to copy a remote repo into your local computer (no `init`)
+- `git pull` to synchronize remote changes into your existing local copy
+- `git push` to synchronize local changes into your remote copy
+
+<pre class="mermaid center">
+flowchart LR
+  lr1[User 1]
+  rr[Remote]
+  lr2[User 2]
+  lr1-->|do work|lr1
+  rr-.->|git clone|lr1
+  rr-->|git pull|lr1
+  lr1-->|git push|rr
+  lr2-->|do work|lr2
+  rr-->|git pull|lr2
+  rr-.->|git clone|lr2
+  lr2-->|git push|rr
+</pre>
+
+---
+class: base24
+
+# Basic Workflow
+
+<pre class="mermaid center">
+%%{init:{'themeCSS':'g:nth-of-type(3) rect.actor { stroke:transparent;fill:#ADD8E6; }; g:nth-of-type(4) rect.actor { stroke:transparent;fill:#D3D3D3; }; g:nth-of-type(5) rect.actor { stroke:transparent;fill:#90EE90; }; g:nth-of-type(6) rect.actor { stroke:transparent;fill:#FFCCCB; }; g:nth-of-type(7) rect.actor { stroke:transparent;fill:#ADD8E6; }; g:nth-of-type(8) rect.actor { stroke:transparent;fill:#D3D3D3; }; g:nth-of-type(9) rect.actor { stroke:transparent;fill:#90EE90; }; g:nth-of-type(10) rect.actor { stroke:transparent;fill:#FFCCCB; }; g:nth-of-type(7) line { stroke:navy; }; g:nth-of-type(8) line { stroke:#303030; }; g:nth-of-type(9) line { stroke:green; }; g:nth-of-type(10) line { stroke:red; };'}}%%
+sequenceDiagram
+  box Local computer
+    participant WT as Working Tree
+    participant SA as Staging Area
+    participant LR as Local Repo
+  end
+  box GitHub
+    participant RR as Remote Repo
+  end
+  RR->>WT: git clone, git pull
+  WT-->>WT: git restore
+  WT->>SA: git add
+  SA-->>WT: git restore --staged
+  SA->>LR: git commit
+  LR->>RR: git push
+  LR->>WT: git checkout, git merge
+</pre>
+
+---
+class: base24
+
+# Contributing to Other Projects
+
+- **Fork**: Kind of a _remote clone_ that happens between user accounts
+- **Pull request**: After changing something in your _fork_, you propose the
+  original owner to _pull_ your modifications into their remote
+
+<pre class="mermaid center" style="zoom:0.8">
+sequenceDiagram
+  box Local computer
+    participant LR as Local Repo
+  end
+  box GitHub
+    participant RR as Remote Repo
+    participant FR as Other Repo
+  end
+  FR-->>RR: fork
+  RR->>LR: git clone, git pull
+  LR->>LR: do work
+  LR->>RR: git push
+  RR-->>FR: pull request
+</pre>
+
+---
+
+# Contributing to Other Projects
+
+1. Go to https://github.com/IBiDat/dataviz-git-test
+2. **Fork** the project into your GitHub account
+3. Now you're in your fork, copy the _Code > Clone HTTPS_ URL
+4. Set up the local copy in your terminal
+  ```bash
+  $ cd .. # go one level up, because we were in 'test-repo'
+  $ git clone https://github.com/<your_user>/dataviz-git-test.git
+  $ cd data-git-test # change into your local copy
+  ```
+5. Edit the `edit-me.txt` file, add something after your name
+6. Inspect the result with `git status/diff`, then commit and push the changes
+  ```bash
+  $ git add .
+  $ git commit -m "add my favorite food"
+  $ git push
+  ```
+7. Go back to your fork on GitHub, open a **pull request**
+8. You can repeat 5-6 indefinitely, and the new commits will be added
+  to the pull request automatically, no further action needed
+
+---
+class: base24
+
+# Contributing to Other Projects
+
+This is what happened, instant replay:
+
+<pre class="mermaid" style="position:fixed;top:150px;left:30px;background:#FAFAFA">
+gitGraph LR:
+  commit id: "initial files"
+  branch "user1:main"
+  branch "user2:main"
+  branch "user3:main"
+  branch "user4:main"
+</pre>
+
+--
+
+<pre class="mermaid" style="position:fixed;top:150px;left:30px;background:#FAFAFA">
+gitGraph LR:
+  commit id: "initial files"
+  branch "user1:main"
+  commit id: "fix 1"
+  branch "user2:main"
+  branch "user3:main"
+  branch "user4:main"
+</pre>
+
+--
+
+<pre class="mermaid" style="position:fixed;top:150px;left:30px;background:#FAFAFA">
+gitGraph LR:
+  commit id: "initial files"
+  branch "user1:main"
+  commit id: "fix 1"
+  checkout main
+  branch "user2:main"
+  commit id: "fix 2"
+  branch "user3:main"
+  branch "user4:main"
+</pre>
+
+--
+
+<pre class="mermaid" style="position:fixed;top:150px;left:30px;background:#FAFAFA">
+gitGraph LR:
+  commit id: "initial files"
+  branch "user1:main"
+  commit id: "fix 1"
+  checkout main
+  branch "user2:main"
+  commit id: "fix 2"
+  checkout main
+  branch "user3:main"
+  commit id: "fix 3"
+  branch "user4:main"
+</pre>
+
+--
+
+<pre class="mermaid" style="position:fixed;top:150px;left:30px;background:#FAFAFA">
+gitGraph LR:
+  commit id: "initial files"
+  branch "user1:main"
+  commit id: "fix 1"
+  checkout main
+  branch "user2:main"
+  commit id: "fix 2"
+  checkout main
+  branch "user3:main"
+  commit id: "fix 3"
+  checkout main
+  branch "user4:main"
+  commit id: "fix 4"
+</pre>
+
+--
+
+<pre class="mermaid" style="position:fixed;top:150px;left:30px;background:#FAFAFA">
+gitGraph LR:
+  commit id: "initial files"
+  branch "user1:main"
+  commit id: "fix 1"
+  checkout main
+  branch "user2:main"
+  commit id: "fix 2"
+  checkout main
+  branch "user3:main"
+  commit id: "fix 3"
+  checkout main
+  branch "user4:main"
+  commit id: "fix 4"
+  checkout main
+  merge "user1:main"
+</pre>
+
+--
+
+<pre class="mermaid" style="position:fixed;top:150px;left:30px;background:#FAFAFA">
+gitGraph LR:
+  commit id: "initial files"
+  branch "user1:main"
+  commit id: "fix 1"
+  checkout main
+  branch "user2:main"
+  commit id: "fix 2"
+  checkout main
+  branch "user3:main"
+  commit id: "fix 3"
+  checkout main
+  branch "user4:main"
+  commit id: "fix 4"
+  checkout main
+  merge "user1:main"
+  checkout main
+  merge "user2:main"
+</pre>
+
+--
+
+<pre class="mermaid" style="position:fixed;top:150px;left:30px;background:#FAFAFA">
+gitGraph LR:
+  commit id: "initial files"
+  branch "user1:main"
+  commit id: "fix 1"
+  checkout main
+  branch "user2:main"
+  commit id: "fix 2"
+  checkout main
+  branch "user3:main"
+  commit id: "fix 3"
+  checkout main
+  branch "user4:main"
+  commit id: "fix 4"
+  checkout main
+  merge "user1:main"
+  checkout main
+  merge "user2:main"
+  checkout main
+  merge "user3:main"
+</pre>
+
+--
+
+<pre class="mermaid" style="position:fixed;top:150px;left:30px;background:#FAFAFA">
+gitGraph LR:
+  commit id: "initial files"
+  branch "user1:main"
+  commit id: "fix 1"
+  checkout main
+  branch "user2:main"
+  commit id: "fix 2"
+  checkout main
+  branch "user3:main"
+  commit id: "fix 3"
+  checkout main
+  branch "user4:main"
+  commit id: "fix 4"
+  checkout main
+  merge "user1:main"
+  checkout main
+  merge "user2:main"
+  checkout main
+  merge "user3:main"
+  checkout main
+  merge "user4:main"
+</pre>
+
+--
+
+<pre class="mermaid" style="position:fixed;top:150px;left:30px;background:#FAFAFA">
+gitGraph LR:
+  commit id: "initial files"
+  branch "user1:main"
+  commit id: "fix 1"
+  checkout main
+  branch "user2:main"
+  commit id: "fix 2"
+  checkout main
+  branch "user3:main"
+  commit id: "fix 3"
+  checkout main
+  branch "user4:main"
+  commit id: "fix 4"
+  checkout main
+  merge "user1:main"
+  checkout main
+  merge "user2:main"
+  checkout main
+  merge "user3:main"
+  checkout main
+  merge "user4:main"
+  checkout "user1:main"
+  commit id: "fix 1bis"
+</pre>
+
+--
+
+<pre class="mermaid" style="position:fixed;top:150px;left:30px;background:#FAFAFA">
+gitGraph LR:
+  commit id: "initial files"
+  branch "user1:main"
+  commit id: "fix 1"
+  checkout main
+  branch "user2:main"
+  commit id: "fix 2"
+  checkout main
+  branch "user3:main"
+  commit id: "fix 3"
+  checkout main
+  branch "user4:main"
+  commit id: "fix 4"
+  checkout main
+  merge "user1:main"
+  checkout main
+  merge "user2:main"
+  checkout main
+  merge "user3:main"
+  checkout main
+  merge "user4:main"
+  checkout "user1:main"
+  commit id: "fix 1bis"
+  checkout main
+  merge "user1:main"
+</pre>
+
+--
+
+<pre class="mermaid" style="position:fixed;top:150px;left:30px;background:#FAFAFA">
+gitGraph LR:
+  commit id: "initial files"
+  branch "user1:main"
+  commit id: "fix 1"
+  checkout main
+  branch "user2:main"
+  commit id: "fix 2"
+  checkout main
+  branch "user3:main"
+  commit id: "fix 3"
+  checkout main
+  branch "user4:main"
+  commit id: "fix 4"
+  checkout main
+  merge "user1:main"
+  checkout main
+  merge "user2:main"
+  checkout main
+  merge "user3:main"
+  checkout main
+  merge "user4:main"
+  checkout "user1:main"
+  commit id: "fix 1bis"
+  checkout main
+  merge "user1:main"
+  checkout "user2:main"
+  merge main
+</pre>
+
+--
+
+<pre class="mermaid" style="position:fixed;top:150px;left:30px;background:#FAFAFA">
+gitGraph LR:
+  commit id: "initial files"
+  branch "user1:main"
+  commit id: "fix 1"
+  checkout main
+  branch "user2:main"
+  commit id: "fix 2"
+  checkout main
+  branch "user3:main"
+  commit id: "fix 3"
+  checkout main
+  branch "user4:main"
+  commit id: "fix 4"
+  checkout main
+  merge "user1:main"
+  checkout main
+  merge "user2:main"
+  checkout main
+  merge "user3:main"
+  checkout main
+  merge "user4:main"
+  checkout "user1:main"
+  commit id: "fix 1bis"
+  checkout main
+  merge "user1:main"
+  checkout "user2:main"
+  merge main
+  commit id: "fix 3bis"
+</pre>
+
+--
+
+<pre class="mermaid" style="position:fixed;top:150px;left:30px;background:#FAFAFA">
+gitGraph LR:
+  commit id: "initial files"
+  branch "user1:main"
+  commit id: "fix 1"
+  checkout main
+  branch "user2:main"
+  commit id: "fix 2"
+  checkout main
+  branch "user3:main"
+  commit id: "fix 3"
+  checkout main
+  branch "user4:main"
+  commit id: "fix 4"
+  checkout main
+  merge "user1:main"
+  checkout main
+  merge "user2:main"
+  checkout main
+  merge "user3:main"
+  checkout main
+  merge "user4:main"
+  checkout "user1:main"
+  commit id: "fix 1bis"
+  checkout main
+  merge "user1:main"
+  checkout "user2:main"
+  merge main
+  commit id: "fix 3bis"
+  checkout main
+  merge "user2:main"
+</pre>
