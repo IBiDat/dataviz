@@ -9,8 +9,94 @@ output:
     self_contained: false
 ---
 
-Distill is a publication format for scientific and technical writing, native to the web.
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(out.width="100%", fig.align="center")
+```
+## Packages
 
-Learn more about using Distill at <https://rstudio.github.io/distill>.
+```{r}
+install.packages("readxl")
+library(readxl)
+install.packages("reshape2")
+library(reshape2)
+install.packages("dplyr")
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(tidyverse)
+library(scales)
+install.packages("ggcharts")
+library(ggplot2)
+library(ggalluvial)
+install.packages("ggsankey")
+library(ggsankey)
+
+```
+
+## Data and Data Processing
+
+```{r}
+data <- read_excel("~/Desktop/data visualization/Net_generation_United_States_all_sectors_annual.xls")
+
+
+data <- data |> separate("Year,petroleum liquids thousand megawatthours,coal thousand megawatthours,natural gas thousand megawatthours,nuclear thousand megawatthours,conventional hydroelectric thousand megawatthours,wind thousand megawatthours,all solar thousand megawatthours,geothermal thousand megawatthours",
+                         into=c("year", "petroleum", "coal", "natural_gas", "nuclear", "hydroelectric", "wind", "solar", "geothermal"), sep=",")
+
+data <- data[-c(22),]
+data <- data[-c(1,2,3,4),]
+
+data$petroleum <- as.numeric(data$petroleum)
+data$coal <- as.numeric(data$coal)
+data$natural_gas <- as.numeric(data$natural_gas)
+data$nuclear <- as.numeric(data$nuclear)
+data$hydroelectric <- as.numeric(data$hydroelectric)
+data$wind <- as.numeric(data$wind)
+data$solar <- as.numeric(data$solar)
+data$geothermal <- as.numeric(data$geothermal)
+
+data[is.na(data)] <- 0 #to calculate the proportion, NA should be replaced by 0
+
+year <- rep(2001:2017, by = 1) #creating year variable
+year <- as.matrix(year)
+
+x <- data |> select(-year)
+x <- as.matrix(x)
+x =  prop.table(x, margin = 1)
+x <- cbind(x, year)
+
+x <- as.data.frame(x) #change the matix to data.frame 
+x <- relocate(x, "year", .before = "petroleum")
+x$year <- sort(x$year, decreasing = TRUE)
+
+k <- pivot_longer(x, !year, names_to = "energy", values_to = "percent")
+k <- k |> mutate(percentage = percent * 100)
+```
+
+## Data Visualization
+
+```{r}
+ggplot(k, aes(x = year,
+              node = energy,
+              fill = energy,
+              value = percentage)) +
+  geom_sankey_bump(space = 0, type = "alluvial", color = "transparent", smooth = 13, alpha = 0.9) +
+  theme_sankey_bump(base_size = 18)  +
+  labs(x = NULL,
+       title = "Sources of electricity generation in the United States") +
+  scale_x_continuous(breaks = c(2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
+                                2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017),
+                     labels = c("2001", "02", "'03", "'04", "'05", "'06", "'07", "'08", "'09",
+                                "'10", "'11", "'12", "'13", "'14", "'15", "'16", "2017")) +
+  scale_y_continuous(labels = NULL) +
+  theme_bw() + coord_cartesian(expand = FALSE) +
+  theme(legend.position = c(0.8,-.2),legend.title = element_blank(),
+        legend.direction = "horizontal",
+        legend.key.size = unit(c(1,1), "cm"),
+        plot.title = element_text(size = 20, face = "bold"),
+        legend.background = element_rect(color = "black"),
+        legend.text = element_text(face = "bold"),
+        plot.margin = unit(c(1,1,6,1), "cm")) +
+  scale_fill_manual(values = color)
+```
 
 
