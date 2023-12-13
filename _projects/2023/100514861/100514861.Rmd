@@ -9,8 +9,329 @@ output:
   distill::distill_article:
     self_contained: false
     toc: true
+editor_options: 
+  chunk_output_type: console
 ---
 
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(grDevices) #plotmath
+library (maps)
+library (mapproj)
+library (readr)
+library(glue)
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(extrafont)
+library(sysfonts)
+library(showtext)
+library(patchwork)
+library(ggplotify)
+library(ggtext)
+library(png)
+library(grid)
+library(gghighlight)
+require(cowplot)
+require(magick)
+
+```
+
+Fonts
+
+```{r}
+
+sysfonts::font_add_google("Roboto Condensed", family="Roboto Condensed")
+sysfonts::font_add_google("Work Sans", family="Work Sans")
+
+showtext::showtext_auto()
+```
+
+Data cleaning and transforming data
+
+```{r}
+gender_pg <- read_csv("gender_pg.csv")
+  
+data <- gender_pg |> 
+  filter(TIME_PERIOD == 2020) |> 
+  filter(!(geo %in% c("EA20", "EA19"))) |> 
+  drop_na(OBS_VALUE) |> 
+  select(-("DATAFLOW":"nace_r2")) |> 
+  select (-("OBS_FLAG")) |> 
+  mutate(obs_left = (OBS_VALUE/2)*-1,
+         obs_right = OBS_VALUE/2) |> 
+  arrange(desc(OBS_VALUE)) |> 
+  mutate(rank = 1:30) |> 
+pivot_longer(cols = c("obs_left", "obs_right"), names_to = "left_right", values_to = "obs_conv") |> 
+  mutate(obs_left = (OBS_VALUE/2)*-1,
+         obs_right = OBS_VALUE/2)
+  
+```
+
+Transforming names
+
+```{r}
+data <- data |> 
+  mutate(geo_names = case_when(geo == "AT" ~ "AUSTRIA",
+                               geo == "BE" ~ "BELGIUM",
+                               geo == "BG" ~ "BULGARIA",
+                               geo == "CH" ~ "SWITZERLAND", 
+                               geo == "CY" ~ "CYPRUS",
+                               geo == "CZ" ~ "CZECHIA",
+                               geo == "DE" ~ "GERMANY", 
+                               geo == "DK" ~ "DENMARK",
+                               geo == "EE" ~ "ESTONIA",
+                               geo == "ES" ~ "SPAIN",
+                               geo == "FI" ~ "FINLAND",
+                               geo == "FR" ~ "FRANCE",
+                               geo == "HR" ~ "CROATIA",
+                               geo == "HU" ~ "HUNGARY",
+                               geo == "IE" ~ "IRELAND",
+                               geo == "IS" ~ "ICELAND",
+                               geo == "IT" ~ "ITALY",
+                               geo == "LT" ~ "LITHUANIA",
+                               geo == "LU" ~ "LUXEMBOURG",
+                               geo == "LV" ~ "LATVIA",
+                               geo == "MT" ~ "MALTA",
+                               geo == "NL" ~ "NETHERLANDS",
+                               geo == "NO" ~ "NORWAY",
+                               geo == "PL" ~ "POLAND",
+                               geo == "PT" ~ "PORTUGAL",
+                               geo == "RO" ~ "ROMANIA",
+                               geo == "SE" ~ "SWEDEN",
+                               geo == "SI" ~ "SLOVENIA",
+                               geo == "SK" ~ "SlOVAKA",
+                               geo == "EU27_2020" ~ "EU")) |> 
+  drop_na(geo_names)
+
+data_2<- data |> 
+  select(OBS_VALUE, geo_names) |> 
+  filter(OBS_VALUE != 12.9)
+
+data<- data |> 
+  left_join(data, data_2, by = c("OBS_VALUE", "OBS_VALUE"))
+```
+
+Creating the plot
+
+```{r}
+
+#Geom_linerange
+
+p <- data |>
+  ggplot (aes(x=obs_conv, y=rank))+
+  geom_area(fill = "#ffeacb")+  
+  geom_linerange(data = data, aes(y = rank,
+             xmin = obs_left, xmax = obs_right),
+             linewidth =0.3) +
+  annotate("rect", xmin= -11.15, xmax= 11.15, ymin=-3.5, ymax=0, fill = "#ffeacb" )+
+  annotate("rect", xmin= -16, xmax= -11.15, ymin=-3.5, ymax=1, fill = "#f7a600" )+
+  annotate("rect", xmin= 11.15, xmax= 16, ymin=-3.5, ymax=1, fill = "#f7a600" )+
+  annotate("rect", xmin= -0.35, xmax= 0.35, ymin=30.1, ymax= 30.5,fill = "#ffeacb" )+
+  geom_text(data=subset(data, OBS_VALUE != 12.9
+                        &OBS_VALUE !=12.2
+                        &OBS_VALUE !=13.4
+                        &OBS_VALUE !=18.9)
+            ,aes(label = OBS_VALUE, 
+                 x = obs_right, 
+                 family = "Roboto Condensed", 
+                 fontface = 'bold'),
+                 size = 3.5, 
+                 vjust = 0.5, 
+                 hjust= -0.5)+
+  geom_text(data=subset(data, geo_names != "EU" 
+                        & geo_names !="ICELAND" 
+                        & geo_names != "NORWAY"
+                        & geo_names != "SWITZERLAND"),
+            aes(label = geo_names, 
+                x = obs_left, 
+                family = "Roboto Condensed",
+                fontface = 'bold'), 
+            size = 3.5, 
+            vjust = 0.5,
+            hjust = 1.2)+
+  scale_x_continuous(limits = c(-22,22), expand=expansion(0))+
+   scale_y_continuous(limits = c(-3.5,30.5), expand=expansion(0))
+  p
+  
+  
+ p<- p+geom_text(data=subset(data, OBS_VALUE == 12.9
+                        &OBS_VALUE ==12.2
+                        &OBS_VALUE ==13.4
+                        &OBS_VALUE ==18.9)
+            ,aes(label = OBS_VALUE, 
+                 x = obs_right, 
+                 family = "Roboto Condensed", 
+                 fontface = 'bold'),
+                 size = 3.5, 
+                 vjust = 0.5, 
+                 hjust= -0.5)+
+  geom_text(data=subset(data, geo_names == "EU" 
+                        & geo_names =="ICELAND" 
+                        & geo_names == "NORWAY"
+                        & geo_names == "SWITZERLAND"),
+            aes(label = geo_names, 
+                x = obs_left, 
+                family = "Roboto Condensed",
+                fontface = 'italic'), 
+            size = 3.5, 
+            vjust = 0.5,
+            hjust = 1.2)
+ p
+ # expand=expansion(0.2)
+```
+
+Labels
+
+```{r}
+
+#Making strings for labels
+
+subtitle_string <- "How much less \n do women earn \n than men?"
+
+subtitle_string_short <- strwrap(subtitle_string, width = 15)
+
+tag_string <- "Difference between average gross \n hourly earnings of male and female \n employees as % of male gross \n earnings, 2020"
+
+tag_string_short <- strwrap(tag_string, width = 35)
+
+```
+
+Extra panels
+
+```{r}
+
+p1.df<- data_frame(x=c(-20,20), y= c(10,10))
+
+p1<- p1.df |> ggplot (aes(x=x, y=y))+
+  geom_area(fill = "#ffeacb")
+
+p1<-p1+
+  theme(aspect.ratio = 0.4,
+         axis.title = element_blank(),
+         axis.text = element_blank(),
+         axis.ticks = element_blank(),
+         axis.line = element_blank(),
+         plot.margin = margin (20,0, 0, 0))+
+  scale_x_continuous(expand=expansion(0),limits = c(-20,20)) +
+  scale_y_continuous(expand=expansion(0))+
+  annotate("text", x=0, y=8, label = "Gender pay gap", family = "Roboto Condensed", size = 12, fontface = 'bold')+
+  annotate("text", x=-5, y=4, label =  paste(subtitle_string_short, collapse = "\n"), family = "Roboto Condensed", size = 7.5, fontface = 'bold', lineheight = 0.8, hjust ='right')+
+  annotate("text", x=4, y=4, label =  paste(tag_string_short, collapse = "\n"), family = "Roboto Condensed", size = 3.75, fontface = 'italic',  hjust = 'left')
+
+p1
 
 
 
+p2.df<- data_frame(x=c(-20,20), y= c(10,10))
+
+p2<- p2.df |> ggplot (aes(x=x, y=y))+
+  geom_area(fill = "white")
+
+p2<-p2+
+  theme(aspect.ratio = 0.05,
+         axis.title = element_blank(),
+         axis.text = element_blank(),
+         axis.ticks = element_blank(),
+         axis.line = element_blank())+
+  scale_x_continuous(limits = c(-20,20), expand=expansion(0)) +
+  scale_y_continuous(expand=expansion(0))+
+  annotate("text", x=-5, y=6, label = "#InternationalWomensDay", family = "Roboto Condensed", size = 5, fontface = 'bold', color = "#7a7b7f", hjust=1)+
+  annotate("text", x=6, y=6, label = "ec.europa.eu/", family = "Roboto Condensed", size = 5, color = "#7a7b7f", hjust=0)+
+  annotate("text", x=13.5, y=6, label = "eurostat", family = "Roboto Condensed", size = 5, color = "#7a7b7f", hjust=0, fontface = 'bold')
+
+p2
+```
+
+Theme specification
+
+```{r}
+
+p<-p+
+  theme(
+    plot.margin = margin(0,0, 0, 0),
+    panel.background = element_rect(fill = "#f7a600"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_blank())
+
+p
+```
+
+Adding extra annotations
+
+```{r}
+
+label_EU <- data |> 
+  filter(geo_names =="EU" & left_right== "obs_left") 
+
+label_OBS_VALUE <- data |> 
+  filter(left_right== "obs_right" & OBS_VALUE == 12.9) 
+  
+
+label_EU
+p<- p+
+  annotate("rect",ymin=15, ymax= 15, xmin = -6.45, xmax=6.45, fill = NA, color="#a71c6d", linewidth =1)+
+  geom_label(data = label_EU, aes(label = geo_names), 
+             family = "Roboto Condensed",  fontface = 'bold', size = 3.5, color = "white",
+             fill = "#a71c6d", label.size = 0, label.r = unit(0, "lines"),
+             label.padding = unit(0.05, "lines"),
+             vjust = 0.5, hjust = 1.3)+
+  geom_label(data = label_OBS_VALUE, aes(label = OBS_VALUE), 
+             family = "Roboto Condensed",  fontface = 'bold', size = 3.5,  color = "white",
+             fill = "#a71c6d", label.size = 0, label.r = unit(0, "lines"),
+             label.padding = unit(0.05, "lines"),
+             vjust = 0.5, hjust= -0.5)
+  p
+```
+
+Adding lower labels
+
+```{r}
+
+middle_string <- "For all countries except Czechia and Iceland: data for enterprises \n employing 10 or more employees. Czechia and Iceland: data \n for enterprises employing 1 or more employees "
+
+left_string <- "Iceland, Norway, Switzerland: \n non_EU countries"
+
+right_string <- "Ireland, Greece: data not \n available"
+
+p<-p+ 
+  annotate("text", x=0, y=-1, label = middle_string, family = "Roboto Condensed", size = 2.5, fontface = 'italic')+
+  annotate("text", x=-12, y=-2, label = left_string, family = "Roboto Condensed", size = 2.5,  hjust ='right')+
+  annotate("text", x=12, y=-2, label = left_string, family = "Roboto Condensed", size = 2.5, hjust ='left')
+
+p
+```
+
+Adding planes together
+
+```{r}
+p3<-p1+p+p2+
+  plot_layout(ncol=1)&
+  theme(plot.background = element_rect(fill ="#ffeacb"),
+        plot.margin = margin(0,0,0,0))
+
+p3<-ggdraw(p3) +      
+  draw_image(
+    "/Users/nienke/Desktop/Data visualisation/female.png",
+    y = 0.30959, x=-0.025,
+    scale = 0.178)
+p3
+
+p3<-ggdraw(p3)+
+  draw_image(
+    "/Users/nienke/Desktop/Data visualisation/male.png",
+    y = 0.30959, x=0.025,
+    scale = 0.178)
+p3
+```
+
+```{r}
+
+eu = readPNG('eu.png')
+grid.raster(eu, x=0.75, y=.023, width=.017) 
+```
