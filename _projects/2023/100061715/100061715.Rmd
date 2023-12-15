@@ -5,3 +5,212 @@ categories: 2023
 author: "Celia Muñoz"
 date: "`r Sys.Date()`"
 ---
+
+```{r}
+# Loading packages
+library(tidyverse)
+library(mapSpain)
+library(readr)
+library(ggplot2)
+library(sf)
+library(stringdist)
+library(fuzzyjoin)
+library(cartogram)
+```
+
+
+```{r}
+# Adjusting locale settings
+my_locale <- locale(decimal_mark = ",", grouping_mark = ".")
+
+
+# Reading data
+cesareas <- read_delim("tasa_cesareas.csv", 
+                 skip = 10, 
+                 delim = ";",
+                 col_names = c("ccaa", "n_partos", "estancia_partos", "edad_partos", "n_cesareas", "edad_cesareas", "estancia_cesareas", "tasa_cesareas"),
+                 locale = my_locale)
+
+# Cleaning data and generating a new cesarea rate
+cesareas <- cesareas %>% 
+  na.omit() %>% 
+  filter(ccaa != "Total Altas") %>% 
+  mutate(tasa_cesareas = (n_cesareas / n_partos) * 100)
+
+ccaa <- cesareas %>% 
+  select(ccaa)
+
+```
+```{r}
+# Loading map data
+spain <- esp_get_ccaa()
+
+# Ploting the basic map
+ggplot(spain) +
+  geom_sf()
+```
+
+
+
+```{r}
+# Comprobamos que los nombres de las CCAA coinciden y hacemos ajustes para mejorar el join
+cesareas <- cesareas %>% 
+  stringdist_join(
+    spain,
+    by = c("ccaa" = "ine.ccaa.name"),
+    method = "jaccard",
+    mode = "left",
+    max_dist = 0.3
+  ) %>% 
+  mutate(
+    ine.ccaa.name = if_else(ccaa == "Rioja (La)", "Rioja, La", ine.ccaa.name)) %>% 
+  select(ccaa, ine.ccaa.name, n_partos, edad_partos, tasa_cesareas, edad_cesareas) # Keeping the main variables
+
+# Joining map data and cesarean data
+cesareas_map <- spain %>% 
+  left_join(
+    cesareas,
+    by = "ine.ccaa.name"
+  )  
+
+summary(cesareas_map)
+```
+
+
+```{r}
+# Filling the map with cesarean rate data
+map <- ggplot(cesareas_map) +
+  geom_sf(aes(fill = tasa_cesareas), color = "white", linewidth = 0.2)
+
+map
+```
+
+```{r}
+# Setting the specific colors and breaks
+map <- map +
+  scale_fill_stepsn(
+    colors = c("#5EAABB", "#478B9C", "#2f6b7d", "#184c5d", "#002c3e"),
+    breaks = c(13.57, 16.83, 20.10, 23.36, 26.63, 29.89),
+    limits = c(13.57, 29.89)) # Setting the limits
+
+
+map
+```
+
+```{r}
+# Setting the coordinates so we can have space for the legend
+map <- map +
+    coord_sf(xlim=c(-14, 5),
+           ylim=c(35, 46)) 
+
+map
+```
+
+
+```{r}
+# Tunning the theme, legend
+map <- map +
+  theme_void() +
+  theme(
+    legend.position = c(0.2,0.9),
+    legend.direction = "horizontal",
+    legend.key.width = unit(12, "mm"),
+    legend.key.height = unit(5, "mm"),
+    legend.background = element_blank(),
+    legend.title = element_blank(),
+    plot.background = element_rect(color = "#f5f5f5")) 
+
+map
+```
+
+```{r}
+# Tunning the fonts and alignment of the legend
+sysfonts::font_add_google("Open Sans", family="Open Sans")
+showtext::showtext_auto()
+
+map <- map + 
+  theme(text = element_text(size = 10, 
+                            color = "#888888",
+                            family="Open Sans"),
+        legend.text.align = c(0, 0.5, 0.5, 0.5, 0.5, 0.5))
+
+map
+```
+```{r}
+# Obtaining the standarised cesarean rate
+cesareas_map <- cesareas_map %>% 
+  mutate(tasa_cesareas_edad = (tasa_cesareas/edad_partos)*100)
+```
+
+
+```{r}
+spain <- esp_get_country()
+cesareas_centroid <- st_centroid(cesareas_map, of_largest_polygon = TRUE)
+
+```
+
+```{r}
+# Alternativa sin cartograma
+centroid_map <- ggplot() +
+  geom_sf(data = spain,
+          linewidth = 0.1,
+          alpha = 0.5) +
+  geom_sf(
+    data = cesareas_centroid,
+    pch = 21,
+    aes(size = n_partos, 
+        fill = tasa_cesareas_edad),
+    stroke = 0.1) +
+  coord_sf(xlim=c(-15, 4),
+           ylim=c(34, 44))
+  
+centroid_map
+```
+
+
+
+```{r}
+# Ajustamos las leyendas
+centroid_map <- centroid_map + 
+ scale_fill_stepsn(
+    colors = c("#5EAABB", "#478B9C", "#2f6b7d", "#184c5d", "#002c3e"),
+    guide = guide_colorsteps(title = "Cesarean section rate (%)",
+                             title.position = "top")) +
+  scale_size(
+    breaks = c(20000, 40000),
+    labels = c("20", "40"),
+    range = c(1, 15),
+    guide = guide_legend(title="Number of births (K)", 
+                         title.position="top",
+                         order=2)) # Ajusta según sea necesario +
+
+centroid_map
+```
+
+```{r}
+centroid_map <- centroid_map + 
+  theme_void() +
+  theme(
+    legend.position = c(0.12,0.7),
+    legend.direction = "horizontal",
+    legend.key.width = unit(8, "mm"),
+    legend.key.height = unit(5, "mm"),
+    legend.background = element_blank(),
+    legend.title=element_text(face="bold", size=10),
+    legend.text=element_text(size=8),
+    plot.background = element_rect(color = "#f5f5f5"))  
+
+centroid_map
+
+```
+
+ 
+```{r}
+# Title and annotations (to be finished)
+centroid_map + 
+  labs(title = "This is a title using *italics* and **boldface**") +
+  theme(plot.title = ggtext::element_markdown()) +
+  annotate("text", x = -8.5, y = 39, label = "Extremadura", size = 3)
+
+centroid_map
+```
