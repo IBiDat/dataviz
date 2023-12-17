@@ -1,7 +1,7 @@
 ---
 title: "Graph: La evolución del despligue militar de EE.UU."
 description: |
-  This project will explain the process of replicating the graphic "La evolución del despliegue militar de EE.UU." created by El Orden Mundial .
+  "This project will explain the process of replicating the graphic "La evolución del despliegue militar de EE.UU." created by El Orden Mundial"
 categories: "2023"
 author: Clara Fernanda Martín Villaescusa
 date: "`r Sys.Date()`"
@@ -11,9 +11,407 @@ output:
     toc: true 
 ---
 
+# REPLICATION
 
-Distill is a publication format for scientific and technical writing, native to the web.
+## DATA BASE
 
-Learn more about using Distill at <https://rstudio.github.io/distill>.
+```{r}
+library(tidyverse)
+library(scales)
+library(here)
+library(haven)
+library(ggtext)
+library(troopdata)
+library(glue)
+library(ggtext)
+library(ggplotify)
+library(treemapify)
+library(ggalluvial)
+library(ggpmisc)
+library(ggrepel)
+library(patchwork)
+library(scico)
+library(ggbeeswarm)
+library(peacesciencer)
+library(kableExtra)
+library(gridExtra)
+library(ggpmisc)
+library(dplyr)
+#install.packages("Hmisc")
+library(Hmisc)
 
+#install.packages("showtext")
+library(showtext)
+
+
+
+troopdata <- troopdata::troopdata |>  
+  filter(ccode != 2 & year >= 1950) |> 
+  mutate(ccode = ifelse(ccode == 260, 255, ccode),
+         ccode = ifelse(countryname == "Republic of Vietnam", 816, ccode),
+         iso3c = ifelse(countryname == "Republic of Vietnam", "VNM", iso3c),
+         region = countrycode::countrycode(iso3c, "iso3c", "region"),
+         region = case_when(
+           ccode == 1003 ~ "Afloat",
+           ccode == 70 ~ "North America",
+           region == "Latin America & Caribbean" ~ "Central & South America & Caribbean", 
+           TRUE ~ region), 
+         region = recode(region, "Central & South America & Caribbean" = "Latinoamérica y Caribe", "Europe & Central Asia" = "Europa y Asia Central", "Middle East & North Africa" = "Oriente Próximo y Magreb", "Sub-Saharan Africa" = "África Subsahariana", "South Asia" = "Asia Meridional", "East Asia & Pacific" = "Asia Oriental y Oceanía")) 
+```
+
+### Troopdata without highlighted countries
+
+```{r}
+eliminar <- c("Germany", "West Germany", "German Democratic Republic", "Vietnam", "Japan", "South Korea", "Iraq")
+
+troopdata_sin <- troopdata::troopdata |>  
+  filter(ccode != 2 & year >= 1950) |> 
+  mutate(
+         region = countrycode::countrycode(iso3c, "iso3c", "region"),
+         region = case_when(
+           ccode == 1003 ~ "Afloat",
+           ccode == 70 ~ "North America",
+           region == "Latin America & Caribbean" ~ "Central & South America & Caribbean", 
+           TRUE ~ region), 
+         region = recode(region, "Central & South America & Caribbean" = "Latinoamérica y Caribe", "Europe & Central Asia" = "Europa y Asia Central", "Middle East & North Africa" = "Oriente Próximo y Magreb", "Sub-Saharan Africa" = "África Subsahariana", "South Asia" = "Asia Meridional", "East Asia & Pacific" = "Asia Oriental y Oceanía")) |> 
+  filter(!(countryname %in% eliminar))
+```
+
+## TIDY DATA
+
+### REGION DATA
+
+I do the region data with troopdata without the highlighted countries so that they are not counted twice.
+
+```{r}
+regional.data <- troopdata_sin |> 
+  group_by(region, year) |>  
+  dplyr::summarise(troopsum = sum(troops, na.rm = TRUE)) |>  
+  filter(region != 'Afloat') |> 
+  filter(region != 'North America') 
+
+
+regional.data <- subset(regional.data, year <= 2020)
+
+regional.data$region <- factor(regional.data$region , levels= c("Europa y Asia Central", "África Subsahariana", "Asia Oriental y Oceanía", "Latinoamérica y Caribe", "Asia Meridional", "Oriente Próximo y Magreb"))
+```
+
+### COUNTRY DATA
+
+here are only the highlighted countries. Germany is recategorised because there are several germanies in the database.
+
+```{r}
+country.data <- troopdata |>
+  filter((grepl("Vietnam", countryname)) | grepl('Germany', countryname) | grepl ("South Korea", countryname) | grepl ("Japan", countryname) | grepl ("Iraq", countryname)) |>
+  mutate(countryname = ifelse(countryname == "Republic of Vietnam", "Vietnam", countryname),
+            countryname = ifelse(countryname == "West Germany", "Germany", countryname),
+         countryname = ifelse(countryname == "German Democratic Republic", "Germany", countryname)
+         )|>
+  group_by(countryname, year) |>  
+  dplyr::summarise(troopsum = sum(troops, na.rm = TRUE)) |>
+  mutate(countryname = factor(countryname, 
+                              levels = c("Iraq", "Japan", 
+                                         "South Korea", "Vietnam",
+                                         "Germany", 
+                                         setdiff(unique(countryname),
+                                                 c("Iraq", "Japan",
+                                                   "South Korea",
+                                                   "Vietnam",
+                                                   "Germany")))))
+
+country.data$countryname <- factor(country.data$countryname , levels=rev(c("Germany", "Vietnam", "Japan", "South Korea", "Iraq")))
+```
+
+### COMBINATION OF REGION AND COUNTRY
+
+combination of the two data frames created above
+
+```{r}
+combined_data <- bind_rows(
+  mutate(regional.data, data_type = "region"),
+  mutate(country.data, data_type = "country"))
+
+combined_data <- bind_rows(regional.data, country.data)
+
+combined_data <- combined_data |> 
+  pivot_longer(cols = c(region, countryname), names_to = "tipo", values_to = "region_country")
+```
+
+```{r}
+#sort categories 
+combined_data$region_country <- factor(combined_data$region_country , levels = c("Latinoamérica y Caribe", "África Subsahariana","Iraq", "Oriente Próximo y Magreb", "Asia Meridional","South Korea","Japan","Vietnam","Asia Oriental y Oceanía", "Germany","Europa y Asia Central"))
+```
+
+## GGPLOT
+
+### THEME
+
+cosas que faltan: Poner mas ticks en el eje X y ponerlos por dentro.
+
+```{r}
+sysfonts::font_add_google("Outfit", family="outfit")
+showtext::showtext_auto()
+
+theme_ok <- theme(text = element_text(family="outfit", size = 11),
+  plot.title = element_text(face = "bold", size = 18),
+  plot.subtitle = element_text(face = "bold", color = "gray30" ,size = 12),
+  plot.title.position = "plot",
+  plot.caption = ggtext::element_markdown(size = rel(0.7), lineheight = 0.9, hjust = 0, margin = margin(0, 0, 0, 0)),
+  plot.caption.position = "plot",
+  strip.background = element_rect(fill = "gray80", color = "black"),
+  panel.background = element_rect(fill = "white"),
+  strip.text = element_text(color = "black", face = "bold"),
+  panel.grid.major.y = element_line(color = "lightgrey"),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  axis.line = element_line(color = "black",size = 1),
+  axis.title.y = element_text(angle = 90, hjust = 0.5, color = "gray40"),
+  axis.text.x = element_text(angle = 45, hjust = 1),
+  legend.position = "top",
+  legend.direction = "horizontal",
+  legend.title = element_blank(),  # Remove legend title
+  legend.text = element_text(hjust = 0, face = "plain"),
+  legend.background = element_blank(),  # Remove legend background
+  legend.box = "none",  # Remove legend box
+  legend.justification = "left",  
+  legend.margin = margin(t = 0, r = 0, b = 0, l = 0),
+  legend.key = element_blank(),
+  legend.key.size = unit(0.5, "cm"),
+  legend.key.width = unit(0.8, "cm"),
+  legend.key.height = unit(0.5, "cm"))
+
+```
+
+```{r}
+colors <- c("Europa y Asia Central" = "#676B90", "Asia Oriental y Oceanía" = "#DE5A3C", "Asia Meridional" = "#70B3B5", "Oriente Próximo y Magreb" = "#8BA629", "África Subsahariana" = "#9E65A6", "Latinoamérica y Caribe" = "#F2BE5C", "Iraq" = "#AACE7B", "Japan" = "#DEA281", "South Korea" = "#E5C5B1", "Vietnam" = "#DF8756", "Germany" = "#7185B5")
+
+colors2 <- c("Europa y Asia Central" = "#676B90", "Asia Oriental y Oceanía" = "#DE5A3C", "Asia Meridional" = "#70B3B5", "Oriente Próximo y Magreb" = "#8BA629", "África Subsahariana" = "#9E65A6", "Latinoamérica y Caribe" = "#F2BE5C", "Iraq" = "#8BA629", "Japan" = "#DEA281", "South Korea" = "#DE5A3C", "Vietnam" = "#DF8756", "Germany" = "#676B90")
+```
+
+### REGION GRAPH
+
+```{r}
+regional.time <- ggplot(regional.data, aes(x = year, y = troopsum, fill = region)) +
+  geom_area() +
+  scale_x_continuous(
+    limits = c(1950, 2020),
+    breaks = seq(1950, 2020, 10),
+    expand = expansion(add = c(1.5, 0))) +
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", decimal.mark = ",", accuracy = 1), 
+                     limits = c(0, 1200000),
+                     breaks = seq(0, 1200000, 200000),
+                     expand = expansion(0)) +
+  scale_fill_manual(values = c("Europa y Asia Central" = "#676B90", "Asia Oriental y Oceanía" = "#D94A3D", "Asia Meridional" = "#70B3B5", "Oriente Próximo y Magreb" = "#8BA629", "África Subsahariana" = "#9E65A6", "Latinoamérica y Caribe" = "#F2BE5C")) +
+  theme_ok +
+  labs(x = "",
+       y = "Soldados",
+       color = "Region",
+       linetype = "Region",
+       title = "La evolución del despligue militar de EE.UU.",
+       subtitle = "Presencia de tropas por regiones y países más destacados (1950-2020)") 
+
+print(regional.time)
+```
+
+### COUNTRY GRAPH
+
+```{r}
+country.time <- ggplot(country.data, aes(x = year, y = troopsum, fill = countryname)) +
+  geom_area() +
+  scale_x_continuous(limits = c(1950, 2020), breaks = seq(1950, 2020, 10), expand = expansion(0.02)) +
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", decimal.mark = ",", accuracy = 1), 
+                     limits = c(0, 1200000),
+                     breaks = seq(0, 1200000, 200000),
+                     expand = expansion(0))  +
+  theme_ok + 
+  labs(x = "",
+       y = "Soldados",
+       color = "Region",
+       linetype = "Region",
+       title = "La evolución del despligue militar de EE.UU.",
+       subtitle = "Presencia de tropas por regiones y países más destacados (1950-2020)")  
+
+print(country.time)
+```
+
+### COMBINED GRAPH ✅
+
+```{r}
+combinado.time <- ggplot() +
+  geom_area(data = combined_data |>  filter(!is.na(region_country)), 
+            mapping = aes(x = year, y = troopsum, fill = region_country, color = region_country), 
+            position = "stack", size = 1.3) +  
+  scale_x_continuous(
+    limits = c(1950, 2020),
+    breaks = seq(1950, 2020, 5),
+    expand = expansion(add = c(0.5, 0)))+
+    #minor_breaks = seq(1950, 2020, by = 5)) +
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", decimal.mark = ",", accuracy = 1),
+                     limits = c(0, 1200000),
+                     breaks = seq(0, 1200000, 200000),
+                     expand = expansion(0)) +
+   scale_fill_manual(name = "Leyenda", values = colors, breaks = c("Europa y Asia Central", "África Subsahariana", "Asia Oriental y Oceanía", "Latinoamérica y Caribe", "Asia Meridional", "Oriente Próximo y Magreb")) +
+  scale_color_manual(values = colors2, breaks = unique(combined_data$region_country), guide = FALSE) +
+  theme_ok +
+  labs(
+    x = "",
+    y = "Soldados",
+    color = "Data Type",
+    fill = "Data Type",
+    title = "La evolución del despliegue militar de EE.UU.",
+    subtitle = "Presencia de tropas por regiones y países más destacados (1950-2020)", 
+    caption = paste("**Gráfico:** \n\nÁlvaro Merino (2021) \n\n**Fuente:** \n\nMichael A. Allen, Michael E. Flynn y Carla Martínez Machain, Us global military deployments, 1950-2020 (2021)"))
+
+combinado.time
+```
+
+### **Annotations**
+
+(falta cambiar el tamaño de la cabeza de las fechas, no se hacerlo)
+
+```{r}
+combinado.timeA <- combinado.time + annotate("text",
+  label = "Alemania",
+  x = 1980, y = 150000, hjust = 0.3, vjust = 0, size = 4, color = "white") + 
+  annotate("text",
+  label = "Vietnam",
+  x = 1968, y = 450000, hjust = 0.4, vjust = 0, size = 4, color = "white") +
+  annotate("text",
+  label = "Irak",
+  x = 2006, y = 300000, hjust = 0.6, vjust = 0, size = 4, color = "white") +
+  annotate("text",
+  label = "Japón",
+  x = 1955, y = 520000, hjust = 0.5, vjust = 0, size = 4, color = "white") +
+   annotate("text",
+  label = "11S",
+  x = 2001, y = 440000, hjust = 0.5, vjust = 0, size = 4, color = "gray30") +
+  annotate("text",
+  label = "Colapso de la URSS",
+  x = 1992, y = 540000, hjust = 0.09, vjust = 0, size = 4, color = "gray30") +
+  annotate("text",
+  label = "Caída del Muro \nde Berlín",
+  x = 1990, y = 700000, hjust = 0.5, vjust = -0.4, size = 4, color = "gray30") +
+  annotate("segment", x = 1990, xend = 1990, y = 0, yend = 700000, color = "gray50", linetype = "aa") +
+  annotate("segment", x = 1992, xend = 1992, y = 0, yend = 520000, color = "gray50", linetype = "aa") +
+  annotate("segment", x = 2001, xend = 2001, y = 0, yend = 420000, color = "gray50", linetype = "aa") +
+  annotate("segment", x = 2012, xend = 2014, y = 200000, yend = 330000, color = "gray30", linetype = "solid") +
+  annotate("text",
+  label = "Afganistán",
+  x = 2014, y = 330000, hjust = 0.3, vjust = -0.5, size = 4, color = "gray30") +
+  annotate("segment", x = 1953, xend = 1957, y = 700000, yend = 840000, color = "gray30", linetype = "solid") +
+  annotate("text",
+  label = "Corea \ndel Sur",
+  x = 1958, y = 800000, hjust = 0.2, vjust = -0.2, size = 4, color = "gray30") +
+  annotate("curve", x = 2010, y = 210000 , xend = 2010, yend = 640000, color = "gray30", curvature = 0.06, arrow = arrow(length = unit(0.03, "npc"), angle = 20, type = "closed")) +
+  annotate("curve", x = 2006, y = 350000 , xend = 2007, yend = 640000, color = "gray30", curvature = -0.1, arrow = arrow(length = unit(0.03, "npc"), angle = 20, type = "closed")) +
+  annotate("text",
+  label = "Guerra contra \nel terror",
+  x = 2009, y = 660000, hjust = 0.5, vjust = 0, size = 4, color = "gray30") +
+  annotate("curve", x = 1968, y = 850000 , xend = 1975, yend = 920000, color = "gray30", curvature = -0.2, arrow = arrow(length = unit(0.03, "npc"), angle = 20, type = "closed")) +
+  annotate("text",
+  label = "Guerra de Vietnam",
+  x = 1975, y = 920000, hjust = -0.05, vjust = 0.3, size = 4, color = "gray30") +
+  annotate("curve", x = 1953, y = 880000 , xend = 1957, yend = 1100300, color = "gray30", curvature = -0.3, arrow = arrow(length = unit(0.03, "npc"), angle = 20, type = "closed")) +
+  annotate("text",
+  label = "Guerra de Corea",
+  x = 1957, y = 1100300, hjust = -0.05, vjust = -0.3, size = 4, color = "gray30") 
+
+combinado.timeA
+```
+
+
+# ALTERNATIVE
+
+## Data Base.
+
+```{r}
+troopdata1 <- troopdata::troopdata |>  
+  filter(ccode != 2 & year >= 1950) |> 
+  mutate(ccode = ifelse(ccode == 260, 255, ccode),
+         ccode = ifelse(countryname == "Republic of Vietnam", 816, ccode),
+         iso3c = ifelse(countryname == "Republic of Vietnam", "VNM", iso3c),
+         region = countrycode::countrycode(iso3c, "iso3c", "region"),
+         region = case_when(
+           ccode == 1003 ~ "Afloat",
+           ccode == 70 ~ "North America",
+           region == "Latin America & Caribbean" ~ "Central & South America & Caribbean", 
+           TRUE ~ region), 
+         region = recode(region, "Central & South America & Caribbean" = "Latinoamérica y Caribe", "Europe & Central Asia" = "Europa y Asia Central", "Middle East & North Africa" = "Oriente Próximo y Magreb", "Sub-Saharan Africa" = "África Subsahariana", "South Asia" = "Asia Meridional", "East Asia & Pacific" = "Asia Oriental y Oceanía")) 
+```
+
+## TidyData: Region
+
+```{r}
+regional.data1 <- troopdata1 |> 
+  group_by(region, year) |> 
+  dplyr::summarise(troopsum = sum(troops, na.rm = TRUE)) |> 
+  filter(region != 'Afloat') |>
+  filter(region != 'North America')
+regional.data1$region <- factor(regional.data1$region , levels= c("Europa y Asia Central", "África Subsahariana", "Asia Oriental y Oceanía", "Latinoamérica y Caribe", "Asia Meridional", "Oriente Próximo y Magreb"))
+```
+
+## Theme Alternative.
+
+```{r}
+sysfonts::font_add_google("Merriweather", family="Merriweather")
+showtext::showtext_auto()
+
+theme_ok1 <- theme(text = element_text(family="Merriweather", size = 16),
+  plot.title = element_text(face = "bold", size = 23),
+  plot.subtitle = element_text(face = "bold", color = "gray30" ,size = 18),
+  plot.title.position = "plot",
+  plot.caption = ggtext::element_markdown(size = rel(0.7), lineheight = 0.9, hjust = 0, margin = margin(0, 0, 0, 0)),
+  plot.caption.position = "plot",
+  strip.background = element_rect(fill = "gray80", color = "black"),
+  panel.background = element_rect(fill = "white"),
+  strip.text = element_text(color = "black", face = "bold"),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  axis.line = element_line(color = "black",size = 0.6),
+  axis.title.y = element_text(angle = 90, hjust = 0.5),
+  axis.text.x = element_text(angle = 45, hjust = 1),
+  legend.position = "top",
+  legend.direction = "horizontal",
+  legend.title = element_blank(),  
+  legend.text = element_text(hjust = 0),
+  legend.background = element_blank(),  
+  legend.box = "none",  
+  legend.justification = c(-0.2, 0),  
+  legend.margin = margin(t = 0, r = 0, b = 0, l = 0),
+  legend.key = element_blank(),
+  legend.key.size = unit(0.5, "cm"))
+```
+
+## Graph Alternative.
+
+```{r}
+regional.time1 <- ggplot() +
+  geom_line(data = regional.data1, mapping = aes(x = year, y = troopsum, color = region, linetype = region), linetype = "solid", size = 0.5) +  
+  scale_x_continuous(limits = c(1950, 2020), breaks = seq(1950, 2020, 5), expand = expansion(add = c(1.5, 0))) +
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", decimal.mark = ",", accuracy = 1), breaks = seq(0, 1000000, 100000)) +
+  scale_color_manual(name = NULL, values = c("Europa y Asia Central" = "#322c8e", "Asia Oriental y Oceanía" = "#ff1964", "Asia Meridional" = "#ff7d10", "Oriente Próximo y Magreb" = "#90ff17", "África Subsahariana" = "#0aefff", "Latinoamérica y Caribe" = "#057c46")) +
+  theme_ok1  +
+  labs(
+    x = "",
+    y = "Soldados",
+    title = "La evolución del despliegue militar de EE.UU.",
+    subtitle = "Presencia de tropas por regiones (1950-2020)", 
+    caption = paste("Fuente: Michael A. Allen, Michael E. Flynn y Carla Martínez Machain, Us global military deployments, 1950-2020 (2021)")
+  )
+
+regional.time1 <- regional.time1 + annotate("text",
+  label = "11S",
+  x = 2001, y = 220000, hjust = 0.5, vjust = 0.8, size = 4, color = "gray30") +
+  annotate("text",
+  label = "Colapso de la URSS",
+  x = 1992, y = 370000, hjust = 0.05, vjust = 1, size = 4, color = "gray30") +
+  annotate("text",
+  label = "Caída del Muro de Berlín",
+  x = 1990, y = 470000, hjust = 0.5, vjust = 0, size = 4, color = "gray30") +
+  annotate("segment", x = 1990, xend = 1990, y = 0, yend = 450000, color = "gray50", linetype = "aa", size = 0.2) +
+  annotate("segment", x = 1992, xend = 1992, y = 0, yend = 350000, color = "gray50", linetype = "aa", size = 0.2) +
+  annotate("segment", x = 2001, xend = 2001, y = 0, yend = 200000, color = "gray50", linetype = "aa", size = 0.2) 
+
+regional.time1
+```
 
