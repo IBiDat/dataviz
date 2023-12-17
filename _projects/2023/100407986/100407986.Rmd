@@ -1,0 +1,191 @@
+---
+title: "Drop in abortions after Dobbs"
+description: |
+  Change in abortion data after Dobbs.
+categories: "2023"
+author: Clara Espinosa Acevedo
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+Preparing the dataframe
+
+```{r}
+library(readxl)
+abortions <- read_xlsx(path = "./abortion data.xlsx")
+colnames(abortions) <- c("state", "abr", "variation")
+
+abortions$prct <- abortions$variation * 100
+
+df <- data.frame(
+  x = c(1, 8, 6, 3, 2, 4, 11, 11, 11, 10, 9, 1, 6, 3, 6, 7, 5, 7, 5, 11, 10, 
+        12, 8, 6, 6, 7, 4, 10, 5, 5, 12, 10, 4, 3, 10, 8, 4, 2, 9, 12, 9, 
+        5, 8, 5, 3, 9, 11, 2, 7, 8, 4),
+  y = c(8, 2, 2, 3, 4, 4, 5, 3, 4, 1, 2, 2, 5, 6, 4, 4, 3, 3, 2, 6, 4, 8, 
+        6, 6, 3, 2, 6, 3, 6, 4, 7, 5, 3, 4, 6, 5, 2, 5, 5, 6, 3, 5, 3, 1, 5, 4, 7, 6, 5, 4, 5),
+  state = c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA", 
+            "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME", 
+            "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM", 
+            "NV", "NY", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", 
+            "UT", "VA", "VT", "WA", "WI", "WV", "WY"),
+  state.color = c("black", "#BE8DB7", "#BE8DB7", "black", "black", 
+                  "black", "black", "black", "black", "black", 
+                  "black", "black", "black", "black", "black",
+                  "black", "black", "#BE8DB7", "#BE8DB7", "black",
+                  "black", "black", "black", "black", "white",
+                  "#BE8DB7", "black", "black", "#BE8DB7", "black",
+                  "black", "black", "black", "black", "black",
+                  "white", "#BE8DB7", "black", "black", "black",
+                  "black", "#BE8DB7", "white", "#BE8DB7", "black",
+                  "black", "black", "black","#BE8DB7", "black", "black"),
+  value = c(2, -100, -100, -53, 1, 33, -1, 0, 24, 10, -57, 4, -27, -48, 28,
+           15, 36, -100, -100, -3, 1, 18, 8, 14, -83, -100, 30, 37, -100, 30,
+           -6, 7, 12, 21, 12, -65, -100, 18, 6, -7, -56, -100, -78, -100, -3,
+           -4, 16, 5, -100, -8, -5))
+
+```
+
+
+Base graph of the dataframe
+
+```{r}
+library(ggplot2)
+ggplot(df) +
+  aes(x, y, fill=value) +
+  geom_tile(color="white", linewidth=2) +
+  geom_text(aes(label=state, color=state.color), size=6) +
+  coord_fixed() +
+  scale_fill_distiller(type="div", palette="PRGn") +
+  scale_color_identity() +
+  theme_void()
+```
+Gradient color
+
+```{r}
+q <- ggplot(df) +
+  aes(x, y, fill=value) +
+  geom_tile(color="white", linewidth=2) +
+  geom_text(aes(label=state, color=state.color), size=5) +
+  coord_fixed() +
+  scale_fill_gradientn(colors = c("#4A0B35","#7D3F62", "#92597A","#AB7D99", "#CBA8C2", "#E8D0E9","#F0F0F0", "#DBF2D5", "#C1DCB8", "#B4D2AB", "#A9C89E", "#9CBD8F","#7EA370", "#2B5F1D"),
+                       breaks = c(-100, -78, -65, -48, -27, -8, 0, 5, 18, 24, 30, 37, 50, 100),
+                       limits = c(-100, 100)) +
+  scale_color_identity() + 
+  theme_void()
+```
+
+Legend
+
+```{r}
+q <- q + guides(fill = guide_colorbar(title = "PERCENT CHANGE",
+                                 title.position = "top",
+                                 title.theme = element_text(size = 10,
+                                                            family = "Helvetica"),
+                                 #title.hjust = 0.5,
+                                 #title.vjust = 0.5,
+                                 label = FALSE,
+                                 barheight = 0.7,
+                                 barwidth = 9,
+                                 #nbin = 100,
+                                 ticks = FALSE,
+                                 direction = "horizontal")) +
+  theme(legend.position = c(0.13, 0.93))
+```
+
+Titles and subtitles
+
+```{r}
+q <- q + labs(
+  title = "Several states saw a complete drop in abortions after Dobbs",
+  subtitle = "Percentage change in number of abortions from April to August 2022, by state",
+  caption = paste("Percent change in abortions is calculated from #WeCount's unrounded data. Less-populated states might see larger",
+                  "percentage shifts because the raw number of abortions in those states tend to be smaller.",
+                  sep = "\n")
+) +
+  theme(plot.title = element_text(size = 18, color = "#222222", face = "bold", family = "Helvetica", hjust = 0.1, vjust = 3)) +
+  theme(plot.subtitle = element_text(size = 14, color = "#222222", face = NULL, family = "Helvetica", hjust = 0.1, vjust = 3)) +
+  theme(plot.caption = element_text(size = 10, color = "#999999", face = NULL, family = "Helvetica", hjust = 0, vjust = 0.1))
+```
+
+Square annotations
+
+```{r}
+# Base
+q <- q + annotate("rect", xmin = 6.5, xmax = 7.5, ymin = 8.65, ymax = 9.65, alpha = 0, color = "#D8726F")
+
+# SD
+q <- q + annotate("rect", xmin = 4.5, xmax = 5.5, ymin = 4.5, ymax = 5.5, alpha = 0, color = "#D8726F")
+
+# WI
+q <- q + annotate("rect", xmin = 6.5, xmax = 7.5, ymin = 4.5, ymax = 5.5, alpha = 0, color = "#D8726F")
+
+# OH
+q <- q + annotate("rect", xmin = 7.5, xmax = 8.5, ymin = 4.5, ymax = 5.5, alpha = 0, color = "#D8726F")
+
+# KY
+q <- q + annotate("rect", xmin = 6.5, xmax = 7.5, ymin = 2.5, ymax = 3.5, alpha = 0, color = "#D8726F")
+
+# MO
+q <- q + annotate("rect", xmin = 5.5, xmax = 6.5, ymin = 2.5, ymax = 3.5, alpha = 0, color = "#D8726F")
+
+# TN
+q <- q + annotate("rect", xmin = 7.5, xmax = 8.5, ymin = 2.5, ymax = 3.5, alpha = 0, color = "#D8726F")
+
+# SC
+q <- q + annotate("rect", xmin = 8.5, xmax = 9.5, ymin = 2.5, ymax = 3.5, alpha = 0, color = "#D8726F")
+
+# AZ
+q <- q + annotate("rect", xmin = 2.5, xmax = 3.5, ymin = 2.5, ymax = 3.5, alpha = 0, color = "#D8726F")
+
+# OK
+q <- q + annotate("rect", xmin = 3.5, xmax = 4.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#D8726F")
+
+# LA
+q <- q + annotate("rect", xmin = 4.5, xmax = 5.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#D8726F")
+
+# AR
+q <- q + annotate("rect", xmin = 5.5, xmax = 6.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#D8726F")
+
+# MS
+q <- q + annotate("rect", xmin = 6.5, xmax = 7.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#D8726F")
+
+# AL
+q <- q + annotate("rect", xmin = 7.5, xmax = 8.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#D8726F")
+
+# GA
+q <- q + annotate("rect", xmin = 8.5, xmax = 9.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#D8726F")
+
+# TX
+q <- q + annotate("rect", xmin = 4.5, xmax = 5.5, ymin = 0.5, ymax = 1.5, alpha = 0, color = "#D8726F")
+
+q
+```
+
+Line annotations
+
+```{r}
+## Lines ##
+# CA
+q <- q + annotate("segment", x = 2, xend = 2, y = 3.5, yend = 1)
+
+# AZ
+q <- q + annotate("segment", x = 3, xend = 3, y = 2.5, yend = 2)
+
+# CA&AZ
+q <- q + annotate("segment", x = 2, xend = 3, y = 2, yend = 2)
+
+# ND
+q <- q + annotate("segment", x = 5.3, xend = 5.3, y = 6.5, yend = 7.1)
+
+# AR
+# AR1
+q <- q + annotate("segment", x = 6, xend = 6, y = 1.5, yend = -0.2)
+# AR2
+q <- q + annotate("segment", x = 6, xend = 6.3, y = -0.2, yend = -0.2)
+
+q
+```
+
