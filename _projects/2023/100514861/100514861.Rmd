@@ -1,7 +1,7 @@
 ---
-title: "Gender data gap graph replication"
+title: "Gender Pay Gap Graph Replication"
 description: |
-  Replication project Nienke Visscher.
+  Using Eurstat data to reproduce the Gender Pay Gap graph of 2020.
 categories: "2023"
 author: Rianne Nienke Visscher
 date: 2023-11-22
@@ -10,45 +10,38 @@ output:
     self_contained: false
     toc: true
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
+
+# Graph replication
+
+## Introduction
+
+The Gender Pay Gap graph of 2020 as presented below is created by Eurostat which is the European office for statistics by the European Commission. The graph shows a literal gap in the earth with a woman and man standing on top of it. For them, the gap is almost invisible as the smaller gaps are closest to the surface. Eurostat collects data concerning the labour market. The Gender Pay Gap is calculated as "the difference between the average gross hourly earnings of men and women expressed as a percentage of the average gross hourly earnings of men" (Eurostat, 2021). The Gender pay gap is used as a proxy for the inequality between men and women.
+
+![](images/Gender_pay_gap_2020.png)
+
+## Libraries
 
 ```{r}
 library(tidyverse)
 library(ggplot2)
-library(grDevices) #plotmath
 library (maps)
 library (mapproj)
 library (readr)
 library(glue)
 library(readxl)
-library(tidyverse)
 library(dplyr)
-library(extrafont)
 library(sysfonts)
 library(showtext)
 library(patchwork)
-library(ggplotify)
 library(ggtext)
-library(png)
-library(grid)
-library(gghighlight)
-require(cowplot)
-require(magick)
-
+library(cowplot)
 ```
 
-Fonts
+## Data cleaning and data transformation
 
-```{r}
-
-sysfonts::font_add_google("Roboto Condensed", family="Roboto Condensed")
-sysfonts::font_add_google("Work Sans", family="Work Sans")
-
-showtext::showtext_auto()
-```
-
-Data cleaning and transforming data
+First, the data is cleaned that is important NA's and non-useful variables are deleted and only data for the year 2020 is kept. The variables 'obs_left 'and 'obs_right' are created to be able to form the graph. The variable 'rank' is computed to order the countries from the highest pay gap to the lowest.
 
 ```{r}
 gender_pg <- read_csv("gender_pg.csv")
@@ -63,13 +56,14 @@ data <- gender_pg |>
          obs_right = OBS_VALUE/2) |> 
   arrange(desc(OBS_VALUE)) |> 
   mutate(rank = 1:30) |> 
-pivot_longer(cols = c("obs_left", "obs_right"), names_to = "left_right", values_to = "obs_conv") |> 
+pivot_longer(cols = c("obs_left", "obs_right"), 
+             names_to = "left_right", values_to = "obs_conv") |> 
   mutate(obs_left = (OBS_VALUE/2)*-1,
-         obs_right = OBS_VALUE/2)
+         obs_right = OBS_VALUE/2) 
   
 ```
 
-Transforming names
+As the original data only contains the abbreviations of the country names, in this section, a variable with the full country names is added to the data set.
 
 ```{r}
 data <- data |> 
@@ -104,20 +98,24 @@ data <- data |>
                                geo == "SK" ~ "SlOVAKA",
                                geo == "EU27_2020" ~ "EU")) |> 
   drop_na(geo_names)
-
-data_2<- data |> 
-  select(OBS_VALUE, geo_names) |> 
-  filter(OBS_VALUE != 12.9)
-
-data<- data |> 
-  left_join(data, data_2, by = c("OBS_VALUE", "OBS_VALUE"))
 ```
 
-Creating the plot
+## Fonts
+
+The fonts used in the original graph were checked using an online font detector. However, the original font was unavailable and 'Roboto Condensed' was reported as the most similar free font. The font is found in google fonts and is uploaded using the 'sysfonts' package.
 
 ```{r}
 
-#Geom_linerange
+sysfonts::font_add_google("Roboto Condensed", family="Roboto Condensed")
+
+showtext::showtext_auto()
+```
+
+## Creating the main plot
+
+In this section the main plot is created. Note that the main plot consist of two different geoms: geom_area with geom_linerange on top. Different rectangular annotations are done to match some of the aesthetics of the original graph. Geom_text is used to annotate the graph with the country names and the values of the gender pay gap per country (obs_value). As in the original graph EU, Iceland, Norway and Switzerland with their corresponding obs_values are coloured grey whereas the rest of the countries and their obs_values is coloured black, these four countries have been excluded form the first geom_text and are later added in another geom_text with the specification of colour set as grey. Only EU is not added in the second geom_text as it asks for a different, more specific annotations and will later be added. The text colours have been generated using an online colour detector.
+
+```{r, fig.showtext=TRUE, fig.asp= 1.5}
 
 p <- data |>
   ggplot (aes(x=obs_conv, y=rank))+
@@ -125,14 +123,18 @@ p <- data |>
   geom_linerange(data = data, aes(y = rank,
              xmin = obs_left, xmax = obs_right),
              linewidth =0.3) +
-  annotate("rect", xmin= -11.15, xmax= 11.15, ymin=-3.5, ymax=0, fill = "#ffeacb" )+
-  annotate("rect", xmin= -16, xmax= -11.15, ymin=-3.5, ymax=1, fill = "#f7a600" )+
-  annotate("rect", xmin= 11.15, xmax= 16, ymin=-3.5, ymax=1, fill = "#f7a600" )+
-  annotate("rect", xmin= -0.35, xmax= 0.35, ymin=30.1, ymax= 30.5,fill = "#ffeacb" )+
+  annotate("rect", xmin= -11.15, xmax= 11.15,
+           ymin=-3.5, ymax=0, fill = "#ffeacb" )+
+  annotate("rect", xmin= -16, xmax= -11.15, 
+           ymin=-3.5, ymax=1, fill = "#f7a600" )+
+  annotate("rect", xmin= 11.15, xmax= 16, 
+           ymin=-3.5, ymax=1, fill = "#f7a600" )+
+  annotate("rect", xmin= -0.35, xmax= 0.35, 
+           ymin=30.1, ymax= 30.5,fill = "#ffeacb" )+
   geom_text(data=subset(data, OBS_VALUE != 12.9
                         &OBS_VALUE !=12.2
                         &OBS_VALUE !=13.4
-                        &OBS_VALUE !=18.9)
+                        &OBS_VALUE !=18.4)
             ,aes(label = OBS_VALUE, 
                  x = obs_right, 
                  family = "Roboto Condensed", 
@@ -153,40 +155,110 @@ p <- data |>
             hjust = 1.2)+
   scale_x_continuous(limits = c(-22,22), expand=expansion(0))+
    scale_y_continuous(limits = c(-3.5,30.5), expand=expansion(0))
-  p
   
+  data_l<-data |> 
+   filter(geo_names =="ICELAND"|
+          geo_names == "NORWAY"|
+          geo_names == "SWITZERLAND")
   
- p<- p+geom_text(data=subset(data, OBS_VALUE == 12.9
-                        &OBS_VALUE ==12.2
-                        &OBS_VALUE ==13.4
-                        &OBS_VALUE ==18.9)
-            ,aes(label = OBS_VALUE, 
+ p<-p+ 
+   geom_text (data=data_l,aes(label = OBS_VALUE, 
                  x = obs_right, 
                  family = "Roboto Condensed", 
                  fontface = 'bold'),
+                 colour = "#8e6001",
                  size = 3.5, 
                  vjust = 0.5, 
                  hjust= -0.5)+
-  geom_text(data=subset(data, geo_names == "EU" 
-                        & geo_names =="ICELAND" 
-                        & geo_names == "NORWAY"
-                        & geo_names == "SWITZERLAND"),
-            aes(label = geo_names, 
+  geom_text(data=data_l,aes(label = geo_names, 
                 x = obs_left, 
                 family = "Roboto Condensed",
-                fontface = 'italic'), 
+                fontface = 'bold'), 
+            colour = "#8e6001",
             size = 3.5, 
             vjust = 0.5,
             hjust = 1.2)
  p
- # expand=expansion(0.2)
 ```
 
-Labels
+## Theme specification
+
+In this code piece, the panel grid and all themes is relation to the axes are set to element_blank to remove any of these specifications. The colour of the graph is set using the panel.background command.
+
+```{r, fig.showtext=TRUE, fig.asp= 1.5}
+
+
+p<-p+
+  theme(
+    plot.margin = margin(0,0, 0, 0),
+    panel.background = element_rect(fill = "#f7a600"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_blank())
+
+p
+```
+
+## Annotations
+
+In order to add the pink labels for EU, two data sets were generated only containing the values needed to plot the labels. Hereafter, geom_label is used to put the labels on top of the plot. The pink bar is computed using the annotate ("rect") function.
+
+```{r, fig.showtext=TRUE, fig.asp= 1.5}
+
+
+label_EU <- data |> 
+  filter(geo_names =="EU" & left_right== "obs_left") 
+
+label_OBS_VALUE <- data |> 
+  filter(left_right== "obs_right" & OBS_VALUE == 12.9) 
+  
+
+label_EU
+p<- p+
+  annotate("rect",ymin=15, ymax= 15, 
+           xmin = -6.45, xmax=6.45,
+           fill = NA, color="#a71c6d", linewidth =1)+
+  geom_label(data = label_EU, aes(label = geo_names), 
+             family = "Roboto Condensed",  fontface = 'bold', size = 3.5, 
+             color = "white",fill = "#a71c6d",
+             label.size = 0, label.r = unit(0, "lines"),
+             label.padding = unit(0.05, "lines"),
+             vjust = 0.5, hjust = 1.3)+
+  geom_label(data = label_OBS_VALUE, aes(label = OBS_VALUE), 
+             family = "Roboto Condensed",  fontface = 'bold', size = 3.5,  
+             color = "white",fill = "#a71c6d", 
+             label.size = 0, label.r = unit(0, "lines"),
+             label.padding = unit(0.05, "lines"),
+             vjust = 0.5, hjust= -0.5)
+  p
+```
+
+In this section, the text annotations are computed and are added to the main plot using annotate ('text')
+
+```{r, fig.showtext=TRUE, fig.asp= 1.5}
+
+middle_string <- "For all countries except Czechia and Iceland: data for enterprises \n employing 10 or more employees. Czechia and Iceland: data \n for enterprises employing 1 or more employees "
+
+left_string <- "Iceland, Norway, Switzerland: \n non_EU countries"
+
+right_string <- "Ireland, Greece: data not \n available"
+
+p<-p+ 
+  annotate("text", x=0, y=-1, label = middle_string, family = "Roboto Condensed", size = 2.5, fontface = 'italic')+
+  annotate("text", x=-12, y=-2, label = left_string, family = "Roboto Condensed", size = 2.5,  hjust ='right')+
+  annotate("text", x=12, y=-2, label = left_string, family = "Roboto Condensed", size = 2.5, hjust ='left')
+
+p
+```
+
+## Graph text
+
+In this section the text that annotate the text is generated for the upper and lower part of the graph. The panels for the upper and lower part of the graph is computed in the next section.
 
 ```{r}
-
-#Making strings for labels
 
 subtitle_string <- "How much less \n do women earn \n than men?"
 
@@ -198,7 +270,9 @@ tag_string_short <- strwrap(tag_string, width = 35)
 
 ```
 
-Extra panels
+## Extra panels
+
+In this section, the extra panels that are at the top and bottom of the graph are computed. The panels contain many different pieces of text. In order to locate them precisely to match the original graph, annotate ('text') is used. Later these panels will be added to the main graph using the library 'patchwork'.
 
 ```{r}
 
@@ -216,13 +290,16 @@ p1<-p1+
          plot.margin = margin (20,0, 0, 0))+
   scale_x_continuous(expand=expansion(0),limits = c(-20,20)) +
   scale_y_continuous(expand=expansion(0))+
-  annotate("text", x=0, y=8, label = "Gender pay gap", family = "Roboto Condensed", size = 12, fontface = 'bold')+
-  annotate("text", x=-5, y=4, label =  paste(subtitle_string_short, collapse = "\n"), family = "Roboto Condensed", size = 7.5, fontface = 'bold', lineheight = 0.8, hjust ='right')+
-  annotate("text", x=4, y=4, label =  paste(tag_string_short, collapse = "\n"), family = "Roboto Condensed", size = 3.75, fontface = 'italic',  hjust = 'left')
+  annotate("text", x=0, y=8, label = "Gender pay gap",
+           family = "Roboto Condensed", size = 12, fontface = 'bold')+
+  annotate("text", x=-7, y=4, label =  paste(subtitle_string_short, collapse = "\n"),
+           family = "Roboto Condensed", size = 7.5, fontface = 'bold',
+           lineheight = 0.8, hjust ='right')+
+  annotate("text", x=6, y=4, label =  paste(tag_string_short, collapse = "\n"),
+           family = "Roboto Condensed", size = 3.75, fontface = 'italic', 
+           hjust = 'left')
 
 p1
-
-
 
 p2.df<- data_frame(x=c(-20,20), y= c(10,10))
 
@@ -237,101 +314,256 @@ p2<-p2+
          axis.line = element_blank())+
   scale_x_continuous(limits = c(-20,20), expand=expansion(0)) +
   scale_y_continuous(expand=expansion(0))+
-  annotate("text", x=-5, y=6, label = "#InternationalWomensDay", family = "Roboto Condensed", size = 5, fontface = 'bold', color = "#7a7b7f", hjust=1)+
-  annotate("text", x=6, y=6, label = "ec.europa.eu/", family = "Roboto Condensed", size = 5, color = "#7a7b7f", hjust=0)+
-  annotate("text", x=13.5, y=6, label = "eurostat", family = "Roboto Condensed", size = 5, color = "#7a7b7f", hjust=0, fontface = 'bold')
+  annotate("text", x=-5, y=6, label = "#InternationalWomensDay", 
+           family = "Roboto Condensed", size = 5, fontface = 'bold',
+           color = "#7a7b7f", hjust=1)+
+  annotate("text", x=6, y=6, label = "ec.europa.eu/", 
+           family = "Roboto Condensed", size = 5, color = "#7a7b7f", hjust=0)+
+  annotate("text", x=12.5, y=6, label = "eurostat", 
+           family = "Roboto Condensed", size = 5, color = "#7a7b7f", hjust=0, fontface = 'bold')
 
 p2
 ```
 
-Theme specification
+## Combining the planes with the main graph
 
-```{r}
+This section adds to two extra plains to the main graph using the library ('patchwork')
 
-p<-p+
-  theme(
-    plot.margin = margin(0,0, 0, 0),
-    panel.background = element_rect(fill = "#f7a600"),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-    axis.line = element_blank())
-
-p
-```
-
-Adding extra annotations
-
-```{r}
-
-label_EU <- data |> 
-  filter(geo_names =="EU" & left_right== "obs_left") 
-
-label_OBS_VALUE <- data |> 
-  filter(left_right== "obs_right" & OBS_VALUE == 12.9) 
-  
-
-label_EU
-p<- p+
-  annotate("rect",ymin=15, ymax= 15, xmin = -6.45, xmax=6.45, fill = NA, color="#a71c6d", linewidth =1)+
-  geom_label(data = label_EU, aes(label = geo_names), 
-             family = "Roboto Condensed",  fontface = 'bold', size = 3.5, color = "white",
-             fill = "#a71c6d", label.size = 0, label.r = unit(0, "lines"),
-             label.padding = unit(0.05, "lines"),
-             vjust = 0.5, hjust = 1.3)+
-  geom_label(data = label_OBS_VALUE, aes(label = OBS_VALUE), 
-             family = "Roboto Condensed",  fontface = 'bold', size = 3.5,  color = "white",
-             fill = "#a71c6d", label.size = 0, label.r = unit(0, "lines"),
-             label.padding = unit(0.05, "lines"),
-             vjust = 0.5, hjust= -0.5)
-  p
-```
-
-Adding lower labels
-
-```{r}
-
-middle_string <- "For all countries except Czechia and Iceland: data for enterprises \n employing 10 or more employees. Czechia and Iceland: data \n for enterprises employing 1 or more employees "
-
-left_string <- "Iceland, Norway, Switzerland: \n non_EU countries"
-
-right_string <- "Ireland, Greece: data not \n available"
-
-p<-p+ 
-  annotate("text", x=0, y=-1, label = middle_string, family = "Roboto Condensed", size = 2.5, fontface = 'italic')+
-  annotate("text", x=-12, y=-2, label = left_string, family = "Roboto Condensed", size = 2.5,  hjust ='right')+
-  annotate("text", x=12, y=-2, label = left_string, family = "Roboto Condensed", size = 2.5, hjust ='left')
-
-p
-```
-
-Adding planes together
-
-```{r}
+```{r, fig.showtext=TRUE, fig.asp= 1.5}
 p3<-p1+p+p2+
   plot_layout(ncol=1)&
   theme(plot.background = element_rect(fill ="#ffeacb"),
         plot.margin = margin(0,0,0,0))
+p3
+```
+
+## Inserting graphics and final result
+
+This piece of code adds the graphics of the woman and the man in the upper part of the graph as well as the EU sign in the lower part of the graph.
+
+```{r, fig.showtext=TRUE, fig.asp= 1.5}
 
 p3<-ggdraw(p3) +      
   draw_image(
     "/Users/nienke/Desktop/Data visualisation/female.png",
-    y = 0.30959, x=-0.025,
-    scale = 0.178)
-p3
+    y = 0.315, x=-0.07,
+    scale = 0.170)
 
 p3<-ggdraw(p3)+
   draw_image(
     "/Users/nienke/Desktop/Data visualisation/male.png",
-    y = 0.30959, x=0.025,
-    scale = 0.178)
+    y = 0.315, x=0.06,
+    scale = 0.170)
+
+p3<-ggdraw(p3)+
+  draw_image(
+    "/Users/nienke/Desktop/Data visualisation/eu.png",
+    y = -0.48, x=0.445,
+    scale = 0.05)
+
 p3
 ```
 
+# Graph improvement
+
+## Map
+
+## Data cleaning and data transformation
+
+```{r}
+gender_pg <- read_csv("gender_pg.csv")
+
+data2<- gender_pg |> 
+  filter(TIME_PERIOD > 2009)
+
+data2 <- data2 |> 
+  mutate(geo_names = case_when(geo == "AT" ~ "AUSTRIA",
+                               geo == "BE" ~ "BELGIUM",
+                               geo == "BG" ~ "BULGARIA",
+                               geo == "CH" ~ "SWITZERLAND", 
+                               geo == "CY" ~ "CYPRUS",
+                               geo == "CZ" ~ "CZECHIA",
+                               geo == "DE" ~ "GERMANY", 
+                               geo == "DK" ~ "DENMARK",
+                               geo == "EE" ~ "ESTONIA",
+                               geo == "ES" ~ "SPAIN",
+                               geo == "FI" ~ "FINLAND",
+                               geo == "FR" ~ "FRANCE",
+                               geo == "HR" ~ "CROATIA",
+                               geo == "HU" ~ "HUNGARY",
+                               geo == "IE" ~ "IRELAND",
+                               geo == "IS" ~ "ICELAND",
+                               geo == "IT" ~ "ITALY",
+                               geo == "LT" ~ "LITHUANIA",
+                               geo == "LU" ~ "LUXEMBOURG",
+                               geo == "LV" ~ "LATVIA",
+                               geo == "MT" ~ "MALTA",
+                               geo == "NL" ~ "NETHERLANDS",
+                               geo == "NO" ~ "NORWAY",
+                               geo == "PL" ~ "POLAND",
+                               geo == "PT" ~ "PORTUGAL",
+                               geo == "RO" ~ "ROMANIA",
+                               geo == "SE" ~ "SWEDEN",
+                               geo == "SI" ~ "SLOVENIA",
+                               geo == "SK" ~ "SlOVAKA",
+                               geo == "EU27_2020" ~ "EU")) |> 
+  drop_na(geo_names)
+
+data4<- data2 |> 
+filter(TIME_PERIOD==2021) |>
+mutate(y2021 = OBS_VALUE)
+
+data5<- data2 |> 
+filter(TIME_PERIOD==2010) |>
+mutate(y2010 = OBS_VALUE) 
+
+data3<- data2 |> 
+  left_join(data4, by = c("geo" = "geo"))
+
+data3<- data3 |> 
+  left_join(data5, by = c("geo" = "geo"))
+
+data3<- data3 |> 
+  select(geo, TIME_PERIOD, OBS_VALUE, geo_names, y2021, y2010) |> 
+  mutate(TIME_PERIOD = as.integer(TIME_PERIOD))
+
+data3<- data3 |> 
+  mutate(diff_10_21 = y2021-y2010) |>
+  mutate(diff_10_21_fact = ifelse(between(diff_10_21, -8, -6), "-8 to -6",
+                           ifelse(between(diff_10_21, -5.99, -4), "-6 to -4",
+                           ifelse(between(diff_10_21, -3.99, -2), "-4 to -2",
+                           ifelse(between(diff_10_21, -1.99, 0), "-2 to 0",
+                           ifelse(between(diff_10_21, 0.01, 2), "0 to 2",
+                           ifelse(between(diff_10_21, 2.01, 4), "2 to 4",
+                           ifelse(between(diff_10_21, 4.01, 6), "4 to 6",
+                           ifelse(between(diff_10_21, 6.01, 8), "6 to 8", "NA")))))))))
+
+
+europe<-giscoR::gisco_get_countries(resolution = "60",
+    region="Europe") |> 
+  select(CNTR_ID, geometry) |> 
+  left_join(data3, by = c("CNTR_ID" = "geo"))
+
+data6<- data2 |> 
+  select(geo, TIME_PERIOD, OBS_VALUE, geo_names)
+
+data_graph<- data2 |> 
+  filter(!geo_names %in% c("CROATIA","IRELAND"))
+```
+
+## Map
+
+```{r, fig.showtext=TRUE, fig.asp= 0.8}
+p1021<- ggplot(europe)+
+  geom_sf(aes(fill = reorder(diff_10_21_fact, diff_10_21)))+
+  coord_sf(xlim=c(-20, 50),
+           ylim=c(35, 70))+
+  labs(title = "Difference in Gender Pay Gap between 2010 and 2021")
+
+p1021
+```
+
+## Theme specification
+
+```{r, fig.showtext=TRUE, fig.asp= 0.8}
+
+p1021<-p1021+
+  theme(axis.title = element_blank(),
+         axis.text = element_blank(),
+         axis.ticks = element_blank(),
+         axis.line = element_blank(),
+    panel.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(colour =  "#33201F", family = "Roboto Condensed", face = "bold"),
+    plot.subtitle = element_text(family = "Roboto Condensed" ),
+    legend.title = element_blank())+
+  scale_fill_manual(values = c( "-8 to -6 reduction" = "#303B16",
+                                  "-6 to -4" = "#61772c",
+                                  "-4 to -2" = "#91B342",
+                                  "-2 to 0" ="#B4CD79",
+                                  "0 to 2"="#CCA3A3",
+                                  "2 to 4"="#AF6E6E",
+                                  "4 to 6"="#844848",
+                                  "6 to 8 increase"= "#4F2B2B"))
+
+p1021
+
+```
+
+```{r, fig.showtext=TRUE, fig.asp= 0.8}
+ p1021<-p1021 +
+  theme(legend.position = "bottom")
+
+ p1021
+ 
+```
+
+## Facet plot
+
+```{r, fig.showtext=TRUE, fig.asp= 0.7}
+
+
+data2a<- dplyr::select(data2, -geo_names)
+facet <-ggplot(data2, aes(TIME_PERIOD, OBS_VALUE)) + 
+  geom_line(data = data2a, aes(TIME_PERIOD, OBS_VALUE, group= geo), colour ="#CCA3A3") +
+  geom_line() + 
+  facet_wrap(~geo_names)
+
+facet
+
+```
+
+## Plot text
+
+```{r, fig.showtext=TRUE, fig.asp= 0.7}
+facet<-facet +
+  labs(
+    x = "Year",
+    y = "Gender Pay Gap",
+    title = "Evolution of the Gender Pay Gap between 2010 and 2021"
+  )
+
+facet
+```
+
+## Theme specification
+
+```{r, fig.showtext=TRUE, fig.asp= 0.8}
+facet <-facet+
+  theme( panel.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.title = element_text(family = "Roboto Condensed", colour = "#33201F"),
+    axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1, margin = margin(10,0,10,0)),
+    title = element_text(family = "Roboto Condensed", colour = "#33201F",  face = "bold", margin = margin(10,0,10,0)),
+    strip.background=element_rect(fill="#B4CD79"),
+    strip.text = element_text(family = "Roboto Condensed", colour = "#33201F"),
+    plot.margin = margin(10,10,10,10) )
+facet
+
+```
+
+## Combining graphs
+
 ```{r}
 
-eu = readPNG('eu.png')
-grid.raster(eu, x=0.75, y=.023, width=.017) 
+p4<-(p1021 / plot_spacer()) | facet
+p4
+```
+
+## Graph text
+
+```{r}
+p4<-p4+
+  plot_annotation(
+    title= "The Gender Pay Gap between 2010 and 2021",
+    subtitle = "Difference between average gross hourly earnings of male and female employees as % of male gross earnings",
+    caption = "Iceland, Norway, Switzerland: non_EU countries and Ireland, Greece: data not available",
+    theme= theme(plot.title =  element_text(
+      family = "Roboto Condensed", colour = "#33201F", face = "bold", size = 20),
+        plot.title.position = "plot",
+        plot.subtitle = element_text(family = "Roboto Condensed", colour = "#33201F",margin=margin(0,0,30,0)),
+        plot.caption =  element_text(family = "Roboto Condensed", colour = "#33201F")))
+p4
 ```
