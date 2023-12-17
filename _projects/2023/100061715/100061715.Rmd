@@ -15,7 +15,7 @@ library(ggplot2)
 library(sf)
 library(stringdist)
 library(fuzzyjoin)
-library(cartogram)
+library(ggtext)
 ```
 
 
@@ -137,21 +137,27 @@ map <- map +
 map
 ```
 ```{r}
+# Enhancement
 # Obtaining the standarised cesarean rate
+model <- lm(tasa_cesareas ~ edad_cesareas, data = cesareas_map)
+coefs <- coef(model)
+
 cesareas_map <- cesareas_map %>% 
-  mutate(tasa_cesareas_edad = (tasa_cesareas/edad_partos)*100)
+  mutate(tasa_cesareas_edad = tasa_cesareas - coefs['edad_cesareas'] * (edad_cesareas - mean(edad_cesareas)))
+
+# Lets take a look at the adjusted cesarean rate
+summary(cesareas_map$tasa_cesareas_edad)
 ```
 
 
 ```{r}
-spain <- esp_get_country()
+#spain <- esp_get_country()
 cesareas_centroid <- st_centroid(cesareas_map, of_largest_polygon = TRUE)
-
 ```
 
 ```{r}
-# Alternativa sin cartograma
-centroid_map <- ggplot() +
+# Visualising a bubble map
+bubble_map <- ggplot() +
   geom_sf(data = spain,
           linewidth = 0.1,
           alpha = 0.5) +
@@ -161,17 +167,17 @@ centroid_map <- ggplot() +
     aes(size = n_partos, 
         fill = tasa_cesareas_edad),
     stroke = 0.1) +
-  coord_sf(xlim=c(-15, 4),
-           ylim=c(34, 44))
+  coord_sf(xlim=c(-17, 3.5),
+           ylim=c(34, 45))
   
-centroid_map
+bubble_map
 ```
 
 
 
 ```{r}
-# Ajustamos las leyendas
-centroid_map <- centroid_map + 
+# Adjusting guides
+bubble_map <- bubble_map + 
  scale_fill_stepsn(
     colors = c("#5EAABB", "#478B9C", "#2f6b7d", "#184c5d", "#002c3e"),
     guide = guide_colorsteps(title = "Cesarean section rate (%)",
@@ -184,11 +190,12 @@ centroid_map <- centroid_map +
                          title.position="top",
                          order=2)) # Ajusta según sea necesario +
 
-centroid_map
+bubble_map
 ```
 
 ```{r}
-centroid_map <- centroid_map + 
+# A few more tweaks 
+bubble_map <- bubble_map + 
   theme_void() +
   theme(
     legend.position = c(0.12,0.7),
@@ -196,21 +203,52 @@ centroid_map <- centroid_map +
     legend.key.width = unit(8, "mm"),
     legend.key.height = unit(5, "mm"),
     legend.background = element_blank(),
-    legend.title=element_text(face="bold", size=10),
-    legend.text=element_text(size=8),
+    legend.title=element_text(face="bold", size=8),
+    legend.text=element_text(size=6),
     plot.background = element_rect(color = "#f5f5f5"))  
 
-centroid_map
-
+bubble_map
 ```
+```{r}
+# Including annotations
 
+bubble_map <- bubble_map +
+  annotate("richtext", x = -8.5, y = 44.3, 
+           label = paste0(
+    "<span style='color: #e75c93;'>#1 </span><b>Galicia</b> becomes a higher rate<br>
+    than would be expected:
+    <b>25.05%</b></span>"),
+    size = 3,
+    hjust = 0,
+    fill = NA,
+    label.color = NA) +
+  annotate("richtext", x = -7.5, y = 38.5, 
+           label = paste0(
+    "<span style='color: #e75c93;'>#2 </span><b>Extremadura</b><br>",
+    "has around 7K births per year<br>
+    with the highest age-adjusted c-section rate<br>
+    <b>28.93%</b></span>"),
+    size = 3,
+    hjust = 1,
+    fill = NA,
+    label.color = NA)
+
+bubble_map
+```
  
 ```{r}
-# Title and annotations (to be finished)
-centroid_map + 
-  labs(title = "This is a title using *italics* and **boldface**") +
-  theme(plot.title = ggtext::element_markdown()) +
-  annotate("text", x = -8.5, y = 39, label = "Extremadura", size = 3)
+# Adding title and subtitle
+bubble_map <- bubble_map + 
+  labs(title = "**Regional disparities in childbirth**",
+       subtitle = "**Number of births** and _age-adjusted caesarean rates_ across autonomous communities") +
+  theme(plot.title = element_text(hjust = 0.5,
+                                  size = 14),
+        plot.subtitle = element_text(hjust = 0.5,
+                                     size = 9)) +
+  theme(plot.title = element_markdown(),
+        plot.subtitle = element_markdown())
 
-centroid_map
+bubble_map
 ```
+
+
