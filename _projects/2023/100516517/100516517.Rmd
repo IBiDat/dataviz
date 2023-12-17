@@ -1,0 +1,569 @@
+---
+title: "Final Project - Candela Gómez Blanco"
+description: |
+  A short description of the post.
+categories: "2023"
+author: Candela Gómez Blanco
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+Preparing the data base
+
+```{r}
+
+library(ggplot2)
+library(dplyr)
+library(readxl)
+library(lubridate)
+library(ggstream)
+library(stringr)
+
+
+graph_db<-read_xlsx("Legislaturas unificado.xlsx", col_types = c("text", "text", "text", "date", "date", "date","text", "date", "date"))
+
+
+count_dip <- graph_db |>
+  # seleccionamos las variables de interés y convertimos a fecha
+  select(NOMBRE, FORMACIONELECTORAL, FECHAALTA, FECHABAJA) |>
+  mutate(across(c(FECHAALTA, FECHABAJA), ymd)) |> 
+  # quitamos valores duplicados (cambios de grupo parlamentario)
+  distinct() |> 
+  # pivotamos la fecha, ordenamos y convertimos a año, quitando NAs
+  tidyr::pivot_longer(c(FECHAALTA, FECHABAJA), values_to="FECHA")  |> 
+  mutate(
+    ELECCIONES = case_when(
+      year(FECHA) == 1977 ~ as.Date("1977-06-05"),
+      year(FECHA) == 1979 ~ as.Date("1979-03-01"),
+      year(FECHA) == 1982 ~ as.Date("1982-10-28"),
+      year(FECHA) == 1986 ~ as.Date("1986-06-22"),
+      year(FECHA) == 1989 ~ as.Date("1989-10-29"),
+      year(FECHA) == 1993 ~ as.Date("1993-06-06"),
+      year(FECHA) == 1996 ~ as.Date("1996-03-03"),
+      year(FECHA) == 2000 ~ as.Date("2000-03-12"),
+      year(FECHA) == 2004 ~ as.Date("2004-03-14"),
+      year(FECHA) == 2008 ~ as.Date("2008-03-09"),
+      year(FECHA) == 2011 ~ as.Date("2011-11-20"),
+      FECHA >= as.Date("2015-12-20") & FECHA < as.Date("2016-06-26") ~ as.Date("2016-01-01"),
+      FECHA >= as.Date("2016-06-26") & FECHA < as.Date("2019-04-28") ~ as.Date("2016-06-26"),
+      FECHA >= as.Date("2019-04-28") & FECHA < as.Date("2019-11-10") ~ as.Date("2019-04-28"),
+      FECHA >= as.Date("2019-11-10") & FECHA < as.Date("2023-07-23") ~ as.Date("2019-11-10"),
+      FECHA >= as.Date("2023-07-23") ~ as.Date("2023-07-23")
+    )
+  ) |> 
+  arrange(ELECCIONES)  |> 
+  #mutate(FECHA = year(FECHA)) |>
+  na.omit() |> 
+  # calculamos la suma acumulativa por formación electoral:
+  # FECHAALTA contribuye +1, FECHABAJA contribuye -1
+  group_by(FORMACIONELECTORAL) |> 
+  mutate(num_diputados = cumsum(if_else(name == "FECHAALTA", 1, -1))) |> 
+  # ahora nos interesa quedarnos con el último valor por fecha y formación
+  select(ELECCIONES, FORMACIONELECTORAL, num_diputados) |> 
+  group_by(ELECCIONES, FORMACIONELECTORAL) |> 
+  slice_tail()  |> 
+  # finalmente, quitamos los registros transitorios, esto es, para los que
+  # la suma total por fecha es menor que 340
+  group_by(ELECCIONES) |> 
+  filter(sum(num_diputados) > 330) |> 
+  ungroup() |> 
+  # y quitamos los ceros
+  filter(num_diputados > 0)
+
+
+```
+
+RECATEGORIZATIONS
+
+```{r}
+##RECATEGORIZACIONES PARTIDOS
+
+count_dip <- count_dip |> 
+  mutate(recat = case_when(
+    str_detect(FORMACIONELECTORAL, "CIU|CiU|CDC|UDC") ~ "CiU",
+    str_detect(FORMACIONELECTORAL, "Junts") ~ "Junts",
+    str_detect(FORMACIONELECTORAL, "ERC") ~ "ERC",
+    str_detect(FORMACIONELECTORAL, "PODEMOS|POD-AAA EN COMÚN|ECP") ~ "PODEMOS",
+    str_detect(FORMACIONELECTORAL, "MÁS PAÍS") ~ "Más País",
+    str_detect(FORMACIONELECTORAL, "PCE") ~ "PCE",
+    str_detect(FORMACIONELECTORAL, "IU") ~ "IU",
+    str_detect(FORMACIONELECTORAL, "PSOE|PSE|PSC") ~ "PSOE",
+    str_detect(FORMACIONELECTORAL, "US") ~ "US",
+    str_detect(FORMACIONELECTORAL, "SUMAR") ~ "SUMAR",
+    FORMACIONELECTORAL == "CD" ~ "UCD",
+    FORMACIONELECTORAL == "UP" ~ "PODEMOS",
+    str_detect(FORMACIONELECTORAL, "Cs") ~ "Cs",
+    str_detect(FORMACIONELECTORAL, "CDS") ~ "CDS",
+    str_detect(FORMACIONELECTORAL, "UCD") ~ "UCD",
+    str_detect(FORMACIONELECTORAL, "UPyD") ~ "UPyD",
+    str_detect(FORMACIONELECTORAL, "AP|PP") ~ "PP",
+    FORMACIONELECTORAL == "CP" ~ "PP",
+    str_detect(FORMACIONELECTORAL, "Vox|VOX") ~ "VOX",
+    str_detect(FORMACIONELECTORAL, "PNV") ~ "PNV",
+    str_detect(FORMACIONELECTORAL, "HB") ~ "HB",
+    str_detect(FORMACIONELECTORAL, "EH Bildu") ~ "EH Bildu",
+    str_detect(FORMACIONELECTORAL, "CC") ~ "CC",
+    TRUE ~ "Otros"
+  ))
+
+#RECATEGORIZACIÓN ORIENTACIÓN
+
+count_dip <- count_dip |> 
+  mutate(Orientacion = case_when(
+    recat %in% c("CiU", "ERC", "Junts") ~ "Partidos catalanes",
+    recat %in% c("PODEMOS", "PSOE", "US", "SUMAR", "IU",  "PCE", "PSC", "Más País") ~ "Izquierda",
+    recat %in% c("UCD", "Cs", "UPyD", "CDS") ~ "Centro",
+    recat %in% c("PP", "VOX") ~ "Derecha",
+    recat %in% c("PNV", "HB", "EH Bildu") ~ "Partidos vascos",
+    recat %in% c("CC") ~ "Otros partidos regionales",
+    TRUE ~ "Otros partidos regionales"
+  ))
+
+
+
+```
+
+GRAPH DATA BASE
+
+```{r}
+
+nueva_base <- count_dip |> 
+  group_by(ELECCIONES, recat, Orientacion) |> 
+  summarise(total_diputados = sum(num_diputados)) |> 
+  ungroup() |> 
+  mutate(
+    Presidencia = case_when(
+      ELECCIONES == as.Date("1977-06-05") ~ "Adolfo SUarez (UCD)",
+      ELECCIONES == as.Date("1979-03-01") ~ "Adolfo SUarez (UCD)",
+      ELECCIONES == as.Date("1982-10-28") ~ "Leopoldo Calvo-Sotelo (UCD)",
+      ELECCIONES == as.Date("1986-06-22") ~ "Felipe González (PSOE)",
+      ELECCIONES == as.Date("1989-10-29") ~ "Felipe González (PSOE)",
+      ELECCIONES == as.Date("1993-06-06") ~ "Felipe González (PSOE)",
+      ELECCIONES == as.Date("1996-03-03") ~ "José María Aznar (PP)",
+      ELECCIONES == as.Date("2000-03-12") ~ "José María Aznar (PP)",
+      ELECCIONES == as.Date("2004-03-14") ~ "José Luis Rodríguez Zapatero (PSOE)",
+      ELECCIONES == as.Date("2008-03-09") ~ "José Luis Rodríguez Zapatero (PSOE)",
+      ELECCIONES == as.Date("2011-11-20") ~ "Mariano Rajoy (PP)",
+      ELECCIONES == as.Date("2016-01-01") ~ "Mariano Rajoy (PP)",
+      ELECCIONES == as.Date("2016-06-26") ~ "Mariano Rajoy (PP)",
+      ELECCIONES == as.Date("2019-04-28") ~ "Pedro Sánchez (PSOE)",
+      ELECCIONES == as.Date("2019-11-10") ~ "Pedro Sánchez (PSOE)",
+      ELECCIONES == as.Date("2023-07-238") ~ "Pedro Sánchez (PSOE)"))
+
+nueva_base$recat <- factor(nueva_base$recat, levels = c("VOX", "PP", "Cs", "UCD", "CDS", "UPyD", "US", "PSOE", "SUMAR", "Más País", "PODEMOS", "PCE", "IU", "CiU", "ERC", "Junts", "PNV", "HB", "EH Bildu", "CC", "Otros"))
+
+# Agregar la columna DECIMAL_DATE
+nueva_base$DECIMAL_DATE <- decimal_date(nueva_base$ELECCIONES)
+fechas_unicas <- unique(nueva_base$DECIMAL_DATE)
+```
+
+
+
+CREATING THE STREAMGRAPH
+
+```{r}
+# Creating a ggplot object with nueva_base data
+graph <- ggplot(data = nueva_base, aes(x = DECIMAL_DATE, y = total_diputados)) +
+  # Adding a stream plot with recat as fill and proportional type
+  geom_stream(aes(fill = recat), type = "proportional") +
+  # Formatting y-axis labels as percentages
+  scale_y_continuous(labels = scales::percent_format(), breaks = NULL) +
+  # Formatting x-axis labels and reversing the scale
+  scale_x_continuous(trans = "reverse", 
+                     breaks = fechas_unicas,
+                     labels = function(x) floor(x)) + 
+  # Flipping coordinates to create a horizontal plot
+  coord_flip(ylim = c(0, 1.2), 
+             xlim = c(2023.556, 1975)) +  
+  # Adding axis labels and titles
+  labs(x = "", y = "350 diputados", fill = "Orientación ideológica",
+       title = "**El desfile político en la democracia española**",
+       subtitle = "**Composición del Congreso (1977-2023)**",
+       caption = paste("**Autor:**", "Álvaro Merino (2023)", sep = "<br>")) +
+  # Modifying the appearance of various plot elements using theme settings
+  theme(
+    plot.title = ggtext::element_markdown(size = 10, color = "#272727"), 
+    plot.title.position = "plot", 
+    plot.subtitle = ggtext::element_markdown(size = 9, color = "#6A6A6A"), 
+    plot.caption = ggtext::element_markdown(size = 3, color = "#6A6A6A"), 
+    axis.ticks.y = element_line(size = 0.5, color = "#6A6A6A"), 
+    axis.line.x = element_blank(), 
+    axis.line.y = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 3.5, color = "#6A6A6A"),
+    axis.title.x = element_text(size = 5, color = "#6A6A6A", hjust = 0.43), # Changing axis title font size
+    panel.grid.major.x = element_blank(),
+    aspect.ratio = 4/2,
+    panel.border = element_blank(),
+    panel.background = element_blank(),
+    legend.position = "none"
+  )
+
+
+graph
+
+
+```
+
+REAL COLORS 
+
+```{r}
+graph <- graph + 
+  scale_fill_manual(values = c(
+    "VOX" = "#1F3D71",
+    "PP" = "#4D76BF",
+    "Cs" = "#E89433",
+    "UCD" = "#E6A55B",
+    "CDS" = "#C98B2C",
+    "UPyD" = "#FFC38D",
+    "US" = "#E2706D",
+    "PSOE" = "#BE4D4C",
+    "SUMAR" = "#A61918",
+    "PODEMOS" = "#D07F7F",
+    "PCE" = "#650904",
+    "Más País" = "#650904",
+    "IU" = "#9B2E33",
+    "CiU" = "#EAC659",
+    "Junts" = "#EAC659",
+    "ERC" = "#DDAB0B",
+    "PNV" = "#46862C",
+    "HB" = "#ABD894",
+    "EH Bildu" = "#A1B944",
+    "CC" = "#3B3D40",
+    "Otros" = "#E0E3E0"
+  ))
+
+graph
+
+```
+
+ADDING LABELS within each stream
+
+```{r}
+
+remotes::install_github("mattcowgill/ggannotate")
+
+library(ggannotate)
+
+#ggannotate(graph)
+
+graph <- graph + geom_text(data = data.frame(x = 1981.45781025734, y = 0.63774255267349, label = "UCD"),
+                           mapping = aes(x = x, y = y, label = label),
+                           size = 1.23, colour = "white", fontface = 2, inherit.aes = FALSE) +
+  geom_text(data = data.frame(x = 2020.11619436701, y = 0.912516630619374, 
+                              label = "VOX"), mapping = aes(x = x, y = y, label = label), 
+            size = 1.23, colour = "white", fontface = 2, inherit.aes = FALSE)+
+  geom_text(data = data.frame(x = 1986.2262453017, y = 0.912516630619374, label = "Alianza \n Popular"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", fontface = 2, inherit.aes = FALSE) +
+  geom_text(data = data.frame(x = 1989.63227033339, y = 0.850470871083207, label = "Coalición \n Popular"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", fontface = 2, inherit.aes = FALSE)+
+  geom_text(data = data.frame(x = 2011.77143303937, y = 0.788425111547039, label = "PP"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", fontface = 2, inherit.aes = FALSE) +
+  geom_text(data = data.frame(x = 1997.00, y = 0.788425111547039, label = "PP"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", fontface = 2, inherit.aes = FALSE) +
+  geom_text(data = data.frame(x = 1982.82022027001, y = 0.141376476384151, label = "PSOE"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", fontface = 2, inherit.aes = FALSE) +
+  geom_text(data = data.frame(x = 2005.12968422758, y = 0.309786395125176, label = "PSOE"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", fontface = 2, inherit.aes = FALSE) +
+  geom_text(data = data.frame(x = 1994.57100705567, y = 0.15, label = "IU"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", fontface = 2, inherit.aes = FALSE) +
+  geom_text(data = data.frame(x = 1979.2, y = 0.065, label = "PCE"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", fontface = 2, inherit.aes = FALSE) +
+  geom_text(data = data.frame(x = 2021.98950813444, y = 0.150240156317889, label = "Sumar"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, angle = 30L, colour = "white", fontface = 2, inherit.aes = FALSE)+
+  geom_text(data = data.frame(x = 2015.17745807106, y = 0.15, label = "Podemos y \n confluencias"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", fontface = 2, inherit.aes = FALSE)+
+  geom_text(data = data.frame(x = 2019.32199031934, y = 0.30, label = "Más País"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", fontface = 2, inherit.aes = FALSE)+
+  annotate("segment", x = 2019.4, xend = 2019.4, y = 0.23, yend = 0.19, color = "white", size = 0.1) +
+  geom_text(data = data.frame(x = 1987.07775155962, y = 0.380695834595082, label = "CDS"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", fontface = 2, inherit.aes = FALSE) +
+  annotate("segment", x = 1987.2, xend = 1987.2, y = 0.45, yend = 0.52, color = "white", size = 0.1)+
+  geom_text(data = data.frame(x = 1978.1, y = 0.123649116516674, label = "Unidad \n Socialista"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", inherit.aes = FALSE)+
+  annotate("segment", x = 1978.1, xend = 1978.1, y = 0.177, yend = 0.20, color = "white", size = 0.1)+
+  geom_text(data = data.frame(x = 2016.93838301204, y = 0.5, label = "Ciudadanos"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, angle = -105L, colour = "white", fontface = 2, inherit.aes = FALSE)+
+  geom_text(data = data.frame(x = 2010.38823241542, y = 0.342686658399254, label = "UPyD"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", inherit.aes = FALSE) +
+  annotate("segment", x = 2010.38823241542, xend = 2010.38823241542, y = 0.41, yend = 0.475, color = "white", size = 0.1)+
+  geom_text(data = data.frame(x = 1989, y = 0.13933813655458, label = "PNV \n Herri Batasuna"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, hjust = 0L, colour = "white", inherit.aes = FALSE) +
+  annotate("segment", x = 1988.6, xend = 1988.6, y = 0.05, yend = 0.12, color = "white", size = 0.1) +
+  annotate("segment", x = 1989.5, xend = 1989.5, y = 0.043, yend = 0.12, color = "white", size = 0.1)+
+  geom_text(data = data.frame(x = 1998.17308670821, y = 0.192385577035799, label = "Coalición Canaria"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, hjust = 0L, colour = "white", inherit.aes = FALSE) +
+  annotate("segment", x = 1998.18, xend = 1998.18, y = 0.024402015512297, yend = 0.17, color = "white", size = 0.1) +
+  geom_text(data = data.frame(x = 2004.54620620762, y = 0.165861856795189, label = "ERC"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", inherit.aes = FALSE)+
+  annotate("segment", x = 2004.65, xend = 2004.65, y = 0.06, yend = 0.13, color = "white", size = 0.1)+
+  geom_text(data = data.frame(x = 2017.56167689254, y = 0.150240156317889, label = "Junts \n ERC \n PNV \n Bildu"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", inherit.aes = FALSE)+
+  annotate("segment", x = 2016.9, xend = 2016.9, y = 0.055, yend = 0.12, color = "white", size = 0.1)+
+  annotate("segment", x = 2017.5, xend = 2017.5, y = 0.048, yend = 0.12, color = "white", size = 0.1)+
+  annotate("segment", x = 2018, xend = 2018, y = 0.03, yend = 0.12, color = "white", size = 0.1)+
+  annotate("segment", x = 2018.5, xend = 2018.5, y = 0.02, yend = 0.12, color = "white", size = 0.1)+
+  geom_text(data = data.frame(x = 1992.15402940321, y = 0.0774494559931572, label = "CiU"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "white", inherit.aes = FALSE)
+graph
+  
+```
+
+EJES X E Y
+
+```{r}
+
+#ejes FALTA AJUSTAR 350 DIP Y TICS 
+graph <- graph + geom_rect(data = data.frame(xmin = 1977.425, xmax = 2023.556, ymin = -0.059999999999721, ymax = -0.059999999999721),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            colour = "#6A6A6A", fill = "#6A6A6A", alpha = 0.25, inherit.aes = FALSE)+
+  geom_rect(data = data.frame(xmin = 2024.67, xmax = 2024.67, ymin = 0, ymax = 1),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            colour = "#6A6A6A", fill = "#6A6A6A", alpha = 0.25, inherit.aes = FALSE)+
+  geom_rect(data = data.frame(xmin = 2024.4, xmax = 2024.67, ymin = 0, ymax = 0), mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            colour = "#6A6A6A", fill = "#6A6A6A", alpha = 0.25, inherit.aes = FALSE)+
+  geom_rect(data = data.frame(xmin = 2024.4, xmax = 2024.67, ymin = 1, ymax = 1), mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            colour = "#6A6A6A", fill = "#6A6A6A", alpha = 0.25, inherit.aes = FALSE)
+
+graph
+  
+```
+
+ANNOTATIONS: THIRD AXIS
+
+```{r}
+
+graph <- graph + geom_rect(data = data.frame(xmin = 1977.425, xmax = 1980.5, ymin = 1.059, ymax = 1.059),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            colour = "#E6A55B", fill = "#E6A55B", alpha = 1, size = 0.75, inherit.aes = FALSE)+
+  annotate("point", x = 1977.425, y = 1.059, shape = 21, size = 1, colour = "#E6A55B", fill = "#E6A55B")+
+  annotate("point", x = 1980.5, y = 1.059, shape = 21, size = 1, colour = "#E6A55B", fill = "#E6A55B")+
+  geom_rect(data = data.frame(xmin = 1981, xmax = 1982.322, ymin = 1.059, ymax = 1.059),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            colour = "#E6A55B", fill = "#E6A55B", alpha = 1, size = 0.75, inherit.aes = FALSE)+
+  annotate("point", x = 1981, y = 1.059, shape = 21, size = 1, colour = "#E6A55B", fill = "#E6A55B")+
+  annotate("point", x = 1982.322 , y = 1.059, shape = 21, size = 1, colour = "#E6A55B", fill = "#E6A55B") +
+  geom_rect(data = data.frame(xmin = 1982.822, xmax = 1995.669, ymin = 1.059, ymax = 1.059),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            colour = "#BE4D4C", fill = "#BE4D4C", alpha = 1, size = 0.75, inherit.aes = FALSE)+
+  annotate("point", x = 1982.822, y = 1.059, shape = 21, size = 1, colour = "#BE4D4C", fill = "#BE4D4C")+
+  annotate("point", x = 1995.669 , y = 1.059, shape = 21, size = 1, colour = "#BE4D4C", fill = "#BE4D4C") +
+  geom_rect(data = data.frame(xmin = 1996.169, xmax = 2003.699, ymin = 1.059, ymax = 1.059),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            colour = "#4D76BF", fill = "#4D76BF", alpha = 1, size = 0.75, inherit.aes = FALSE)+
+  annotate("point", x = 1996.169, y = 1.059, shape = 21, size = 1, colour = "#4D76BF", fill = "#4D76BF")+
+  annotate("point", x = 2003.699 , y = 1.059, shape = 21, size = 1, colour = "#4D76BF", fill = "#4D76BF") +
+  geom_rect(data = data.frame(xmin = 2004.199, xmax = 2011.385, ymin = 1.059, ymax = 1.059),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            colour = "#BE4D4C", fill = "#BE4D4C", alpha = 1, size = 0.75, inherit.aes = FALSE)+
+  annotate("point", x = 2004.199, y = 1.059, shape = 21, size = 1, colour = "#BE4D4C", fill = "#BE4D4C")+
+  annotate("point", x = 2011.385 , y = 1.059, shape = 21, size = 1, colour = "#BE4D4C", fill = "#BE4D4C") +
+  geom_rect(data = data.frame(xmin = 2011.885, xmax = 2018.821, ymin = 1.059, ymax = 1.059),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            colour = "#4D76BF", fill = "#4D76BF", alpha = 1, size = 0.75, inherit.aes = FALSE)+
+  annotate("point", x = 2011.885, y = 1.059, shape = 21, size = 1, colour = "#4D76BF", fill = "#4D76BF")+
+  annotate("point", x = 2018.821 , y = 1.059, shape = 21, size = 1, colour = "#4D76BF", fill = "#4D76BF") +
+  geom_rect(data = data.frame(xmin = 2019.321, xmax = 2023, ymin = 1.059, ymax = 1.059),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            colour = "#BE4D4C", fill = "#BE4D4C", alpha = 1, size = 0.75, inherit.aes = FALSE)+
+  annotate("point", x = 2019.321, y = 1.059, shape = 21, size = 1, colour = "#BE4D4C", fill = "#BE4D4C")+
+  annotate("point", x = 2023 , y = 1.059, shape = 21, size = 1, colour = "#BE4D4C", fill = "#BE4D4C")+
+  geom_text(data = data.frame(x = 1978.5, y = 1.09419206521653, label = "Adolfo\nSuárez\n(UCD)"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "#E6A55B", hjust = 0L, inherit.aes = FALSE) +
+  geom_text(data = data.frame(x = 1981.53216357085, y = 1.1, label = "Leopoldo\nCalvo-Sotelo\n(UCD)"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "#E6A55B", hjust = 0L, inherit.aes = FALSE) +
+  geom_text(data = data.frame(x = 1988.61340745909, y = 1.1, label = "Felipe\nGonzález\n(PSOE)"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "#BE4D4C", hjust = 0L, inherit.aes = FALSE)+
+  geom_text(data = data.frame(x = 1999.23527329145, y = 1.1, label = "José María\nAznar\n(PP)"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "#4D76BF", hjust = 0L, inherit.aes = FALSE) +
+  geom_text(data = data.frame(x = 2007.20167266571, y = 1.1, label = "José Luis\nRodríguez\nZapatero\n(PSOE)"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "#BE4D4C", hjust = 0L, inherit.aes = FALSE) +
+  geom_text(data = data.frame(x = 2014.99104094277, y = 1.1, label = "Mariano\nRajoy\n(PP)"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "#4D76BF", hjust = 0L, inherit.aes = FALSE) +
+  geom_text(data = data.frame(x = 2020.83306715057, y = 1.1, label = "Pedro\nSánchez\n(PSOE)"),
+            mapping = aes(x = x, y = y, label = label),
+            size = 1.23, colour = "#BE4D4C", hjust = 0L, inherit.aes = FALSE)
+
+graph 
+
+
+```
+
+GRAPHIC LEGEND
+
+```{r}
+graph <- graph +  
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = -0.06, ymax = -0.05),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#650904", alpha = 1, inherit.aes = FALSE)+
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = -0.05, ymax = -0.04),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#A61918", alpha = 1 , inherit.aes = FALSE)+
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = -0.04, ymax = -0.03),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#9B2E33", alpha = 0.9, inherit.aes = FALSE)+
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = -0.03, ymax = -0.02),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#BE4D4C", alpha = 0.8, inherit.aes = FALSE)+
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = -0.02, ymax = -0.01),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#D07F7F", alpha = 0.7, inherit.aes = FALSE)+
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = -0.01, ymax = 0),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#E2706D", alpha = 0.4, inherit.aes = FALSE) +
+  geom_text(data = data.frame(x = 1975.6, y = 0.01, label = "Izquierda"),
+            mapping = aes(x = x, y = y, label = label),
+            colour = "#6A6A6A", size = 1.7, hjust = 0L, inherit.aes = FALSE)+
+  
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = 0.15, ymax = 0.17),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#C98B2C", alpha = 1, inherit.aes = FALSE)+
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = 0.17, ymax = 0.19),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#E89433", alpha = 1 , inherit.aes = FALSE)+
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = 0.19, ymax = 0.21),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#E6A55B", alpha = 0.9, inherit.aes = FALSE)+
+  geom_text(data = data.frame(x = 1975.6, y = 0.22, label = "Centro"),
+            mapping = aes(x = x, y = y, label = label),
+            colour = "#6A6A6A", size = 1.7, hjust = 0L, inherit.aes = FALSE)+
+  
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = 0.34, ymax = 0.37),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#1F3D71", alpha = 0.8, inherit.aes = FALSE)+
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = 0.37, ymax = 0.40),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#4D76BF", alpha = 0.9 , inherit.aes = FALSE)+
+  geom_text(data = data.frame(x = 1975.6, y = 0.41, label = "Derecha"),
+            mapping = aes(x = x, y = y, label = label),
+            colour = "#6A6A6A", size = 1.7, hjust = 0L, inherit.aes = FALSE)+
+  
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = 0.55, ymax = 0.58),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#DDAB0B", alpha = 0.8, inherit.aes = FALSE)+
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = 0.58, ymax = 0.61),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#EAC659", alpha = 0.9 , inherit.aes = FALSE)+
+  geom_text(data = data.frame(x = 1975.6, y = 0.62, label = "Partidos\ncatalanes"),
+            mapping = aes(x = x, y = y, label = label),
+            colour = "#6A6A6A", size = 1.5, hjust = 0L, inherit.aes = FALSE) +
+  
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = 0.76, ymax = 0.78),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#46862C", alpha = 0.7, inherit.aes = FALSE)+
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = 0.78, ymax = 0.8),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#A1B944", alpha = 0.9 , inherit.aes = FALSE)+
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = 0.8, ymax = 0.82),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#ABD894", alpha = 0.9 , inherit.aes = FALSE)+
+  geom_text(data = data.frame(x = 1975.6, y = 0.83, label = "Partidos\nvascos"),
+            mapping = aes(x = x, y = y, label = label),
+            colour = "#6A6A6A", size = 1.5, hjust = 0L, inherit.aes = FALSE) +
+  geom_rect(data = data.frame(xmin = 1975.4, xmax = 1976, ymin = 0.95, ymax = 0.98),
+            mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = "#3B3D40", alpha = 0.9 , inherit.aes = FALSE)+
+  geom_text(data = data.frame(x = 1975.6, y = 0.99, label = "Otros partidos\nregionales"),
+            mapping = aes(x = x, y = y, label = label),
+            colour = "#6A6A6A", size = 1.5, hjust = 0L, inherit.aes = FALSE)
+
+graph
+```
+saving my graph
+
+```{r}
+
+ggsave("mi_grafico.png", plot = graph, width = 3.5, height = 6.5, units = "in")
+
+```
+
+
+A DIFFERENT REPRESENTATION OF THE DATA
+
+Me he dado cuenta de que algo está mal porque en 2019 y 2023 la izquierda debería superar a la derecha.
+
+
+```{r}
+
+mejora_base <- count_dip |> 
+  group_by(ELECCIONES, Orientacion) |> 
+  summarise(total_dip = sum(num_diputados)) |> 
+  ungroup() |> 
+  mutate(
+    Presidencia = case_when(
+      ELECCIONES == as.Date("1977-06-05") ~ "Adolfo SUarez (UCD)",
+      ELECCIONES == as.Date("1979-03-01") ~ "Adolfo SUarez (UCD)",
+      ELECCIONES == as.Date("1982-10-28") ~ "Leopoldo Calvo-Sotelo (UCD)",
+      ELECCIONES == as.Date("1986-06-22") ~ "Felipe González (PSOE)",
+      ELECCIONES == as.Date("1989-10-29") ~ "Felipe González (PSOE)",
+      ELECCIONES == as.Date("1993-06-06") ~ "Felipe González (PSOE)",
+      ELECCIONES == as.Date("1996-03-03") ~ "José María Aznar (PP)",
+      ELECCIONES == as.Date("2000-03-12") ~ "José María Aznar (PP)",
+      ELECCIONES == as.Date("2004-03-14") ~ "José Luis Rodríguez Zapatero (PSOE)",
+      ELECCIONES == as.Date("2008-03-09") ~ "José Luis Rodríguez Zapatero (PSOE)",
+      ELECCIONES == as.Date("2011-11-20") ~ "Mariano Rajoy (PP)",
+      ELECCIONES == as.Date("2016-01-01") ~ "Mariano Rajoy (PP)",
+      ELECCIONES == as.Date("2016-06-26") ~ "Mariano Rajoy (PP)",
+      ELECCIONES == as.Date("2019-04-28") ~ "Pedro Sánchez (PSOE)",
+      ELECCIONES == as.Date("2019-11-10") ~ "Pedro Sánchez (PSOE)",
+      ELECCIONES == as.Date("2023-07-238") ~ "Pedro Sánchez (PSOE)"))
+
+# Crear el streamgraph
+
+mejora_base$Orientacion <- factor(mejora_base$Orientacion, levels = c("Derecha", "Centro", "Izquierda", "Partidos catalanes", "Partidos vascos", "Otros partidos regionales"))
+
+# Agregar la columna DECIMAL_DATE
+mejora_base$DECIMAL_DATE <- decimal_date(mejora_base$ELECCIONES)
+fechas_unicas <- unique(mejora_base$DECIMAL_DATE)
+
+p <- ggplot(mejora_base, aes(DECIMAL_DATE, total_dip)) +
+  scale_x_continuous(breaks = fechas_unicas,
+                     labels = function(x) floor(x), 
+                     expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0))+
+  geom_line(aes(color = Orientacion), size = 1) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  scale_color_manual(values = c(
+    "Derecha" = "#566874",
+    "Centro" = "#E89433",
+    "Izquierda" = "#B3402D",
+    "Partidos catalanes" = "#F7D913",
+    "Partidos vascos" = "#46862C",
+    "Otros partidos regionales" = "#3B3D40"))
+
+p
+```
+
+
+
+
+
