@@ -1,0 +1,434 @@
+---
+title: "Blog post"
+author: "Mikaela De Smedt"
+format: html
+editor: visual
+---
+
+# The chart in question
+
+Whats the story behind the chart?: the world is getting warmer.
+
+# Our data
+
+## import data
+
+From this website <http://www.columbia.edu/~mhs119/PerceptionsAndDice/> we take the 'shifted data' table named *Data: N.H. Land, Jun-Jul-Aug.*
+
+This data represents the frequency of occurence (y-axis) of local temperature anomalies divided by local standard deviation (x-axis) obtained by binning all local results for the indicated region and 11-year period into 0.05 frequency intervals. Area under each curve is unity. Standard deviations are for the 1951-1980 period.
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+ccdata<- tibble(read.table(
+  file = "http://www.columbia.edu/~mhs119/PerceptionsAndDice/NH.JJA.11yrs.txt", 
+  header = TRUE,
+  skip = 1))
+
+save(ccdata, file = "/ccdata.RData")
+
+```
+
+## Wrangle
+
+Our data has temperature annommalies ranging from -6 to +8. So the first step is to create a categorical variable that labels these annommalies from extremely cold to extremely hot.
+
+```{r}
+ccdata <- ccdata |> 
+  drop_na(anoms.S)
+
+#tidy up
+longdata <- ccdata |> 
+  pivot_longer(cols = 
+                 c(X1980.1990, 
+                   X1991.2001, 
+                   X2002.2012, 
+                   X2013.2023), 
+               names_to = "period") |> 
+  mutate("period" = str_sub(period, 2)) |> 
+  mutate("temptype" = case_when(
+         anoms.S < -3 ~ "Extremely cold",
+         anoms.S >= -3 & anoms.S < -0.5 ~ "Cold",
+         anoms.S >= -0.5 & anoms.S <= 0.5 ~ "Normal",
+         anoms.S > 0.5 & anoms.S <= 3 ~ "Hot",
+         anoms.S > 3 ~ "Extremely hot"))
+
+```
+
+# Base graph
+
+```{r}
+longdata |> 
+ggplot(aes(x = anoms.S, 
+             y = value, 
+             fill = temptype)) +
+  geom_area(stat = "identity", 
+                 position = "stack", 
+                 bins = 30,
+                 show.legend = FALSE) +
+  scale_fill_manual(values = c("Extremely cold"="#085b84", 
+                               "Cold" = "#54a5ba",
+                               "Normal" = "#dfdfdf", 
+                               "Hot" = "#eb8550",
+                               "Extremely hot" = "#cc2821")) +
+  theme_void()+
+  labs(title = "Summer temperatures",
+       subtitle = "in the Northern Hemisphere") +
+  theme(plot.title = element_text(color = "black",
+                                  hjust = 0.015,
+                                  face = "bold"),
+        plot.subtitle = element_text(color = "gray",
+                                     hjust = 0.015))+
+  xlim(c(-6, 6))+
+    geom_vline(xintercept = c(-3, -0.5, 0.5, 3), 
+             linetype = "dashed", 
+             color = "gray")+ 
+  annotate("text", 
+           x=0, 
+           y=-0.04, 
+           label= "Normal", 
+           color = "#999999",
+           fontface = 2)+
+  annotate("text", 
+           x=-5, 
+           y=-0.04, 
+           label= "Extremely Cold", 
+           color = "#085b84",
+           fontface = 2)+
+  annotate("text", 
+           x=-1.8, 
+           y=-0.04, 
+           label= "Cold", 
+           color = "#54a5ba",
+           fontface = 2)+
+  annotate("text", 
+           x=1.8, 
+           y=-0.04, 
+           label= "Hot", 
+           color = "#eb8550",
+           fontface = 2)+
+  annotate("text", 
+           x=5, 
+           y=-0.04, 
+           label= "Extremely Hot", 
+           color = "#cc2821",
+           fontface = 2)+
+  annotate("text", 
+           x=4, 
+           y= 1, 
+           label= "1980-2023", 
+           color = "black",
+           size = 10,
+           fontface = 10)
+  
+ 
+```
+
+## Divide it by periods
+
+```{r}
+longdata |> 
+  filter(period == "1980.1990") |> 
+  ggplot(aes(x = anoms.S, 
+             y = value, 
+             fill = temptype)) +
+  geom_area(stat = "identity", 
+                 position = "stack", 
+                 bins = 30,
+                 show.legend = FALSE) +
+  scale_fill_manual(values = c("Extremely cold"="#085b84", 
+                               "Cold" = "#54a5ba",
+                               "Normal" = "#dfdfdf", 
+                               "Hot" = "#eb8550",
+                               "Extremely hot" = "#cc2821")) +
+  theme_void()+
+  labs(title = "Summer temperatures",
+       subtitle = "in the Northern Hemisphere") +
+  theme(plot.title = element_text(color = "black",
+                                  hjust = 0.015,
+                                  face = "bold"),
+        plot.subtitle = element_text(color = "gray",
+                                     hjust = 0.015))+
+  xlim(c(-6, 6)) +
+  geom_vline(xintercept = c(-3, -0.5, 0.5, 3), 
+             linetype = "dashed", 
+             color = "gray")+ 
+    annotate("text", 
+           x=0, 
+           y=-0.02, 
+           label= "Normal", 
+           color = "#999999",
+           fontface = 2)+
+  annotate("text", 
+           x=-5, 
+           y=-0.02, 
+           label= "Extremely Cold", 
+           color = "#085b84",
+           fontface = 2)+
+  annotate("text", 
+           x=-1.8, 
+           y=-0.02, 
+           label= "Cold", 
+           color = "#54a5ba",
+           fontface = 2)+
+  annotate("text", 
+           x=1.8, 
+           y=-0.02, 
+           label= "Hot", 
+           color = "#eb8550",
+           fontface = 2)+
+  annotate("text", 
+           x=5, 
+           y=-0.02, 
+           label= "Extremely Hot", 
+           color = "#cc2821",
+           fontface = 2)+
+  annotate("text", 
+           x=3, 
+           y= 0.35, 
+           label= "1980-1990", 
+           color = "black",
+           size = 10,
+           fontface = 10)+
+  geom_segment(#Here I start with annotations 
+    x = -4.2, 
+    y = 0.05,          
+    xend = -4.2, 
+    yend = 0.1,
+    color = "#999999",
+    arrow = arrow(length = unit(0.2, "cm"), 
+                  ends = "last", 
+                  type = "closed"))+
+  annotate("text", 
+           x= -4.2, 
+           y= 0.03, 
+           label= "More frequent", 
+           color = "#999999")+
+   geom_segment(
+    x = -2, 
+    y = 0.06,          
+    xend = -2.3, 
+    yend = 0.06,
+    color = "#999999")+
+  annotate("text", 
+           x= -3, 
+           y= 0.063, 
+           label= "1980-1990",
+           size = 3,
+           color = "#999999")+
+  annotate("text", 
+           x= -3, 
+           y= 0.05, 
+           label= "Base period",
+           size = 2.6,
+           color = "#999999")
+  
+
+```
+
+## The shadow
+
+```{r}
+longdata |> 
+  filter(period == "1980.1990") |> 
+  ggplot(aes(x = anoms.S, 
+             y = value)) +
+  geom_area(stat = "identity", 
+                 position = "stack", 
+                 show.legend = FALSE,
+                 alpha = 0.1)
+
+
+remotes::install_github("coolbutuseless/ggpattern")
+
+
+longdata |> 
+  filter(period == "1980.1990") |> 
+  ggplot(aes(x = anoms.S, 
+             y = value)) +
+  ggpattern::geom_area_pattern(stat = "identity", 
+                 position = "stack", 
+                 show.legend = FALSE,
+                 pattern = "stripe",
+                 pattern_density = 0.2,
+                 pattern_fill = "#bfbfbf",
+                 pattern_colour = "#bfbfbf",
+                 alpha = 0.03,
+                 pattern_size = 0.01,
+                 pattern_spacing = 0.01,
+                 pattern_linetype = 1)+
+  xlim(c(-6, 6))+
+  theme_void()
+  
+df.shadow<-
+  longdata |> 
+  filter(period == "1980.1990")
+
+##THIS CODE IS FOR MY SHADOW LAYER
+  ggpattern::geom_area_pattern(data = df.shadow,
+                               stat = "identity", 
+                 position = "stack", 
+                 show.legend = FALSE,
+                 pattern = "stripe",
+                 pattern_density = 0.2,
+                 pattern_fill = "#bfbfbf",
+                 pattern_colour = "#bfbfbf",
+                 alpha = 0.03,
+                 pattern_size = 0.01,
+                 pattern_spacing = 0.01,
+                 pattern_linetype = 1)+
+  xlim(c(-6, 6))+
+  theme_void() 
+
+```
+
+```{r}
+plot1991.2001<-
+  longdata |> 
+  filter(period == "1991.2001") |> 
+  ggplot(aes(x = anoms.S, 
+             y = value, 
+             fill = temptype)) +
+  geom_area(stat = "identity", 
+                 position = "stack", 
+                 bins = 30,
+                 show.legend = FALSE) +
+  scale_fill_manual(values = c("Extremely cold"="#085b84", 
+                               "Cold" = "#54a5ba",
+                               "Normal" = "#dfdfdf", 
+                               "Hot" = "#eb8550",
+                               "Extremely hot" = "#cc2821")) +
+  theme_void()+
+  labs(title = "Summer temperatures",
+       subtitle = "in the Northern Hemisphere") +
+  theme(plot.title = element_text(color = "black",
+                                  hjust = 0.015,
+                                  face = "bold"),
+        plot.subtitle = element_text(color = "gray",
+                                     hjust = 0.015))+
+  xlim(c(-6, 6)) +
+  geom_vline(xintercept = c(-3, -0.5, 0.5, 3), 
+             linetype = "dashed", 
+             color = "gray")+ 
+    annotate("text", 
+           x=0, 
+           y=-0.02, 
+           label= "Normal", 
+           color = "#999999",
+           fontface = 2)+
+  annotate("text", 
+           x=-5, 
+           y=-0.02, 
+           label= "Extremely Cold", 
+           color = "#085b84",
+           fontface = 2)+
+  annotate("text", 
+           x=-1.8, 
+           y=-0.02, 
+           label= "Cold", 
+           color = "#54a5ba",
+           fontface = 2)+
+  annotate("text", 
+           x=1.8, 
+           y=-0.02, 
+           label= "Hot", 
+           color = "#eb8550",
+           fontface = 2)+
+  annotate("text", 
+           x=5, 
+           y=-0.02, 
+           label= "Extremely Hot", 
+           color = "#cc2821",
+           fontface = 2)+
+  annotate("text", 
+           x=3, 
+           y= 0.35, 
+           label= "1991-2001", 
+           color = "black",
+           size = 10,
+           fontface = 10)+
+  geom_segment(#Here I start with annotations 
+    x = -4.2, 
+    y = 0.05,          
+    xend = -4.2, 
+    yend = 0.1,
+    color = "#999999",
+    arrow = arrow(length = unit(0.2, "cm"), 
+                  ends = "last", 
+                  type = "closed"))+
+  annotate("text", 
+           x= -4.2, 
+           y= 0.03, 
+           label= "More frequent", 
+           color = "#999999")+
+   geom_segment(
+    x = -2, 
+    y = 0.06,          
+    xend = -2.3, 
+    yend = 0.06,
+    color = "#999999")+
+  annotate("text", 
+           x= -3, 
+           y= 0.063, 
+           label= "1980-1990",
+           size = 3,
+           color = "#999999")+
+  annotate("text", 
+           x= -3, 
+           y= 0.05, 
+           label= "Base period",
+           size = 2.6,
+           color = "#999999")+
+  ggpattern::geom_area_pattern(data = df.shadow,
+                               stat = "identity", 
+                 position = "stack", 
+                 show.legend = FALSE,
+                 pattern = "stripe",
+                 pattern_density = 0.2,
+                 pattern_fill = "#bfbfbf",
+                 pattern_colour = "#bfbfbf",
+                 alpha = 0.03,
+                 pattern_size = 0.01,
+                 pattern_spacing = 0.01,
+                 pattern_linetype = 1)+
+  xlim(c(-6, 6))
+  
+```
+
+# improvement
+
+```{r}
+install.packages("ggridges")
+install.packages("viridis")
+library(ggridges)
+library(viridis)
+library(dplyr)
+library(tidyr)
+library(forcats)
+
+longdata2 <-
+  longdata |> 
+  mutate("freq" = anoms.S*value)
+
+# Plot
+longdata2 |> 
+   ggplot( aes(y=freq, 
+               x=anoms.S,  
+               fill= "pink")) +
+    geom_density_ridges(aes(y = period),
+                        alpha=0.6, 
+                        stat="binline", 
+                        bins=20)
+
+
+geom_area(stat = "identity", 
+                 position = "stack", 
+                 bins = 30,
+                 show.legend = FALSE) +
+  scale_fill_manual(values = c("Extremely cold"="#085b84", 
+                               "Cold" = "#54a5ba",
+                               "Normal" = "#dfdfdf", 
+                               "Hot" = "#eb8550",
+                               "Extremely hot" = "#cc2821"))
+
+```
