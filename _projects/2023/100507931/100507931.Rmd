@@ -9,12 +9,346 @@ output:
   distill::distill_article:
     self_contained: false 
     toc: true
+editor_options: 
+  chunk_output_type: console
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(out.width="100%", fig.align="center")
+```
 
+The Pew Research Center has recently published an article where the evolution of public trust towards different U.S. governments between 1972 ans 2023 is shown:
 
-Distill is a publication format for scientific and technical writing, native to the web.
+[INSERT IMAGE HERE]
 
-Learn more about using Distill at <https://rstudio.github.io/distill>.
+## Graph replication
 
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggtext)
+```
 
+Reading and cleaning the data:
+
+```{r}
+datos <-
+  read_csv(file = "chart-export-6dcaa713-b94d-4cb5-b91e-e8d433400438 (1).csv",
+           skip = 3, quote = "\\.") |>
+  mutate(Date = mdy(str_remove_all(Date, "\t|\"")),
+         `Conservative Rep/Lean Rep` =
+           as.numeric(str_remove_all(`Conservative Rep/Lean Rep`, '"'))) |>
+  rename(pollster = .) 
+
+datos<-na.omit(datos)
+
+colnames(datos)[3] <- "Liberal_Dem"
+colnames(datos)[4] <- "Cons_Dem"
+colnames(datos)[5] <- "Liberal_Rep"
+colnames(datos)[6] <- "Cons_Rep"
+```
+
+The first step to start the replication is to create a vector of date strings for the colored area, since the background of our plot is colored by presidential terms under the main lines.
+
+```{r}
+colored_xmin <- c("1974-12-01", "1980-11-07",  "1993-01-17",  "2008-12-21",
+                  "2021-04-11")
+
+colored_xmax <- c("1977-04-25", "1989-01-15",  "2001-01-17", "2017-04-11", 
+                  "2023-06-11")
+
+# Create the intervalos data frame
+colored <- data.frame(xmin = as.Date(colored_xmin),xmax = as.Date(colored_xmax),
+                      intervalo = c("Ford",  "Reagan", "Clinton",  "Obama", "Biden" ))
+
+colores_intervalos <-  c("Ford" = "#C81518", "Reagan" = "#C81518","Clinton" = "#2E5A87",  "Obama" = "#2E5A87", "Biden" = "#2E5A87")
+```
+
+```{r}
+Plot <- ggplot(datos, aes(x = Date)) + 
+  
+  geom_rect(
+  aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = 100),
+  data = colored,
+  fill = "#E8e8da", 
+  alpha = 0.3,
+  inherit.aes = FALSE, na.rm = TRUE) +
+  
+guides(fill = FALSE)  + 
+theme_minimal()
+
+Plot
+```
+
+Now let's create the main structure of our replication:
+
+```{r}
+Plot <- Plot +
+   
+   geom_line(aes(y = Liberal_Dem, color = "Liberal Dem/Lean Dem"), 
+             linetype="solid", size=1.75, alpha = 1, linejoin = "mitre", lineend= "square") +
+  geom_line(aes(y = Cons_Dem, color = "Cons-Moderate Dem/Lean Dem"), 
+            linetype="solid", size=1.75, alpha = 1, linejoin = "mitre", lineend= "square") +
+  geom_line(aes(y = Liberal_Rep, color = "Moderate-Lib Rep/Lean Rep"), 
+            linetype="solid", size=1.75, alpha = 1, linejoin = "mitre", lineend= "square")+
+  geom_line(aes(y = Cons_Rep, color = "Conservative Rep/Lean Rep"), 
+            linetype="solid", size=1.75, alpha = 1, linejoin = "mitre", lineend= "square") +
+   
+  
+  scale_color_manual(values = c("Conservative Rep/Lean Rep" = "#BF3B27",
+                                "Liberal Dem/Lean Dem" = "#456A83",
+                                "Cons-Moderate Dem/Lean Dem" = "#82A6BF",
+                                "Moderate-Lib Rep/Lean Rep" = "#E37F73"),
+                     
+                     breaks = c("Conservative Rep/Lean Rep", 
+                                "Moderate-Lib Rep/Lean Rep", 
+                                "Cons-Moderate Dem/Lean Dem", 
+                                "Liberal Dem/Lean Dem"),
+
+                     name= "") +
+  
+  scale_y_continuous(limits = c(0, 100), 
+                     breaks = seq(0, 100,by = 20),
+                     expand = expansion(0)) + #Y axis
+  
+ scale_x_date(
+    date_labels = "%Y",
+    limits = c(as.Date("1972-10-15"), max(datos$Date)),
+    breaks = seq(as.Date("1975-01-01"), max(datos$Date), by = "5 years"),
+    expand = expansion(0)) + 
+  
+ geom_vline(xintercept = as.Date("1972-10-15"), 
+            color = "darkgrey", size =0.5) + 
+  
+  labs(title = "Trust in government by party and ideology",
+         
+       subtitle = "% who say they trust the government to do what is right just about always/most of the time",
+       caption = "PEW RESEARCH CENTER",
+       
+       x = "",
+       y = "") 
+Plot
+```
+
+#### Annotations
+
+Now we also need to create a vector of date strings for the white area of the background to subsequently insert the annotations of the president names:
+
+```{r}
+white_xmin <- c("1972-10-15","1977-04-25","1989-01-15","2001-01-17","2017-04-11")
+
+white_xmax <- c("1974-12-01", "1980-11-07","1993-01-17","2008-12-21","2021-04-11")
+
+# Create the intervalos data frame
+white <- data.frame(xmin = as.Date(white_xmin),xmax = as.Date(white_xmax),
+                    intervalo = c("Nixon",  "Carter", "H.W.Bush", "W.Bush","Trump"))
+
+colores_white <- c("Nixon" = "#C81518","Carter" = "#2E5A87", "H.W.Bush" = "#C81518", "W.Bush" = "#C81518","Trump" = "#C81518")
+```
+
+Annotations for the white and the colored background area are added separately:
+
+```{r}
+#Annotations in the colored intervals
+Plot <- Plot + annotate("text", x = as.Date(colored_xmin) + 
+                                (as.Date(colored_xmax) - 
+                                   as.Date(colored_xmin))/7, 
+                   
+                  y = 94, label = colored$intervalo, size = 4,
+                  angle = -90,  color = colores_intervalos[colored$intervalo])
+
+#Annotations in the white intervals
+Plot <- Plot + annotate("text", x = as.Date(white_xmin) + 
+                     (as.Date(white_xmax) - 
+                        as.Date(white_xmin))/7, 
+                   
+                  y = 94, label = white$intervalo, size = 4,
+                  angle = -90, color = colores_white[white$intervalo])
+
+Plot
+```
+
+### Arranging the final plot
+
+#### Google fonts
+
+```{r}
+library(showtext)
+
+sysfonts::font_add_google("Libre Franklin", family="franklin")
+showtext::showtext_auto()
+
+sysfonts::font_add_google("Playfair Display", family="playfair")
+showtext::showtext_auto()
+
+sysfonts::font_add_google("Lato", family="lato")
+showtext::showtext_auto()
+
+sysfonts::font_add_google("Almarai", family="almarai")
+showtext::showtext_auto()
+```
+
+#### Defining the theme 
+
+```{r}
+Plot <- Plot +
+  
+  theme_minimal() +
+   
+       theme(legend.position = "bottom",
+            legend.key.size = unit(0.5, "cm"),
+           legend.text = element_text(family = "almarai", size=12, face = "plain"),
+             
+        panel.grid = element_blank(),
+        panel.grid.major.y = element_line(color = "#E5E5E5"),
+        
+        plot.title = element_text(face = "bold", family = "franklin", size = 18), 
+        plot.subtitle = element_text(face = "italic",  colour = "#8d8f8e", family = "playfair", margin = margin(t = 8, b= 30), size =15),
+        
+        plot.caption = element_text(face = "bold", hjust = 0, margin = margin(t = 10, r = 0, b = 0, l = 0), family = "lato", size = 12),
+       
+        axis.line.x =  element_line(color = "#696969", size = 0.7),
+        axis.line.y =  element_line(color = "#a1a1a1", size = 0.5),
+        
+        axis.text.y = element_text(margin = margin(r=0), size=13, colour = "#696969"),
+        axis.text.x = element_text(margin = margin(t=7), size=13, colour = "#696969"),
+        
+        axis.ticks.x = element_line(size = 0.7, color = "#696969"), 
+        axis.ticks.y = element_line(size =0.7, color= "#696969"),
+        
+        axis.ticks.length.x = unit(0.15, "cm"),
+        axis.ticks.length.y = unit(0.15, "cm"),
+        
+        
+        plot.margin = margin(t=10,b=10,r=10,l=10))
+
+Plot 
+```
+
+## Alternative plot
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(showtext)
+library(MetBrewer)
+library(scico)
+library(ggtext)
+library(patchwork)
+library(gghighlight)
+library(lubridate)
+library(dplyr)
+```
+
+#### Managing the data: 
+
+We're planning on showing the data in an alternative way so that the message of the article aligns better with the information visualized in the graph. For that purpose, we're not interested anymore in showing the specific public trust for a given date, but the overall evolution for ideology. Therefore, we have created a new dataset (*tidy_datos*) grouping the data by year and obtaining the mean percentage of trust for every year and for ideology.
+
+```{r}
+tidy_datos <- datos |> 
+ pivot_longer(cols="Liberal_Dem":"Cons_Rep", 
+               names_to = "ideology",values_to = "cases") |> 
+   group_by(year = lubridate::year(Date), ideology) |> 
+  summarise(mean_cases = mean(cases, na.rm = TRUE))
+
+tidy_datos$year <- as.numeric(tidy_datos$year)
+```
+
+#### Facet\~wrap
+
+```{r}
+#arranging the order of the plots
+tidy_datos <- tidy_datos |> 
+  mutate(ideology = factor(ideology, levels = c("Liberal_Rep", 
+                                                "Cons_Rep", 
+                                                "Cons_Dem", 
+                                                "Liberal_Dem"))) |> 
+  arrange(ideology, year)
+```
+
+```{r}
+#Creating alternative graph
+
+Plot2 <- ggplot(tidy_datos, aes(x = year)) +
+  
+  geom_hline(yintercept =  60,linetype= "solid", size=.3, color="#696969") +
+  
+  geom_line(aes(x=year, y=mean_cases, color=ideology),linetype="solid", size=1.3, alpha = 1, linejoin = "round", lineend= "round") +
+
+  
+  gghighlight(use_direct_label = FALSE, 
+              
+             unhighlighted_params = list(colour = alpha("white", .8))) +
+  
+  
+   facet_wrap(~ideology, labeller = labeller
+              (ideology = c ("Liberal_Rep" = "Moderate Republican",
+                             "Liberal_Dem" = "Liberal Democrat",
+                             "Cons_Dem" = "Moderate Democrat",    
+                             "Cons_Rep" ="Conservative Republican")))  +
+  
+ scale_color_manual(values = c("Cons_Rep" = "#BF3B27",
+                                "Liberal_Dem" = "#456A83",
+                                "Cons_Dem" = "#82A6BF",
+                                "Liberal_Rep" = "#E37F73")) +
+
+  
+ scale_x_continuous(breaks = seq(min(tidy_datos$year), max(tidy_datos$year), by = 10))+  
+
+ scale_y_continuous(breaks = c(0,20,40,60,80,100),
+                     labels = c("", "20","40","60","","")) +
+  theme_minimal( ) +
+  
+ labs(title = "Trust in government by party and ideology",
+         
+       subtitle = "% who say they trust the government to do what is right just about always/most of the time")
+
+Plot2 
+```
+
+Since we want to show that public trust in governments has declined over time...
+
+```{r}
+Plot2 <- Plot2 +
+  
+  geom_point(
+    data = tidy_datos %>%
+      group_by(ideology) %>%
+      slice(which.min(mean_cases)),
+    aes(x = year, y = mean_cases, color = ideology),
+    shape = 16,
+    size = 3) +
+  
+   geom_text(data = tidy_datos %>%
+      group_by(ideology) %>%
+      slice(which.min(mean_cases)),
+             aes(x = year, y = mean_cases, color = ideology, label = mean_cases),
+             hjust = -1, vjust = 1, size= 4,  fontface="bold") 
+
+Plot2
+```
+
+#### Final theme
+
+```{r}
+Plot2 <- Plot2 + 
+  
+  theme( axis.title =element_blank(), 
+         strip.text.x = element_text(face="bold",  size=15, ),
+        
+        legend.position = "none", 
+        
+        axis.text.y = element_text(margin = margin(r=0), size=12, colour = "#696969"),
+        axis.text.x = element_text(margin = margin(t=7), size=12, colour = "#696969"),
+        
+        plot.background = element_rect(color="#F4F5F1", fill="#F4F5F1"),
+    plot.margin = margin(10,10,10,10),
+    
+    plot.title = element_text(face = "bold", family = "franklin", size = 18), 
+      plot.subtitle = element_text(face = "bold",  colour = "#8d8f8e",  
+                                     margin = margin(t = 8, b= 30), size =15)) 
+
+Plot2
+```
