@@ -1,0 +1,699 @@
+---
+title: "Graph"
+output: html_document
+date: "2023-11-13"
+---
+
+```{r}
+library(readr)
+library(readxl)
+library(tidyverse)
+library(ggplot2)
+library(ggstream)
+library(dplyr)
+library(ggtext)
+library(ggrepel)
+library(showtext)
+library(sysfonts)
+library(diagram)
+library(grid)
+library(plotrix)
+```
+
+recom:
+1. incluir un cero en 1900 (solo ese año, nada más) para cada país y ver qué hace geom_stream con eso. 
+2. como improvement cuenta el facet, reorganizarlo por producción y en lugar de dejar una sola columna, probar con dos o tres para ver cuál queda mejor visualmente. 
+
+## **CLEANING THE DATA**
+
+Uploading the data base, deleting unnecessary columns and NAs from the main variable (oilprod_kbd):
+
+```{r}
+data <-  read_xlsx(path = "Panel format.xlsx", sheet = 1, range = "A1:M7212")
+
+data <- data |>
+  select(-c(OPEC:CIS))
+
+panel <- data |> 
+  filter(!is.na(oilprod_kbd)) 
+  
+```
+
+First, we start by organizing the countries. We created a vector for the countries that needed to appear explicitly in our graph and then created a new database where all these countries appear. After that, we filtered the original database, but this time we selected the unwanted countries and summed them by region. That way, they would receive the name of the region.
+
+```{r}
+countries <- c("Australia", "China", "Indonesia", "Norway", "Russian Federation", "USSR", "United Kingdom", "Brazil", "Venezuela", "Mexico", "Canada", "US", "Saudi Arabia", "Iran", "Kuwait", "Iraq", "Libya", "United Arab Emirates", "Nigeria", "Other Africa", "Other Asia Pacific", "Other CIS", "Other Caribbean", "Other Eastern Africa", "Other Europe", "Other Middle Africa", "Other Middle East", "Other Northern Africa", "Other S. & Cent. America", "Other South America", "Other Western Africa")
+
+# Filtrar los países de interés
+
+panel_a <-  panel |>
+  group_by(Region, Country) |> 
+  filter(Country %in% countries) |> 
+  mutate(Region = if_else(Country == "Australia", "Oceania", Region)) |> 
+  select(-c(pop, ISO3166_alpha3, ISO3166_numeric, SubRegion, oilprod_mt)) 
+
+  
+# Filtrar países no interés y sumarlos todos. 
+panel_b <- panel |> 
+  filter(!Country %in% countries) |> 
+  group_by(Year, Region) |> 
+  summarise(oilprod_kbd = sum(oilprod_kbd), .groups = 'drop') |> 
+  mutate(Country = Region) |> 
+  select(Country, everything()) |>
+  filter(!is.na(Region)) |> 
+  arrange(Country) 
+```
+
+We combined both databases in order to work with them. To do so, we changed oilprod_kbd, the main variable, as a character variable so it would not change the data, since we were having some trouble. After that, we create the new data base, panel_c, and change oilprod_kbd into a numeric variable again.
+
+```{r}
+# Combinar los dos df que he creado antes.
+
+  # primero convertimos las columnas de oilprod a character para que no me modifique los datos:
+as.character(panel_a$oilprod_kbd)
+as.character(panel_b$oilprod_kbd)
+
+  # luego ya hacemos el nuevo data frame:
+panel_c <- bind_rows(panel_a, panel_b)
+
+  # convierto oilprod a numérica:
+as.numeric(panel_c$oilprod_kbd)
+```
+
+```{r}
+# Modificamos las variables regionales.
+
+  # primero creamos vectores
+asia <- c("Asia Pacific", "Other Asia Pacific")
+africa <-  c("Africa", "Other Africa", "Other Eastern Africa", "Other Middle Africa", "Other Northern Africa", "Other Western Africa")
+middle_east <-  c("Middle East", "Other Middle East")
+europe <- c("Europe", "Other Europe")
+america <- c("Other Caribbean", "Other S. & Cent. America", "Other South America", "S. and Cent. America")
+cis <- c("CIS", "Other CIS")
+
+
+  # después creamos df para cada región
+asia <- panel_c |>
+  filter(Country %in% asia) |> 
+  group_by(Year, Country) |> 
+  mutate(Country = if_else(Country %in% asia, "Other Asia", Country)) |> 
+  arrange(Year) |> 
+  summarise(oilprod_kbd = sum(oilprod_kbd), .groups = 'drop')
+
+africa <- panel_c |>
+  filter(Country %in% africa) |> 
+  group_by(Year, Country) |> 
+  mutate(Country = if_else(Country %in% africa, "Other Africa", Country)) |> 
+  arrange(Year) |> 
+  summarise(oilprod_kbd = sum(oilprod_kbd), .groups = 'drop')
+
+middle_east <- panel_c |>
+  filter(Country %in% middle_east) |> 
+  group_by(Year, Country) |> 
+  mutate(Country = if_else(Country %in% middle_east, "Other Middle East", Country)) |> 
+  arrange(Year) |> 
+  summarise(oilprod_kbd = sum(oilprod_kbd), .groups = 'drop')
+
+europe <- panel_c |>
+  filter(Country %in% europe) |> 
+  group_by(Year, Country) |> 
+  mutate(Country = if_else(Country %in% europe, "Other Europe", Country)) |> 
+  arrange(Year) |> 
+  summarise(oilprod_kbd = sum(oilprod_kbd), .groups = 'drop')
+
+america <- panel_c |>
+  filter(Country %in% america) |> 
+  group_by(Year, Country) |> 
+  mutate(Country = if_else(Country %in% america, "Other America", Country)) |> 
+  arrange(Year) |> 
+  summarise(oilprod_kbd = sum(oilprod_kbd), .groups = 'drop')
+
+cis <- panel_c |>
+  filter(Country %in% cis) |> 
+  group_by(Year, Country) |> 
+  mutate(Country = if_else(Country %in% cis, "Other CIS", Country)) |> 
+  arrange(Year) |> 
+  summarise(oilprod_kbd = sum(oilprod_kbd), .groups = 'drop')
+
+#oceania <- panel_c |> 
+ # filter(Country == "Australia") |> 
+  #mutate(Region = "Oceania") |> 
+  #mutate(Country = Region)
+
+# Creo un data frame para las nuevas regiones. 
+panel_d <-  bind_rows(asia, africa, middle_east, europe, america, cis)
+
+panel_d <- panel_d |> 
+  mutate(Region = Country) |> 
+  select(Country, Year, Region, everything())
+```
+
+```{r}
+# Creamos el data frame final 
+panel_f <- bind_rows(panel_d, panel_a)
+
+panel_f <- panel_f |> 
+  filter(!is.na(Region)) |> 
+  mutate(Region = if_else(Region == "Other Europe", "Europe", Region)) |> 
+  mutate(Region = if_else(Region == "Other Asia", "Asia", Region)) |> 
+  mutate(Region = if_else(Region == "Asia Pacific", "Asia", Region)) |> 
+  mutate(Region = if_else(Region == "Other Middle East", "Middle East", Region)) |> 
+  mutate(Region = if_else(Region == "Other Africa", "Africa", Region)) |> 
+  mutate(Region = if_else(Region == "Other America", "S. & Cent. America", Region)) |>   
+  mutate(Region = if_else(Region == "Other CIS", "CIS", Region)) |> 
+  arrange(Region, Country) 
+
+```
+
+crear filas que incluyan datos desde 1900 hasta 1962. Nienke dice que a lo mejor lo hizo con una distribución normal poniendo que vaya desde 0 hasta el dato de cada país en 1962. Preguntar a Iñaki porque no tengo ni idea de cómo hacerlo
+
+```{r}
+
+# Para establecer el orden en el que quiero que me aparezcan las regiones en el gráfico
+
+panel_f$Region <- factor(panel_f$Region, levels = c("Oceania", "Asia", "Europe", "CIS", "S. & Cent. America", "North America", "Middle East", "Africa"))
+
+panel_f$Country <- factor(panel_f$Country, levels = c("Australia", "Indonesia", "China", "Other Asia", "United Kingdom", "Norway", "Other Europe", "USSR", "Russian Federation", "Other CIS", "Brazil", "Venezuela", "Other America", "Mexico", "Canada", "US", "Saudi Arabia", "Iran", "Kuwait", "Iraq", "United Arab Emirates", "Other Middle East", "Libya", "Nigeria", "Other Africa"))
+
+panel_g <- 
+  panel_f |> 
+  arrange(Country, Region) 
+
+```
+
+```{r}
+# Prueba haciendo que Rusia sea un solo país
+
+panel_g1 <- 
+  panel_g |> 
+  arrange(Country, Region) |> 
+  mutate(Country = if_else(Country == "USSR", "Russian Federation", Country))  
+  
+
+panel_g1 |> distinct(Country, Region)
+```
+
+Running some tests to see if the main variable has similar values as the one used for the original graph.
+
+```{r}
+panel_g |> 
+  filter(Year == 2018) |> 
+  summarise(total_oilprod = sum(oilprod_kbd))
+
+panel_g |> 
+  filter(Country == c("USSR", "US")) |> 
+  group_by(Year) 
+```
+
+```         
+```
+
+## **GRÁFICO**
+
+Annotations and text
+
+```{r}
+
+# Text font
+sysfonts::font_add_google("Fira Sans", family = "sans-serif")
+showtext::showtext_auto()
+
+font_add_google("Fira Sans")
+
+
+
+# Percentage annotations
+
+percent_annotations <- 
+  c(annotate("text", x = 2020, y = 46500, size = 3,  label = paste("4%"), color = "grey20", family = "Fira Sans"), 
+    annotate("text", x = 2020, y = 28000, size = 3,  label = paste("12%"), color = "grey20", family = "Fira Sans"), 
+    annotate("text", x = 2020, y = 17500, size = 3,  label = paste("3%"), color = "grey20", family = "Fira Sans"), 
+    annotate("text", x = 2020, y = 14000, size = 3,  label = paste("3%"), color = "grey20", family = "Fira Sans"), 
+    annotate("text", x = 2020, y = 6000, size = 3,  label = paste("6%"), color = "grey6", family = "Fira Sans"), 
+    annotate("text", x = 2020, y = -4000, size = 3,  label = paste("19%"), color = "grey6", family = "Fira Sans"), 
+    annotate("text", x = 2020, y = -17500, size = 3,  label = paste("13%"), color = "grey20", family = "Fira Sans"), 
+    annotate("text", x = 2020, y = -25000, size = 3,  label = paste("4%"), color = "grey20", family = "Fira Sans"), 
+    annotate("text", x = 2020, y = -28400, size = 3,  label = paste("3%"), color = "grey20", family = "Fira Sans"), 
+    annotate("text", x = 2020, y = -32000, size = 3,  label = paste("5%"), color = "grey20", family = "Fira Sans"), 
+    annotate("text", x = 2020, y = -36000, size = 3,  label = paste("4%"), color = "grey6", family = "Fira Sans"), 
+    annotate("text", x = 2020, y = -39500, size = 3,  label = paste("3%"), color = "grey6", family = "Fira Sans"), 
+    annotate("text", x = 2020, y = -47500, size = 3,  label = paste("5%"), color = "grey6", family = "Fira Sans"))
+
+
+
+# Text annotations
+
+text_annotations <-  
+  c(annotate("text", x = 2012, y = 50000,  hjust = 1, vjust = 0.5, size = 3, label = paste("En 2019, justo antes de la pandemia,\n se alcanzó una producción récord\n (95 millones)"), color = "grey20", family = "Fira Sans"),
+    annotate("text", x = 1993, y = 44000,  hjust = 1, vjust = 0.5, size = 3, label = paste("Crisis financiera\nasiática de 1997"), color = "grey20", family = "Fira Sans"),
+    annotate("text", x = 1972, y = -45000,  hjust = 1, vjust = 0.5, size = 3, label = paste("Crisis del petróleo\nde los 70 (guerra de\nYom Kipur, 1973,\nRev. iraní, 1979)"), color = "grey20", family = "Fira Sans"),
+      annotate("text", x = 1979, y = 45000,  hjust = 0.5, vjust = 0.5, size = 2.5, label = paste("1979:\n 66 millones"), color = "grey40", family = "Fira Sans"),
+      annotate("text", x = 2002, y = -48500,  hjust = 1, vjust = 0.5, size = 3, label = paste("Crisis financiera global de 2008"), color = "grey20", family = "Fira Sans"))
+  
+
+
+# Country labels
+
+country_anotations <- 
+ c(annotate("text", x = 1971, y = 40000, size = 3,  label = paste("Oceanía"), color = "#5fcd84", family = "Fira Sans", fontface = "italic"),
+   annotate("text", x = 2011, y = 42000, size = 3,  label = paste("China"), color = "white", family = "Fira Sans", fontface = "italic"),
+    annotate("text", x = 2000, y = 35000, size = 3,  label = paste("Indonesia"), color = "white", family = "Fira Sans", srt = 10, fontface = "italic"),
+    annotate("text", x = 2010, y = 38000, size = 3,  label = paste("Resto Asia"), color = "#03635f", family = "Fira Sans", srt = 10, fontface = "italic"), 
+    annotate("text", x = 1995, y = 27300, size = 3,  label = paste("R. Unido"), color = "white", family = "Fira Sans", fontface = "italic"),
+    annotate("text", x = 1995, y = 24500, size = 3,  label = paste("Noruega"), color = "white", family = "Fira Sans", fontface = "italic"),
+    annotate("text", x = 1990, y = 18000, size = 3,  label = paste("Resto Europa"), color = "white", family = "Fira Sans", fontface = "italic"),
+    annotate("text", x = 1974, y = 17000, size = 3,  label = paste("URSS"), color = "white", family = "Fira Sans", fontface = "italic"),
+    annotate("text", x = 2010, y = 23000, size = 3,  label = paste("Rusia"), color = "white", family = "Fira Sans", fontface = "italic"), 
+    annotate("text", x = 2008, y = 13000, size = 3,  label = paste("Resto CIS"), color = "white", family = "Fira Sans", fontface = "italic"),
+    annotate("text", x = 2011, y = 10700, size = 3,  label = paste("Brasil"), color = "#6f4e37", family = "Fira Sans", fontface = "italic", srt = 15),
+    annotate("text", x = 2005, y = 8100, size = 3,  label = paste("Venezuela"), color = "#6f4e37", family = "Fira Sans", fontface = "italic"),
+    annotate("text", x = 1998, y = 4900, size = 3,  label = paste("México"), color = "white", family = "Fira Sans", fontface = "italic"),
+    annotate("text", x = 2008, y = 1500, size = 3,  label = paste("Canadá"), color = "white", family = "Fira Sans", fontface = "italic"),
+    annotate("text", x = 1996, y = -3000, size = 3,  label = paste("EE.UU."), color = "white", family = "Fira Sans", fontface = "italic"),
+    annotate("text", x = 2005, y = -13500, size = 3,  label = paste("Arabia Saudi"), color = "#9c2c64", family = "Fira Sans", fontface = "italic"),
+    annotate("text", x = 1999, y = -19000, size = 3,  label = paste("Irán"), color = "white", family = "Fira Sans", fontface = "italic"),
+    annotate("text", x = 2010, y = -25000, size = 3,  label = paste("Kuwait"), color = "white", family = "Fira Sans", srt = -10, fontface = "italic"),
+    annotate("text", x = 1988, y = -24300, size = 3,  label = paste("Irak"), color = "white", family = "Fira Sans", fontface = "italic"),
+    annotate("text", x = 2005, y = -29300, size = 3,  label = paste("EAU"), color = "white", family = "Fira Sans", fontface = "italic"),  
+    annotate("text", x = 1990, y = -41000, size = 3,  label = paste("Resto O. Próximo"), color = "#5f1b3d", family = "Fira Sans", fontface = "italic"),
+    annotate("text", x = 1993, y = -30400, size = 3,  label = paste("Nigeria"), color = "darkgreen", family = "Fira Sans", fontface = "italic"),
+    annotate("text", x = 2012, y = -34800, size = 3,  label = paste("Libia"), color = "white", family = "Fira Sans", srt = -10, fontface = "italic"),
+    annotate("text", x = 2008, y = -40800, size = 3,  label = paste("Resto África"), color = "white", family = "Fira Sans", fontface = "italic"))
+
+
+
+# Labels
+subtitle <- expression(paste(bold("Producción histórica de petróleo hasta 2022 "), "(barriles diarios)"))
+
+labels <-  labs(title = "El crecimiento de la industria petrolera", subtitle = subtitle, caption = "\n Autora: Sara Herranz (2023). Fuente: Energy Institute Statistical Review of World Energy (2023)") 
+
+labelstheme <- theme(plot.title = element_text(family = "Fira Sans", size = 14, face = "bold"), plot.subtitle = element_text(family = "Fira Sans", size = 9.5, color = "gray10", face = "bold"), plot.caption = element_text(family = "Fira Sans"))
+
+```
+
+Colors, scales, axes and background
+
+```{r}
+
+# Colors
+mycolors <-  c("#5fcd84","#03635f", "#059c95", "#91fbf7", "#e96e6e", "#e44c4c", "#801313", "#e48b6b", "#ff7050", "#ff603c", "#ffeca6", "#ffdf6c", "#ffcb0a", "#9787ca", "#735eb8", "#4f3d8b", "#edbfd6", "#e4a0c3", "#dc82af",  "#d3639c", "#9c2c64", "#7e2451", "#5f1b3d", "#99be64", "#4c770e")
+
+colors <- scale_fill_manual(values = mycolors)
+
+
+
+# Scales
+scale <- c(scale_x_continuous(name = NULL, limits = c(1961, 2022), breaks = seq(from = 1970, to = 2020, by = 10), expand = expansion(0)), scale_y_continuous(name = NULL, labels = NULL, expand = expansion(add = c(5000, 5500)), position = "right")) 
+
+
+
+# Y axis 
+axis <- theme(axis.line.y = element_blank(), axis.ticks.y = element_blank()) 
+
+ticks <- theme(axis.ticks.x = element_line(color = "gray40"), axis.ticks.length.x = unit(0.15, "cm"))
+
+
+# Background and key.
+
+theme <- theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.position = "none", plot.caption = element_text(hjust = 0, color = "gray20"))
+
+
+# Arrows and lines
+
+arrows <- c(geom_curve(aes(x = 2013, y = 52000, xend = 2019, yend = 52000), 
+             colour = "grey40",
+             arrow = arrow(length = unit(0.01, "npc"), type = "open"),
+             curvature = -0.3, size = 0.01), 
+           geom_curve(aes(x = 1994, y = 44000, xend = 1997, yend = 38000), 
+             colour = "grey40",
+             arrow = arrow(length = unit(0.01, "npc"), type = "open"),
+             curvature = -0.3, size = 0.01),
+           geom_curve(aes(x = 2003, y = -48500, xend = 2008, yend = -46000), 
+             colour = "grey40", 
+             arrow = arrow(length = unit(0.01, "npc"), type = "open"),
+             curvature = 0.3, size = 0.01), 
+           geom_curve(aes(x = 1973, y = -46000, xend = 1977, yend = -43000), 
+             colour = "grey40",
+             arrow = arrow(length = unit(0.01, "npc"), type = "open"),
+             curvature = 0.3, size = 0.01),
+            geom_segment(aes(x = 1973, y = 38500, xend = 1973, yend = 36000),
+               color = "#5fcd84", size = 0.2),
+           geom_segment(aes(x = 1987, y = -29500, xend = 1987, yend = -39700),
+               color = "#5f1b3d", size = 0.2),
+           geom_segment(aes(x = 1990, y = 19500, xend = 1990, yend = 24200),
+               color = "#801313", size = 0.3))
+```
+
+URSS and Russian Federation graph
+
+```{r, fig.showtext=TRUE, fig.asp=1}
+
+piu <- ggplot(data = panel_g) +
+  aes(x = Year, y = oilprod_kbd, fill = Country) +
+  geom_stream(type = "mirror", 
+    bw = 0.56, 
+    true_range = "max_x") + 
+  geom_vline(xintercept = c(1979, 2019), 
+    linetype = "dashed", 
+    color = "white", 
+    size = 0.2) + 
+  colors + labels + scale + axis +
+  theme_minimal() +  theme + labelstheme + ticks + percent_annotations + text_annotations +
+  country_anotations + arrows 
+
+
+piu
+
+```
+
+Russian Federation graph
+
+```{r, fig.showtext=TRUE, fig.asp=1}
+
+mycolors2 <-  c("#5fcd84","#03635f", "#059c95", "#91fbf7", "#e96e6e", "#e44c4c", "#801313", "#e48b6b", "#ff7050", "#ffeca6", "#ffdf6c", "#ffcb0a", "#9787ca", "#735eb8", "#4f3d8b", "#edbfd6", "#e4a0c3", "#dc82af",  "#d3639c", "#9c2c64", "#7e2451", "#5f1b3d", "#99be64", "#4c770e")
+
+colors2 <- scale_fill_manual(values = mycolors)
+
+
+piu2 <- ggplot(data = panel_g1) +
+  aes(x = Year, y = oilprod_kbd, fill = Country) +
+  geom_stream(type = "mirror", 
+    bw = 0.56, 
+    true_range = "max_x") + 
+  geom_vline(xintercept = c(1979, 2019), 
+    linetype = "dashed", 
+    color = "white", 
+    size = 0.2) + 
+  colors + labels + scale + axis +
+  theme_minimal() +  theme + labelstheme + ticks + percent_annotations + text_annotations +
+  country_anotations + arrows 
+
+
+piu2
+```
+
+## **ENHANCENMENT**
+
+Decidimos utilizar un geom_area graph dado que permite ver mejor las diferencias en los picos de producción que aparecen en los datos y que eran mucho más evidentes en el gráfico que intentamos replicar. Sin embargo, al utilizar los datos originales en los que hay diferencia entre URSS y la Federación Rusa, parece que no se tiene en cuenta el año que salta de uno a otro y genera un espacio entre ambos. Por eso tratamos de hacer el mismo gráfico pero con la base de datos que aúna los datos de URSS y Federación Rusa.
+
+```{r, fig.showtext=TRUE, fig.asp=1}
+
+enhan <- ggplot(data = panel_g) +
+  aes(x = Year, y = oilprod_kbd, fill = Country) +
+  geom_area() +
+  geom_vline(xintercept = c(1979, 2019), 
+    linetype = "dashed", 
+    color = "white", 
+    size = 0.2) + 
+  colors + labels + scale + axis +
+  theme_minimal() +  theme + labelstheme + ticks 
+
+enhan
+```
+
+```{r, fig.showtext=TRUE, fig.asp=1}
+
+center_coordinates <- panel_g1 |> 
+  group_by(Country, Year) |> 
+  filter(Year == 2008) |> 
+  summarize(center = mean(oilprod_kbd))
+
+cumulative_coordinates <- panel_g1 |> 
+  group_by(Country) |> 
+  arrange(Year) |> 
+  mutate(cumulative = cumsum(oilprod_kbd))
+
+enhan2 <- ggplot(data = panel_g1) +
+  aes(x = Year, y = oilprod_kbd, fill = Country) +
+  geom_area() +
+  geom_text(
+    data = cumulative_coordinates |> filter(Year == 2008),
+    aes(label = Country, y = cumulative),
+    hjust = 0, vjust = 0.5,  # Ajustes para la posición del texto
+    size = 3,  # Tamaño del texto
+    color = "white")  +
+  geom_vline(xintercept = c(1979, 2019), 
+    linetype = "dashed", 
+    color = "white", 
+    size = 0.2) + 
+  colors2 + labels + scale + axis +
+  theme_minimal() +  theme + labelstheme + ticks 
+
+
+enhan2
+```
+
+```{r, fig.showtext=TRUE, fig.asp=1}
+
+enhan3 <- ggplot(data = panel_g) +
+  aes(x = Year, y = oilprod_kbd, fill = Country) +
+  geom_stream(type = "ridge") +
+  geom_vline(xintercept = c(1979, 2019), 
+    linetype = "dashed", 
+    color = "white", 
+    size = 0.2) + 
+  colors + labels + scale + axis +
+  theme_minimal() +  theme + labelstheme + ticks
+
+enhan3
+```
+
+```{r}
+ geom_text(data = panel_per,
+            aes(x = Year-3,  
+                y = oilprod_kbd, 
+                label = percent),
+            size = 4, 
+            hjust = 1, 
+            vjust = 0.5,
+            position = position_stack(reverse = FALSE)) 
+
+ 
+ geom_segment(aes(x = 2013, y = 50000, xend = 2019, yend = 50000),
+               arrow = arrow(length = unit(0.3, "inches"), type = "open", ends = "last"),
+               size = 0.5, color = "grey20")
+ 
+ ?geom_curve
+  symbols(1985, -30400, circles = 5000, inches = 0.01, add = TRUE, fg = "black")
+
+  
+  draw.circle(1985, -30400, r = 5000, border = "black")
+
+?draw.circle
+ 
+# resto el total partido por 2 a cada cantidad pero dejo los valores de los procentajes tal cual, hago una nueva columna con esos datos y esa columna la pongo en la y. así me pone las etiquetas de los porcentajes a la altura de la y que yo quiero. 
+ 
+ 
+
+ # mencionar las limitaciones que he tenido en la explicación para github y de la presentación. no puedo hacer nada con rusia ni con la URSS. ni puedo hacer nada para la primera parte del gráfico. 
+ 
+ # probar a hacer un geom_area para plantearlo como alterntiva a ver cómo sale. 
+ 
+ 
+geom_text(aes(label=genre), df.labels, hjust=0, nudge_x=0.2)
+
+ annotate("text", 
+    x = 1979, y = -50000, size = 2,
+    label = paste("1979:", 
+           "66 millones", sep="\n", nudge_y = -0.8)) 
+?annotate
+ 
+ 
+ ?st_point_on_surface
+```
+
+clip off argument si no me entra una etiqueta dentro del panel, va incluido en coord.
+
+ggtitle
+
+```{r}
+
+
+# just in case 
+scale <- c(scale_x_continuous(name = NULL, limits = c(1910, 2022), breaks = seq(from = 1920, to = 2020, by = 10), expand = expansion(0)), scale_y_continuous(name = NULL, labels = NULL)) 
+
+
+geom_text(data = panel_per,
+            aes(x = Year-3,  
+                y = oilprod_kbd, 
+                label = percent),
+            size = 4, 
+            hjust = 1, 
+            vjust = 0.5,
+            position = position_stack(reverse = FALSE)) 
+
+??hjust
+
+annotate(
+    "text", 
+    x = 1979, y = -50000, 
+    label = paste("1979:", 
+           "66 millones", sep="\n", nudge_x = 0.4)) 
+  
+
+  
+
+labelstheme <- theme(plot.title = element_text(family = "Fira Sans", size = 14, face = "bold", margin = margin(t = 100, b = -90)), plot.subtitle = element_text(family = "Fira Sans", size = 9.5, color = "gray10", face = "bold", margin = margin(t = 100, b = -90)), plot.caption = element_text(family = "Fira Sans"))
+
+
+
+
+
+colour = Country # esto es del geom_text pero lo he quitado porque no quiero que sean del mismo color que mi país. 
+
+# tendré que crear un database nuevo???
+
+
+panel_per <- panel_g |> 
+  filter(Year == "2022") |> 
+  mutate(percent = round((oilprod_kbd/(sum(oilprod_kbd)))*100)) |> 
+  filter(percent > 2) |> 
+  arrange(Country, Region) 
+
+
+ # Hasta Canadá lo dejo igual.
+
+
+
+  
+?ggtext
+?geom_stream
+```
+
+-   el sombreado gris alrededor del gráfico
+
+-   espacio entre el eje x y el caption
+
+-   textura del gráfico
+
+-   color de las etiquetas (blanco y negro)
+
+-   texto en el gráfico y flechas
+
+-   porcentajes en 2022
+
+-   la aproximación al cero
+
+-   en 1979 US y USSR deberían ser similares en ancho porque uno es 11000 y el otro 10000 pero USSR es muchiismo mas grande???
+
+-   En el 85 deberia acabar la USSR y empezar Rusia pero es como que alarga sus valores no sé por qué
+
+-   tengo que hacer algo con los datos del 79/80
+
+```{r}
+# Cargo esto para los colores
+install.packages("ggthemes")
+library(ggthemes)
+
+subtitle
+
+
+mycolors <-  c("#5fcd84","#03635f", "#059c95", "#91fbf7", "#e96e6e", "#e44c4c", "#801313", "#e48b6b", "#ff7050", "#ff603c", "#ffeca6", "#ffdf6c", "#ffcb0a", "#9787ca", "#735eb8", "#4f3d8b", "#edbfd6", "#e4a0c3", "#dc82af",  "#d3639c", "#9c2c64", "#7e2451", "#5f1b3d", "#99be64", "#4c770e")
+
+
+panel_g |>
+ggplot() +
+  aes(x = Year, y = oilprod_kbd, fill = Country) +
+  geom_stream(type = "mirror", aes(color = Country),  bw = 0.5) +
+  geom_stream_label(aes(label = Country)) +
+  labels + scale + axis +
+  theme_minimal() + 
+  theme + labelstheme + ticks +
+  geom_vline(xintercept = c(1979, 2019), linetype = "dashed", color = "white", size = 0.2) + 
+  annotate("text", x = 1979, y = -65000, label = "1979: 66 millones") 
+
+# con expand: 
+scale <- c(scale_x_continuous(name = NULL, limits = c(1910, 2022), breaks = seq(from = 1920, to = 2020, by = 10), expand = expansion(0)), scale_y_continuous(name = NULL, labels = NULL, expand = expansion(0))) 
+
+
+
+# Creo una color palette:
+mycols <- colors()[c(89, 46, 60, 32, 459, 99, 144)] 
+
+?ggthemes
+tableau_cyclic
+
+
+panel_f |>
+ggplot() +
+  aes(x = Year, y = oilprod_kbd, fill = Country) +
+  geom_stream(type = "mirror", aes(color = Region)) 
+
+
+
+
+#  theme(plot.caption = element_text(hjust = 0, margin = margin(t = 10, unit = "pt")))
+
+
+
+install.packages("RColorBrewer")
+
+
+scale_color_gradient2(values = mycols) +
+
+  
+
+#     bw = 0.5, extra_span = 2, true_range = "none", n_grid = 1000
+  
+  + geom_stream_label(aes(label = Country))
+  
+  
+ n_grid = 1000, center_fun = NULL,
+
+cols <- c("#FFB400", "#FFC740", "#C20008", "#FF020D", "#13AFEF")
+
+ggplot(blockbusters, aes(x = year, y = box_office, fill = genre)) +
+  geom_stream() +
+  scale_fill_manual(values = cols) 
+
+
+panel_g1 <- 
+  panel_g |> 
+  arrange(Country, Region) |> 
+  mutate(Country = if_else(Country == "USSR", "Russian Federation", Country)) 
+
+
+# Porcentajes. No he podido hacerlo así porque no consigo que me ponga las etiquetas bien, así que haré un annotate 
+
+countries_per <-  c("Australia", "Indonesia", "China", "Other Asia", "United Kingdom", "Norway", "Other Europe", "USSR", "Russian Federation", "Other CIS", "Brazil", "Venezuela", "Other America", "Mexico", "Canada", "US")                   
+                    
+panel_per <- panel_g |> 
+  filter(Year == "2022") |> 
+  mutate(percent = round((oilprod_kbd/(sum(oilprod_kbd)))*100)) |> 
+  arrange(Country, Region) |> 
+  mutate(position = if_else(row_number() <= 15, (oilprod_kbd + sum(oilprod_kbd)/2), (oilprod_kbd - sum(oilprod_kbd)/2))) |> 
+  view()
+
+geom_text(data = panel_per,
+            aes(x = Year-3,  
+                y = position, 
+                label = percent),
+            size = 4, 
+            hjust = 1, 
+            vjust = 0.5,
+            position = position_stack(reverse = FALSE)) 
+
+```
+
+```{r, fig.showtext=TRUE, fig.asp=1}
+
+scale2 <- c(scale_x_continuous(name = NULL, limits = c(1965, 2022), breaks = seq(from = 1970, to = 2020, by = 10), expand = expansion(0), position = "top"), scale_y_continuous(name = NULL, labels = NULL, expand = expansion(add = c(5000, 5500)), position = "right")) 
+
+
+panel_h <- panel_g |> 
+  arrange(Year, oilprod_kbd)
+  
+  # arrange(Region, Year)
+
+panel_g |> 
+  ggplot()+
+  aes(x = Year, y = oilprod_kbd, fill = Country)+
+  geom_area(show.legend = FALSE)+
+  facet_wrap(facets = panel_g$Region,
+             nrow = 4,
+             ncol = 2)+
+  colors + theme_minimal() + labels + scale2 + axis +
+  theme + labelstheme + ticks 
+
+
+```
