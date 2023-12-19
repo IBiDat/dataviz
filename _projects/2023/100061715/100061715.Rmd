@@ -1,10 +1,35 @@
 ---
 title: "Unveiling birth clinical practice in Spain: mapping the cesarian sections and birth dynamics"
-description: "Exploring the nuances of maternal healthcare in Spain through an augmented map, showcasing original cesarean section rates alongside additional insights such as total births per autonomous community and cesarean rates adjusted for the average maternal age."
-categories: 2023
-author: "Celia Muñoz"
+description: |
+  "Exploring the nuances of maternal healthcare in Spain through an augmented map, showcasing original cesarean section rates alongside additional insights such as total births per autonomous community and cesarean rates adjusted for the average maternal age."
+categories: "2023"
+author: Celia Muñoz
 date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
 ---
+
+```{r setup, include=FALSE, fig.align='center', fig.showtext=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+
+Over the past two decades, the global rate of caesarean sections (C-sections) has experienced a notable increase. While C-sections are a life-saving intervention when medically necessary, inappropriate procedures pose potential risks for both mothers and newborns.
+
+In Spain, caesarean deliveries rank among the most prevalent surgical procedures, accounting for 22% of all deliveries in 2019. The aggressive nature of caesarean sections becomes particularly concerning when performed without medical justification, as such instances may be regarded as obstetric violence and contribute to gender discrimination.
+
+The chart to replicate is found on the [Ministry of Health's website, as part of the indicators from the Minimum Basic Data Set (CMBD)](https://icmbd.sanidad.gob.es/icmbd/indicadorAction.do?method=list#t1). This set comprises a record of all hospital admissions documented over the course of a year (2019 in this case) on a patient-level basis. For each patient, fundamental sociodemographic variables are gathered, and the hospital episode is encoded using international standards for the classification of diseases and procedures.
+
+![C-section rate in Spain (2019), the original graph](images/Captura%20de%20pantalla%202023-12-19%20a%20las%2023.20.26.png)
+
+To reproduce our graph, the original data on cesarean section rate can be downloaded from the same website. The dataset includes information for all autonomous communities regarding the total number of births in Spain, the age of the mother, the total number of births with a cesarean section, and the average age of mothers who underwent a cesarean section.
+
+## First steps
+
+The first step is to load the basic libraries and those specific for merging our data, generating maps, etc. Next, we load our original data and perform data cleaning to construct the cesarean section rate variable, which will be essential throughout the development.
 
 ```{r}
 # Loading packages
@@ -18,29 +43,32 @@ library(fuzzyjoin)
 library(ggtext)
 ```
 
-
 ```{r}
 # Adjusting locale settings
 my_locale <- locale(decimal_mark = ",", grouping_mark = ".")
 
 
 # Reading data
-cesareas <- read_delim("tasa_cesareas.csv", 
+c_section <- read_delim("tasa_cesareas.csv", 
                  skip = 10, 
                  delim = ";",
-                 col_names = c("ccaa", "n_partos", "estancia_partos", "edad_partos", "n_cesareas", "edad_cesareas", "estancia_cesareas", "tasa_cesareas"),
+                 col_names = c("ccaa", "n_births", "births_hosp_stay", "birth_age", "n_c_section", "c_section_age", "c_section_hosp_stay", "c_section_rate"),
                  locale = my_locale)
 
 # Cleaning data and generating a new cesarea rate
-cesareas <- cesareas %>% 
+c_section <- c_section %>% 
   na.omit() %>% 
   filter(ccaa != "Total Altas") %>% 
-  mutate(tasa_cesareas = (n_cesareas / n_partos) * 100)
+  mutate(c_section_rate = (n_c_section / n_births) * 100)
 
-ccaa <- cesareas %>% 
+ccaa <- c_section %>% 
   select(ccaa)
-
 ```
+
+Now that we have the data loaded and cleaned, we begin constructing our chart. In this case, as it is a map of Spain, we will use the mapSpain library, which allows us to visualize different geographical levels. In this case, we need the data at the level of autonomous communities.
+
+There are several libraries for creating map-based graphics; however, most of them place the Canary Islands in their original location. This can be problematic when representing territories that are geographically distant from the general country area. Fortunately, mapSpain comes with the default fictitious location for the Canary Islands, commonly used in such cases.
+
 ```{r}
 # Loading map data
 spain <- esp_get_ccaa()
@@ -50,11 +78,9 @@ ggplot(spain) +
   geom_sf()
 ```
 
-
-
 ```{r}
-# Comprobamos que los nombres de las CCAA coinciden y hacemos ajustes para mejorar el join
-cesareas <- cesareas %>% 
+# Verifying that the names of the CCAA match to enhance the join.
+c_section <- c_section %>% 
   stringdist_join(
     spain,
     by = c("ccaa" = "ine.ccaa.name"),
@@ -63,53 +89,62 @@ cesareas <- cesareas %>%
     max_dist = 0.3
   ) %>% 
   mutate(
-    ine.ccaa.name = if_else(ccaa == "Rioja (La)", "Rioja, La", ine.ccaa.name)) %>% 
-  select(ccaa, ine.ccaa.name, n_partos, edad_partos, tasa_cesareas, edad_cesareas) # Keeping the main variables
+    ine.ccaa.name = if_else(ccaa == "Rioja (La)", "Rioja, La", ine.ccaa.name)) 
+
+# Keeping the main variables
+c_section <- c_section %>% 
+select(ccaa, ine.ccaa.name, n_births, birth_age, c_section_rate, c_section_age) 
 
 # Joining map data and cesarean data
-cesareas_map <- spain %>% 
+c_section <- spain %>% 
   left_join(
-    cesareas,
+    c_section,
     by = "ine.ccaa.name"
   )  
 
-summary(cesareas_map)
+str(c_section)
 ```
-
+The next task is to use our cesarean section rate variable to fill the different autonomous communities with varying color intensities according to their values.
 
 ```{r}
 # Filling the map with cesarean rate data
-map <- ggplot(cesareas_map) +
-  geom_sf(aes(fill = tasa_cesareas), color = "white", linewidth = 0.2)
+c_section_map <- ggplot(c_section) +
+  geom_sf(aes(fill = c_section_rate), color = "white", linewidth = 0.2)
 
-map
+c_section_map
 ```
+Our original map uses various shades of bluish-green to represent the cesarean section rate. The color darkens with a higher cesarean section rate. These color specifications are determined based on specific values. We use the "colors," "breaks," and "limits" adjustments in the scale_fill_stepsn function to indicate these specifications.
 
 ```{r}
 # Setting the specific colors and breaks
-map <- map +
+c_section_map <- c_section_map +
   scale_fill_stepsn(
     colors = c("#5EAABB", "#478B9C", "#2f6b7d", "#184c5d", "#002c3e"),
     breaks = c(13.57, 16.83, 20.10, 23.36, 26.63, 29.89),
     limits = c(13.57, 29.89)) # Setting the limits
 
 
-map
+c_section_map
 ```
+Once we have the colors set for our chart, we slightly adjust the coordinates for a better framing of the graph.
 
 ```{r}
 # Setting the coordinates so we can have space for the legend
-map <- map +
+c_section_map <- c_section_map +
     coord_sf(xlim=c(-14, 5),
-           ylim=c(35, 46)) 
+           ylim=c(34, 46)) 
 
-map
+c_section_map
 ```
 
+Uno de los desafíos que presenta nuestro gráfico es la leyenda. Se sitúa arriba y en posición horizontal. Además, los números guía están alineados al centro con los puntos donde cambia el color que indica nuestra tasa. Esto pasa en todos excepto en el primer dato, que está alineado a la izquierda con el inicio de la leyenda.
 
 ```{r}
-# Tunning the theme, legend
-map <- map +
+# Tunning the fonts
+sysfonts::font_add_google("Open Sans", family="Open Sans")
+
+# Tunning the legend
+c_section_map <- c_section_map +
   theme_void() +
   theme(
     legend.position = c(0.2,0.9),
@@ -121,40 +156,32 @@ map <- map +
     panel.background = element_rect(fill = "#f5f5f5",
                                     color = NA))
 
-map
-```
-
-```{r}
-# Tunning the fonts and alignment of the legend
-sysfonts::font_add_google("Open Sans", family="Open Sans")
-showtext::showtext_auto()
-
-map <- map + 
+# Adjusting alignment of the legend
+c_section_map <- c_section_map + 
   theme(text = element_text(size = 10, 
                             color = "#6d6d6d",
                             family="Open Sans"),
         legend.text.align = c(0, 0.5, 0.5, 0.5, 0.5, 0.5))
 
-map
+c_section_map
 ```
+
 
 ```{r}
 # Enhancement
 # Obtaining the standarised cesarean rate
-model <- lm(tasa_cesareas ~ edad_cesareas, data = cesareas_map)
+model <- lm(c_section_rate ~ c_section_age, data = c_section)
 coefs <- coef(model)
 
-cesareas_map <- cesareas_map %>% 
-  mutate(tasa_cesareas_edad = tasa_cesareas - coefs['edad_cesareas'] * (edad_cesareas - mean(edad_cesareas)))
+c_section <- c_section %>% 
+  mutate(c_section_age = c_section_rate - coefs['c_section_age'] * (c_section_age - mean(c_section_age)))
 
 # Lets take a look at the adjusted cesarean rate
-summary(cesareas_map$tasa_cesareas_edad)
+summary(c_section$c_section_age)
 ```
 
-
 ```{r}
-#spain <- esp_get_country()
-cesareas_centroid <- st_centroid(cesareas_map, of_largest_polygon = TRUE)
+c_section_centroid <- st_centroid(c_section, of_largest_polygon = TRUE)
 ```
 
 ```{r}
@@ -164,18 +191,16 @@ bubble_map <- ggplot() +
           linewidth = 0.1,
           alpha = 0.5) +
   geom_sf(
-    data = cesareas_centroid,
+    data = c_section_centroid,
     pch = 21,
-    aes(size = n_partos, 
-        fill = tasa_cesareas_edad),
+    aes(size = n_births, 
+        fill = c_section_age),
     stroke = 0.1) +
   coord_sf(xlim=c(-17, 3.5),
            ylim=c(34, 45))
   
 bubble_map
 ```
-
-
 
 ```{r}
 # Adjusting guides
@@ -237,7 +262,7 @@ bubble_map <- bubble_map +
 
 bubble_map
 ```
- 
+
 ```{r}
 # Adding title and subtitle
 bubble_map <- bubble_map + 
@@ -252,5 +277,3 @@ bubble_map <- bubble_map +
 
 bubble_map
 ```
-
-
