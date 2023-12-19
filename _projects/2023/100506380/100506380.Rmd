@@ -4,7 +4,7 @@ description: |
   Visualizing the global distribution of disposable income between 1990 and 2019- Our World in Data.
 categories: "2023"
 author: "Frederick Peña Sims"
-date: "2023-12-18"
+date: "2023-12-19"
 output:
   distill::distill_article:
     self_contained: false
@@ -127,7 +127,7 @@ theme_owid <- function(){
       
       plot.title = element_text(size = 16, 
                                 hjust = 0,
-                                color = "#5b5b5b"),
+                                color = "#444444"),
       plot.title.position = "plot",
       plot.subtitle = element_text(size = 9.5,
                                    color = "grey",
@@ -223,7 +223,7 @@ p <-
   p + 
   geom_area(data = data_world,
             aes(x = Year, y = am_people, group = disp_inc, fill = disp_inc),
-            alpha = 0.8) +
+            alpha = 0.85) +
   scale_fill_manual(values = c(b_40_dollars_and_more = "#6494c5",
                                b_30_40_dollars = "#7cb4d5",
                                b_20_30_dollars = "#b3d7e8",
@@ -296,7 +296,10 @@ p <-
   theme_owid() +
   labs(title = "Distribution of population between different poverty\nthresholds, World, 1990 to 2019",
        subtitle = "This data is adjusted for inflation and for differences in the cost of living between countries.",
-       caption = "Data source: World Bank Poverty and Inequality Platform (2022) – Learn more about this data\nNote: This data is expressed in international-$ at 2017 prices. Depending on the country and year,\nit relates to income measured after taxes and benefits, or to consumption, per capita.\nOurWorldInData.org/poverty | CC BY"   ) 
+       caption = paste("Data source: World Bank Poverty and Inequality Platform (2022) – Learn more about", 
+                       "this data\nNote: This data is expressed in international-$ at 2017 prices.", 
+                       "Depending on the country and year,\nit relates to income measured after", 
+                       "taxes and benefits, or to consumption, per capita.\nOurWorldInData.org/poverty | CC BY"))
 p
 ```
 
@@ -341,7 +344,7 @@ theme_owid_facet <-
           legend.position = "none",
           plot.title = element_text(size = 16,
                                     hjust = 0,
-                                    colour = "#5b5b5b",
+                                    colour = "#444444",
                                     margin = margin(b = 2.5)),
           plot.title.position = "plot",
           plot.subtitle = element_text(size = 9.5,
@@ -365,9 +368,12 @@ theme_owid_facet <-
 
 ### Creating the alternative plot
 
-To create the plot, first the labels of the facets were created and stored in an object, which was subsequently included in the function '*facet_wrap*'. The remainder remains similar to the replication graph. The segments were adjusted to the fact that a more fine-grained y-axis provides much needed information for the interpretation of the graph.
+To create the plot, first the labels of the facets were created and stored in an object, which was subsequently included in the function '*facet_wrap*'. The remainder remains similar to the replication graph, with some minor distinct changes. The y-axis was replaced with an inscription in only the first facet describing the most upper line (1.5 billion). This caused me a bit of a headache, because just using '*geom_text*' to only annotate in one facet ('*annotate*' annotates in every facet) messed up the order of the facets.
 
-```{r, echo=TRUE, fig.asp= 0.75}
+So I had to create a workaround. First, I created an object ('*custom_levels*'), storing the levels of the variable about to be faceted. This was then plugged into a data frame, created to only select the first level from the '*custom_levels*' object in an '*if_else*' structure to assign the label '*1.5 billion*' storing it under the variable '*label*'. If the label for the variable for disposable income equals the first level of the custom levels object, '*1.5 billion*' is pasted, else nothing is specified. This would generate a facet plot, where the remainder of the facets are allocated '*geom_text*' according to their '*custom_levels*'. To prevent this from happening, the label variable of created data frame is altered, setting the label for every disposable income variable to empty except for the first level in the '*custom_levels*' object. Lastly, I ensured that there is only 9 options for the '*geom_text*' to be applied with the '*unique*' function.
+
+```{r, echo=TRUE}
+
 labels <- c("b_40_dollars_and_more" = "above $40 a day", 
             "b_30_40_dollars" = "$30-$40 a day",      
             "b_20_30_dollars" = "$20-$30 a day",    
@@ -378,28 +384,60 @@ labels <- c("b_40_dollars_and_more" = "above $40 a day",
             "b_1_2.15_dollars" = "$1-$2.15 a day",     
             "below_1_dollar" = "below $1 a day") 
 
-a <-   
-  data_world |>
+
+custom_levels <- c(
+  "b_40_dollars_and_more",
+  "b_30_40_dollars",
+  "b_20_30_dollars",
+  "b_10_20_dollars",
+  "b_6.85_10_dollars",
+  "b_3.65_6.85_dollars",
+  "b_2.15_3.65_dollars",
+  "b_1_2.15_dollars",
+  "below_1_dollar")
+
+dat_text <- data.frame(
+  label = ifelse(data_world$disp_inc == custom_levels[1], "1.5 billion", ""),
+  disp_inc = data_world$disp_inc)
+
+dat_text$label[dat_text$disp_inc %in% custom_levels[-1]] <- ""
+
+dat_text <- unique(dat_text)
+```
+
+This data frame information is then plugged into the '*geom_text*' function in the final code, using the label column to label each facet (with only the first facet being visually labeled).
+
+```{r, echo=TRUE, fig.asp= 0.75}
+a <- 
+  data_world |> 
   ggplot(aes(x = Year, y = am_people, group = disp_inc)) +
   facet_wrap(~ disp_inc, labeller = labeller(disp_inc = labels)) +
-  geom_segment(aes(x = 1990, xend = 2019, y = 0, yend = 0),    
-               linetype = "solid", color = "grey") + 
+  geom_segment(aes(x = 1990, xend = 2019, y = 0, yend = 0),
+               linetype = "solid", color = "grey") +
   geom_segment(aes(x = 1990, xend = 2019, y = 500000000, yend = 500000000),
                linetype = "dashed", color = "grey") +
-  geom_segment(aes(x = 1990, xend = 2019, y = 1e9, yend = 1e9), 
-               linetype = "dashed", color = "grey") +
+  geom_segment(aes(x = 1990, xend = 2019, y = 1e9, yend = 1e9),
+               linetype = "dashed", color = "grey")+
   geom_segment(aes(x = 1990, xend = 2019, y = 1500000000, yend = 1500000000),
                linetype = "dashed", color = "grey") +
-  coord_cartesian(xlim = c(1990, 2019), expand = TRUE) + 
-  theme_owid_facet() + 
-  scale_x_continuous(breaks = c(1990, 2000, 2010, 2019),
-                     expand= c(0, 0)) + 
-  scale_y_continuous(breaks = c(0, 500000000 , 1000000000, 1500000000), 
-                     labels = c("0", "500 million", "1 billion", "1.5 billion"),
+  coord_cartesian(xlim = c(1990, 2019), expand = TRUE) +
+  theme_owid_facet() +
+  scale_y_continuous(breaks = c(0, 
+                                500000000 , 
+                                1000000000, 
+                                1500000000, 
+                                2000000000),
+                     labels = c(),
                      expand = c(0, 0)) +
-  labs(x = NULL, 
-       y = NULL) + 
-  geom_area(stat = "identity", fill = "#002147", alpha = 0.8)  
+  scale_x_continuous(breaks = c(1990, 2000, 2010, 2019),
+                     expand= c(0, 0)) +
+  labs(x = NULL,
+       y = NULL) +
+  geom_area(stat = "identity", fill = "#002147", alpha = 0.8) +
+  geom_text(data = dat_text,
+            mapping = aes(x = 1994.5, y = 1370000000, label = label),
+            color = "grey", show.legend = FALSE)
+
 a
 ```
 
@@ -413,7 +451,10 @@ a <-
   labs(
     title = "Distribution of population between different poverty\nthresholds, World, 1990 to 2019",  
     subtitle = "This data is adjusted for inflation and for differences in the cost of living between countries.",
-    caption = "Data source: World Bank Poverty and Inequality Platform (2022) – Learn more about this data\nNote: This data is expressed in international-$ at 2017 prices. Depending on the country and year,\nit relates to income measured after taxes and benefits, or to consumption, per capita.\nOurWorldInData.org/poverty | CC BY"   ) + 
+    caption = paste("Data source: World Bank Poverty and Inequality Platform (2022) – Learn more about", 
+                       "this data\nNote: This data is expressed in international-$ at 2017 prices.", 
+                       "Depending on the country and year,\nit relates to income measured after", 
+                       "taxes and benefits, or to consumption, per capita.\nOurWorldInData.org/poverty | CC BY")) + 
   coord_cartesian(clip = "off")
 a
 ```
@@ -426,17 +467,14 @@ ggsave("test/alternative_approach.png", width = 8, height = 8, bg = "white")
 
 ### ...and make it move.
 
-For the facet wrap, I was able to animate it. Instead of leaving the x-axis free, it is fixed in my animation, making it easier to to understand the relationship between year and amount of people pertaining to a certain category of disposable income.
+For the facet wrap, I was able to animate it. Instead of leaving the x-axis free, it is fixed in my animation, making it easier to to understand the relationship between year and amount of people pertaining to a certain category of disposable income. To only create one loop, the gifski package provides to opportunity to manually set 'looping' to false.
 
 ```{r, echo = TRUE, eval = FALSE, fig.asp= 0.75}
 a_fluid <-  
   a + 
   transition_reveal(Year) 
-a_fluid
+
+animate(a_fluid, renderer = gifski_renderer(loop = FALSE))
 ```
 
-![](images/rep_animated.gif)
-
-Distill is a publication format for scientific and technical writing, native to the web.
-
-Learn more about using Distill at <https://rstudio.github.io/distill>.
+![](images/animated_plot-02.gif)
