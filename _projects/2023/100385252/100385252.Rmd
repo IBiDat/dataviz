@@ -1,0 +1,598 @@
+---
+title: "Life expectancy increased in all countries of the world"
+description: |
+  The presented plot is a chart published on OurWorldInData, that aims to explain how living standards have increased over the long run through the visualization of the evolution of life expectancy over the world. In order to represent such improvement, data from three different years are considered. First, the x-axis represents the cumulative share of the world population.And on the y-axis, we see the life expectancy of each country, where the areas represent each of the years.Accordingly, all the countries of the world are ordered along the x-axis ascending by the life expectancy of the population. 
+
+author: Alejandra Costa
+cataegories: "2023"
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+### Packages and libraries
+
+```{r}
+#install.packages("ggplot2")
+#install.packages("tidyverse")
+#install.packages("ggrepel")
+#install.packages("patchwork")
+#install.packages("ggthemes")
+#install.packages("extrafont")
+library(ggplot2)
+library(ggthemes)
+library(ggrepel)
+library(tidyverse)
+library(patchwork)
+library(tidyverse)
+library(readxl)
+library(ggstream)
+library(showtext)
+library(ggtext)
+library(extrafont)
+
+
+```
+
+## Data
+
+### 1.1 Read Data
+
+```{r}
+
+# population by country and year
+country_pop <-  read.csv("Pop_country.csv", sep = ";") 
+
+# life expectancy by country and year
+life <- read.csv("LifeExpect.csv", sep = ";") 
+
+
+```
+
+### 1.2 Merge data sets
+
+We join both the data set of life expectancy by country and the data set of population by country.
+
+```{r}
+
+# Merge Life expectancy by country with population by country. 
+join_data <- inner_join(country_pop, life, by = c("Country", "Year")) 
+
+```
+
+```{r}
+
+# Select just information for the years 1800, 1950 and 2012. 
+join_data <- join_data |> filter(Year %in% c("1800", "1950", "2012")) 
+
+
+```
+
+```{r}
+
+# remove unnecessary columns 
+join_data <- join_data |> select(-c("geo")) 
+
+
+```
+
+### 1.3 Arrange data
+
+Arrange data by year and life expectancy
+
+```{r}
+# Arrange Data by year and life expectancy 
+
+join_data <- join_data |> arrange(Year, LifeExpectAtBirth) 
+
+join_data <- join_data[join_data$Country != "Iceland", ]
+
+```
+
+### 1.4 Share of cumulative population
+
+```{r}
+# Calculate share of cumulative world population 
+
+
+dataset <- join_data|> 
+  drop_na() |> 
+  group_by(Year) |> 
+  mutate(share = cumsum((as.numeric(Population)))/ sum(as.numeric(Population))) |> 
+  mutate(Year = as.factor(Year)) |> 
+  mutate(share = round(share, digits = 5)) 
+
+
+
+dataset |> 
+  group_by(Year) |> 
+  filter(share == max(share), LifeExpectAtBirth == max(LifeExpectAtBirth)) |> 
+  ungroup()
+
+dataset$Year <- factor(dataset$Year, levels = c(2012, 1950, 1800)) 
+
+```
+
+### 1.5 Country transformation
+
+In order to align the countries names of the data set with the way they are written in the labels of the plot, we need to apply some specific transformations. We first rewrite "United States" as "USA" and also, for the year 1950, we change "Russia" for "URSS", while for the years 1800 and 2012, we keep it unchanged.
+
+```{r}
+
+dataset <- dataset |> 
+  mutate(Country = ifelse( Country == "Russia" & Year =="1950", "URSS", Country))|>
+  mutate(Country = ifelse( Country == "United States", "USA", Country)) 
+
+
+#Lists 
+list_2012 <- c("Sierra Leone", "Mozambique", "Nigeria", "Somalia", "Afghanistan", "Rwanda", "India", "Pakistan", "Russia", "Indonesia", "Brazil", "China", "Mexico", "Costa Rica", "South Korea", "USA", "Australia", "Germany", "Spain", "Japan") 
+list_1950 <- c("Bhutan", "Somalia", "India", "China","South Korea", "Brazil", "URSS", "Cuba", "Japan", "Germany", "Canada", "USA", "Norway") 
+list_1800 <- c("India", "South Korea", "Nigeria", "Spain", "Russia", "China", "France", "Germany", "Netherlands", "Belgium", "USA") 
+
+
+
+dataset <- dataset |> 
+  mutate(label = 
+           ifelse( (Country %in% list_2012 & Year == "2012") | 
+                   (Country %in% list_1950 & Year == "1950") | 
+                   (Country %in% list_1800 & Year == "1800"), "Yes", "No")) 
+
+
+```
+
+## 2. Arrange Graph
+
+### 2.1 Palette of colors
+
+```{r}
+
+area_color <- c("#84A98C", "#FFD399","#FFCAD3") 
+
+line_color <- c("#238B45", "#ff6900", "#99000d") 
+
+scatter_color <- c("#EF9A9A", "#FDAE61","#66c2a4")
+```
+
+### 2.3 Captions
+
+```{r}
+caption_text <- paste("Data Source: The data on life expectancy by country and population are taken from Gapminder.org.","The interactive data viusalization is available at OurWolrdData.org. There you find the raw data and more viusalizations on this topic.                                Licensed under CC-BY-SA by the author Max Roser.", sep="\n") 
+
+caption_2012 <- paste(" Global Average", "Life Expectancy:", "      70 years", sep= "\n") 
+
+caption_1950 <- paste(" Global Average", "Life Expectancy:", "      48 years", sep= "\n") 
+
+caption_1800 <- paste(" Global Average", "Life Expectancy:", "      32 years", sep= "\n")  
+```
+
+### 2.3 Font
+
+```{r}
+
+library(showtext) 
+
+sysfonts::font_add_google("Playfair Display") 
+showtext::showtext_auto() 
+
+```
+
+## 3. Create Graph
+
+### 3.1 Replication
+
+```{r}
+
+p1 <- 
+  ggplot(dataset, 
+         aes(x = share, y = LifeExpectAtBirth,
+             label= as.factor(Year), 
+             color = as.factor(Year))) +
+  
+  geom_line() +
+  
+  geom_area(aes(fill = as.factor(Year)), 
+            position = position_dodge(width = 0), 
+            alpha = 0.8) +  
+    geom_text_repel(data = subset(dataset, label == "Yes"), aes(label = Country), 
+            xlim = c(0, 1),
+            nudge_y = 0.05,  
+            max.overlaps = 100, colour = "black",size = 3, segment.size = 0, segment.color = NA)  +
+  guides(color = FALSE, fill = FALSE) +
+  scale_fill_manual(values = area_color) +
+  scale_color_manual(values = line_color)
+
+# apply colors and scale of axes
+p2 <- p1 +
+  scale_x_continuous(
+    breaks = c(0.0, 0.25, 0.5, 0.75, 1), 
+    labels = c("0", "1/4", "1/2", "3/4", "1"),
+    expand = c(0, 0),
+    limits = c(0, 1.1)
+   )+
+  scale_y_continuous(
+    breaks = seq(0, 90, by = 10), 
+    labels = c("","10","20", "30", "40", "50", "60", "70", "80", "90"),
+    expand=c(0,0),
+    limits = c(0, 95))
+
+#add title and subtitle
+
+p3 <- p2 +
+   labs(
+    title = "Life Expectancy of the World population in 1800, 1950 and 2012",
+    subtitle = str_wrap("Countries are ordered along the x-axis ascending by the life expectancy of the population. Data for almost all countries is shown in this chart, but not all data points are labelled with the country name.", width =124),
+    caption = caption_text,
+    x = "Cumulative Share of the World Population",
+    y = "Life Expectancy At Birth")
+
+#adjust theme
+
+p4 <- p3 + 
+  theme(
+    axis.line.y = element_line(colour = "black", size =0.05),  
+    axis.line.x = element_blank(),
+    plot.background = element_rect(fill = "white"),
+    panel.background = element_rect(fill  = "white"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    axis.ticks = element_blank(),
+    plot.title = element_text(size = 20, family = "Playfair Display", margin = margin(b=-2, t = -1), vjust = 2.6),
+    plot.subtitle = element_text(size = 10, family = "Playfair Display", lineheight = 0.5, color = "#525252"),
+    plot.caption = element_text(size = 8, hjust = 0, vjust = -1, color = "#525252",lineheight = 0.8),
+    plot.caption.position = "plot",
+    axis.title.x = element_text(size = 15, margin = margin(t = 5)),
+    axis.title.y = element_text(size = 11, margin = margin(r = 8),vjust = 0.05),
+    axis.text.x = element_text(size = 14, color = "black"), 
+    axis.text.y = element_text(size = 12, color = "black"),
+    plot.margin = margin(18, 8, 10, 20))    #top, right, bottom, left
+
+
+
+#include background lines
+
+p5 <- p4 +
+  annotate("segment", x=1, xend = 1, y=0, yend=93,  
+           color = "black",linewidth = 0.05, alpha= 1) +
+  annotate("segment", x=0, xend = 1, y=10, yend=10, 
+           color = "#969696",linewidth = 0.001, alpha= 0.4) +
+  annotate("segment", x=0, xend = 1, y=20, yend=20, 
+           color = "#969696", linewidth = 0.001, alpha= 0.4)+
+  annotate("segment",x=0, xend = 1, y=30, yend=30, 
+           color = "#969696", linewidth = 0.001, alpha= 0.4) +
+  annotate("segment", x=0, xend = 1, y=40, yend=40, 
+           color = "#666666", linewidth = 0.002, alpha= 0.4) +
+  annotate("segment", x=0, xend = 1, y=50, yend=50, 
+           color = "#969696", linewidth = 0.001, alpha= 0.4) +
+  annotate("segment", x=0, xend = 1, y=60, yend=60, 
+           color = "#969696", linewidth = 0.001, alpha= 0.4) +
+  annotate("segment", x=0, xend = 1, y=70, yend=70, 
+           color = "#969696", linewidth = 0.001, alpha= 0.4)+
+  annotate("segment", x=0, xend = 1, y=80, yend=80, 
+           color = "#969696", linewidth = 0.001, alpha= 0.4) +
+  annotate("segment", x=0, xend = 1, y=90, yend=90, 
+           color = "#969696", linewidth = 0.001, alpha= 0.4)+
+   annotate("segment", x=0, xend = 1, y=0, yend=0, 
+           color = "black", linewidth = 0.05, alpha= 1)
+
+
+#include right annotations
+
+p6 <- p5 +
+  annotate("text", x = 1.027, y = 87,
+           label = "2012",
+           hjust=0,
+           size=6,
+           color="#005824") +
+    annotate("text", x = 1.011, y = 81,
+           label = caption_2012,lineheight = 0.6,
+           hjust=0,
+           size=2.5,
+           lineheight=0.05,
+           color="#525252") +
+   annotate("text", x = 1.027, y = 67,
+           label = "1950",
+           hjust=0,
+           size=6,
+           color="#ffa600") +
+  annotate("text", x = 1.011, y = 61,
+           label = caption_1950, lineheight = 0.6,
+           hjust=0,
+           size=2.5,
+           lineheight=0.05,
+           color="#525252") +
+   annotate("text", x = 1.027, y = 41,
+           label = "1800",
+           hjust=0,
+           size=6,
+           color="#99000d") +
+  annotate("text", x = 1.011, y = 35,lineheight = 0.6,
+           label = caption_1800,
+           hjust=0,
+           size=2.5,
+           lineheight=0.05,
+           color="#525252") + 
+
+# include arrows
+
+  geom_segment(x = 1.056, y = 70,
+               xend = 1.056, yend = 76, linewidth = 0.6,
+               color = "#737373", arrow=arrow(type = "closed", angle = 22, length= unit(0.2, "cm"))) +
+  geom_segment(x = 1.056, y = 44,
+               xend = 1.056, yend = 56, linewidth = 0.6,
+               color = "#737373", arrow=arrow(type = "closed", angle = 22, length= unit(0.2, "cm"))) +
+  geom_segment(x = 0.9, y = 41,
+               xend = 0.9, yend = 61,linewidth = 1.4,
+               color = "#e68600", arrow=arrow(type = "closed", angle = 22, length= unit(0.5, "cm"))) +
+  geom_segment(x = 0.3, y = 44,
+               xend = 0.3, yend = 64,linewidth = 1.4,
+               color = "#38B200", arrow=arrow(type = "closed", angle = 22, length= unit(0.5, "cm"))) 
+
+p6
+
+
+ggsave(p6, file = "replication.svg", dpi = 700, device =svg, bg = "white",
+       height = 5,
+       width = 8,
+       )
+
+
+```
+
+### 3.2 Alternative I (improvement)
+
+One of the weaknesses I found in the original graph is that not the same countries are labelled for each of the years. Therefore, the fist proposal in an enhanced plot based on a replication of the original plot plus an additional small modification, in which the same group of countries is highlighted in each line. 
+
+```{r}
+
+list_improved <- c("Mozambique", "Nigeria", "India", "Pakistan", "USA", "Spain", "China", "Mexico", "Brazil", "Cuba", "Japan", "Belgium", "Norway")
+
+dataset <- dataset |> 
+  mutate(label_improved = 
+           ifelse((Country %in% list_improved), "Yes", "No")) 
+
+
+p1 <- 
+  ggplot(dataset, 
+         aes(x = share, y = LifeExpectAtBirth,
+             label= as.factor(Year), 
+             color = as.factor(Year))) +
+  
+  geom_line() +
+  
+  geom_area(aes(fill = as.factor(Year)), 
+            position = position_dodge(width = 0), 
+            alpha = 0.9) +  
+   
+    geom_text_repel(data = subset(dataset, label_improved == "Yes"), aes(label = Country), 
+            xlim = c(0, 1),
+            nudge_y = 0.05, nudge_x = -0.01, 
+            max.overlaps = 50, colour = "black",size = 3, segment.size = 0, segment.color = NA)  +
+  guides(color = FALSE, fill = FALSE) +
+  scale_fill_manual(values = area_color) +
+  scale_color_manual(values = line_color)
+
+# apply colors and scale of axes
+p2 <- p1 +
+  scale_x_continuous(
+    breaks = c(0.0, 0.25, 0.5, 0.75, 1), 
+    labels = c("0", "1/4", "1/2", "3/4", "1"),
+    expand = c(0, 0),
+    limits = c(0, 1.1)
+   )+
+  scale_y_continuous(
+    breaks = seq(0, 90, by = 10), 
+    labels = c("","10","20", "30", "40", "50", "60", "70", "80", "90"),
+    expand=c(0,0),
+    limits = c(0, 95))
+
+#add title and subtitle
+
+p3 <- p2 +
+   labs(
+    title = "Life Expectancy of the World population in 1800, 1950 and 2012",
+    subtitle = str_wrap("Countries are ordered along the x-axis ascending by the life expectancy of the population. Data for almost all countries is shown in this chart, but not all data points are labelled with the country name.", width =124),
+    caption = caption_text,
+    x = "Cumulative Share of the World Population",
+    y = "Life Expectancy At Birth")
+
+#adjust theme
+
+p4 <- p3 + 
+  theme(
+    axis.line.y = element_line(colour = "black", size =0.05),  
+    axis.line.x = element_blank(),
+    plot.background = element_rect(fill = "white"),
+    panel.background = element_rect(fill  = "white"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    axis.ticks = element_blank(),
+    plot.title = element_text(size = 20, family = "Playfair Display", margin = margin(b=-2, t = -1), vjust = 2.6),
+    plot.subtitle = element_text(size = 10, family = "Playfair Display", lineheight = 0.5, color = "#525252"),
+    plot.caption = element_text(size = 8, hjust = 0, vjust = -1, color = "#525252",lineheight = 0.8),
+    plot.caption.position = "plot",
+    axis.title.x = element_text(size = 15, margin = margin(t = 5)),
+    axis.title.y = element_text(size = 11, margin = margin(r = 8),vjust = 0.05),
+    axis.text.x = element_text(size = 14, color = "black"), 
+    axis.text.y = element_text(size = 12, color = "black"),
+    plot.margin = margin(18, 8, 10, 20))    #top, right, bottom, left
+
+
+
+#include background lines
+
+p5 <- p4 +
+  annotate("segment", x=1, xend = 1, y=0, yend=93,  
+           color = "black",linewidth = 0.05, alpha= 1) +
+  annotate("segment", x=0, xend = 1, y=10, yend=10, 
+           color = "#969696",linewidth = 0.001, alpha= 0.4) +
+  annotate("segment", x=0, xend = 1, y=20, yend=20, 
+           color = "#969696", linewidth = 0.001, alpha= 0.4)+
+  annotate("segment",x=0, xend = 1, y=30, yend=30, 
+           color = "#969696", linewidth = 0.001, alpha= 0.4) +
+  annotate("segment", x=0, xend = 1, y=40, yend=40, 
+           color = "#666666", linewidth = 0.002, alpha= 0.4) +
+  annotate("segment", x=0, xend = 1, y=50, yend=50, 
+           color = "#969696", linewidth = 0.001, alpha= 0.4) +
+  annotate("segment", x=0, xend = 1, y=60, yend=60, 
+           color = "#969696", linewidth = 0.001, alpha= 0.4) +
+  annotate("segment", x=0, xend = 1, y=70, yend=70, 
+           color = "#969696", linewidth = 0.001, alpha= 0.4)+
+  annotate("segment", x=0, xend = 1, y=80, yend=80, 
+           color = "#969696", linewidth = 0.001, alpha= 0.4) +
+  annotate("segment", x=0, xend = 1, y=90, yend=90, 
+           color = "#969696", linewidth = 0.001, alpha= 0.4)+
+   annotate("segment", x=0, xend = 1, y=0, yend=0, 
+           color = "black", linewidth = 0.05, alpha= 1)
+
+#include right annotations
+
+p6 <- p5 +
+  annotate("text", x = 1.027, y = 87,
+           label = "2012",
+           hjust=0,
+           size=6,
+           color="#005824") +
+    annotate("text", x = 1.011, y = 81,
+           label = caption_2012,lineheight = 0.6,
+           hjust=0,
+           size=2.5,
+           lineheight=0.05,
+           color="#525252") +
+   annotate("text", x = 1.027, y = 67,
+           label = "1950",
+           hjust=0,
+           size=6,
+           color="#ffa600") +
+  annotate("text", x = 1.011, y = 61,
+           label = caption_1950, lineheight = 0.6,
+           hjust=0,
+           size=2.5,
+           lineheight=0.05,
+           color="#525252") +
+   annotate("text", x = 1.027, y = 41,
+           label = "1800",
+           hjust=0,
+           size=6,
+           color="#99000d") +
+  annotate("text", x = 1.011, y = 35,lineheight = 0.6,
+           label = caption_1800,
+           hjust=0,
+           size=2.5,
+           lineheight=0.05,
+           color="#525252") + 
+
+# include arrows
+
+  geom_segment(x = 1.056, y = 70,
+               xend = 1.056, yend = 76, linewidth = 0.6,
+               color = "#737373", arrow=arrow(type = "closed", angle = 22, length= unit(0.2, "cm"))) +
+  geom_segment(x = 1.056, y = 44,
+               xend = 1.056, yend = 56, linewidth = 0.6,
+               color = "#737373", arrow=arrow(type = "closed", angle = 22, length= unit(0.2, "cm"))) +
+  geom_segment(x = 0.9, y = 41,
+               xend = 0.9, yend = 61,linewidth = 1.4,
+               color = "#e68600", arrow=arrow(type = "closed", angle = 22, length= unit(0.5, "cm"))) +
+  geom_segment(x = 0.3, y = 44,
+               xend = 0.3, yend = 64,linewidth = 1.4,
+               color = "#38B200", arrow=arrow(type = "closed", angle = 22, length= unit(0.5, "cm"))) 
+
+p6
+
+
+  
+
+ggsave(p6, file = "plot.svg", device = svg, bg = "white",
+         height = 10,
+      width = 10)
+```
+
+### 3.3 Alternative II (faced grid)
+
+The other alternative proposed is a completely new plot in which the same information is represented but from another point of view.
+
+```{r}
+
+
+list_alternative <- c("Mozambique", "Nigeria", "India", "Pakistan", "USA", "Spain", "China", "Mexico", "Brazil", "Cuba")
+
+dataset <- dataset |> 
+  mutate(label_alternative = 
+           ifelse((Country %in% list_alternative), "Yes", "No")) |> 
+  mutate(Year_f = factor(Year, levels = c("1800", "1950", "2012")))
+
+
+data_text <- data.frame(
+  Year_f = c(1800, 1950, 2012),
+  label = c(caption_1800, caption_1950, caption_2012),
+  x  = c(0.35, 0.35, 0.35),
+  y = c(92, 92, 92))
+
+colors_vector <- c("#EF9A9A", "#FDAE61","#66c2a4")
+
+g_faced <-
+  ggplot(
+    dataset, aes(x=share,y=LifeExpectAtBirth, color = as.factor(Year_f), group = Year_f)
+    ) +
+  geom_jitter(data= dataset,
+    position = position_jitter(width = 0.2), alpha = 0.8) +
+  scale_color_manual(values = colors_vector)  +
+  facet_grid(~Year_f) +
+  geom_smooth(method = "lm", se = TRUE, formula = y ~ x, aes(color = as.factor(Year_f)),linewidth = 0.001, linetype = "dashed") +
+  guides(color = FALSE, fill = FALSE) +
+  scale_x_continuous(
+    breaks = c(0, 0.25, 0.5, 0.75, 1),
+    labels = c("0", "1/4", "1/2", "3/4", "1"),
+    expand = c(0, 0),
+    limits = c(0, 1))+
+  scale_y_continuous(
+    breaks = seq(0, 90, by = 10),
+    labels = c("","10","20", "30", "40", "50", "60", "70", "80", "90"),
+    expand=c(0,0),
+    limits = c(0, 100)) +
+  labs(
+    title = "Life Expectancy of the World population in 1800, 1950 and 2012",
+    subtitle = str_wrap("Countries are ordered along the x-axis ascending by the life expectancy of the population. Data for almost all countries is shown in this chart, but not all data points are labelled with the country name.", width =124),
+    caption = "Data Source: The data on life expectancy by country and population are taken from Gapminder.org.",
+    x = "Cumulative Share of the World Population",
+    y = "Life Expectancy At Birth") +
+  theme(
+    plot.background = element_rect(fill = "transparent"),
+    panel.background = element_rect(fill  = "#F0F0F0"),
+    strip.text.x = element_text(size = 12, face = "bold.italic"),
+    panel.grid.major.x = element_line(color = "white", linewidth = 0.0000001),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(color = "white", linewidth = 0.0000001),
+     plot.title = element_text(size = 22, family = "Playfair Display", margin = margin(b=-2, t = -1), vjust = 2.6),
+    plot.subtitle = element_text(size = 12, family = "Playfair Display", lineheight = 1, color = "#525252"),
+    plot.caption = element_text(size = 8, hjust = 0, vjust = -0.5, color = "#737373",lineheight = 1.5),
+    plot.caption.position = "plot",
+    axis.title.x = element_text(size = 10),
+    axis.title.y = element_text(size = 10),
+    plot.margin = margin(12, 20, 12, 15), #bottom, right, top, left
+    panel.spacing = unit(0.5, "cm"))
+ 
+
+
+plot <- g_faced +
+
+ geom_text(
+    data = data_text,
+    aes(x = x, y = y,label = label), lineheight = 1,
+    hjust = 0, size = 3, color = "black"
+    ) +
+  geom_text_repel(data = subset(dataset, label_alternative == "Yes"), aes(label = Country), 
+            xlim = c(0, 1),max.overlaps = 50,
+            nudge_y = 0.05, nudge_x = -0.01, 
+           colour = "black",size = 3, segment.size = 0, segment.color = NA)  
+plot
+
+
+
+```
