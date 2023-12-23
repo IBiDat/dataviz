@@ -1,0 +1,349 @@
+---
+title: "The world is progressively embracing democracy"
+description: |
+  A reproduction of the Our World in Data visualization, which is based on the
+  classification and assessment of countries' political regimes by Skaaning et al. (2015).
+categories: "2023"
+author: Sofia Villamil Erosa
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.align="center", fig.showtext=TRUE)
+```
+
+## Democracy
+
+The graphic I choose shows how democracy has spread across countries, how it differs between them, and whether we are moving 
+towards a more democratic world. The variables denoted in the chart shows the number of electoral democracies in the world based 
+on the Lexical Index of Electoral Democracy-classification from Skaaning et al. (2015).
+
+The Lexical Index definition attained from Our World in Data establishes that it is a classification system that categorizes 
+political systems or regimes based on easily observable characteristics. It aims to avoid difficult evaluations by experts or 
+researchers and relies on its own teams to assess specific criteria. These criterions are used to identify democracies and 
+non-democracies. The index is able to track political systems over time, measured since the year 1789, and includes 242 countries.
+ The index prioritizes straightforward and objective factors, making it a tool for quick assessments and comparisons.
+
+### Definitions
+
+**Types of Democracy in the Lexical Index:**
+
+1.  **Non-Electoral Autocracy:** A political system characterized by a single entity or a small group holding power without 
+elections, often with a single autocrat or ruling elite.
+
+2.  **One-Party Autocracy:** A system where a single political party maintains absolute control over the government, suppressing 
+the opposition and competitive elections.
+
+3.  **Multi-Party Autocracy without Elected Executive:** A political system with multiple parties, but the executive leader is 
+not elected democratically.
+
+4.  **Multi-Party Autocracy:** Features multiple political parties, but the political system still retains autocratic elements.
+
+5.  **Exclusive Democracy:** Inclusive of elections but excludes certain groups or individuals from political participation.
+
+6.  **Male Democracy:** A democracy where only male citizens are allowed to participate in elections.
+
+7.  **Electoral Democracy:** A political system with regular elections where citizens can choose their leaders, but this may not 
+guarantee full democratic rights.
+
+8.  **Polyarchy:** A comprehensive democracy with competitive elections, civil liberties, political pluralism, and broad 
+participation.
+
+These definitions reflect the categorization of political systems within the Lexical Index, based on specific characteristics and 
+levels of inclusiveness attained from Skaaning et al. (2015), with "Polyarchy" representing the highest level of democracy and 
+inclusivity.
+
+## Getting the data
+
+The dataset, obtained from Our World in Data and based on research by Skaaning et al. (2015), categorizes the world's nations 
+into democracies and autocracies. This graphic dynamically captures the shifts in these counts from 1789 through 2022, offering 
+insights into the evolving landscape of global political systems nowadays. All the data needed for this chart can be downloaded 
+directly from the Our World in Data website in the topic Democracy 
+(<https://ourworldindata.org/grapher/countries-democracies-autocracies-lexical>).
+
+```{r}
+data <- read.csv("data_world.csv", sep = ";", dec = ",")
+```
+
+## Building the chart
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+```
+
+### Data
+
+The data scoured from Our World in Data needed to be converted to frequency tables . The graph's vertical axis, which I aimed to 
+replicate, utilized cumulative frequency as a metric, necessitating the data's conversion. Subsequently, I identified and chose 
+the specific columns needed for the replication, resulting in the creation of a new data-set named *df_reduced*.
+
+```{r}
+df_reduced <- data %>%
+  select(Year, Frec.Non.electoral.autocracies, Frec.One.party.autocracies,
+         Frec.Multi.party.autocracies.without.elected.executive,
+         Frec.Multi.party.autocracy, Frec.Exclusive.democracies, 
+         Frec.Male.democracies, Frec.Electoral.democracies, 
+         Frec.Polyarchies) 
+
+custom_order <- c("Frec.Non.electoral.autocracies", "Frec.One.party.autocracies", 
+                  "Frec.Multi.party.autocracies.without.elected.executive",
+                  "Frec.Multi.party.autocracy", "Frec.Exclusive.democracies",
+                  "Frec.Male.democracies", "Frec.Electoral.democracies",
+                  "Frec.Polyarchies")
+```
+
+To enhance accessibility and facilitate the chart-building process, I converted the new dataset into tidy data. During this 
+conversion, several changes were implemented, and intervals were established for the axis.
+
+```{r}
+df_long <- df_reduced %>%
+  pivot_longer(cols = -Year, names_to = "Democracy_Type", values_to = "n")
+
+df_long <- df_long %>%
+  mutate(Democracy_Type = factor(Democracy_Type, levels = custom_order))
+
+interval_x <- c(1789, 1850, 1900, 1950, 2000, 2022)
+
+interval_y <- seq(0, 100, by = 0.2)   
+
+```
+
+Due to each variable having an associated color. The following color vector was created for each value.
+
+```{r}
+democracy_colors <- c(
+  "Frec.Non.electoral.autocracies" = "#d73027",
+  "Frec.One.party.autocracies" = "#f46d43", 
+  "Frec.Multi.party.autocracies.without.elected.executive" = "#fdae61", 
+  "Frec.Multi.party.autocracy" = "#fee090", 
+  "Frec.Exclusive.democracies" = "#e0f3f8",
+  "Frec.Male.democracies" = "#abd9e9",
+  "Frec.Electoral.democracies" = "#74add1", 
+  "Frec.Polyarchies" = "#4575b4"
+)
+```
+
+### Starting with the graphic
+
+To construct the visual representation, I utilized the *geom_area* function from *ggplot*, tailored for generating 
+**Stacked Area Charts.**
+
+```{r}
+plot <- ggplot(df_long, aes(x = Year, y = n, fill = Democracy_Type)) +
+  geom_area(alpha = 0.8, size = 0.2, aes(color = Democracy_Type)) +
+  labs(x = NULL, y = NULL, fill = NULL) +
+  scale_x_continuous(limits = c(1789, 2085), breaks = interval_x, minor_breaks = NULL) +
+  scale_y_continuous(labels = scales::percent_format(scale = 100), breaks = interval_y) +
+  scale_fill_manual(values = democracy_colors) +
+  scale_color_manual(values = democracy_colors) +
+  coord_cartesian(expand=0) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      color="#5b5b5b", size = 10, family = "Lato", angle = 0, 
+      hjust = c(0.1, 0.3, 0.5, 0.5, 0.5, 1), margin = margin(t = 0)),
+    axis.ticks.x = element_line(color="#5b5b5b", size = 0.2),
+    axis.ticks.length = unit(0.1, "cm"),
+    legend.position = "none",
+    panel.grid = element_blank(),
+    axis.text.y = element_text(
+      color="#5b5b5b", size = 10, family = "Lato", margin = margin(r = 0))
+  ) +
+  ggtitle(
+    "Countries that are democracies and autocracies, World", 
+    subtitle = "Political regimes based on the classification and assessment by Skaaning et al. (2015).") +
+  theme(plot.title = element_text(
+    color="#5b5b5b", family = "serif", size = 15, face = "bold", hjust = -0.27),
+        plot.subtitle = element_text(
+          color="#5b5b5b", family = "Lato", size = 9, hjust = -0.24)
+  )
+plot
+```
+
+I employed the intervals created during the data organization for both the x-axis and the y-axis in constructing the graphic. 
+Given that the y-axis represents frequencies in percentage, the code was modified to reflect this in the visualization. The year 
+limits were adjusted to fit the dimensions required for displaying custom labels for each democratic type. While the code's limits
+ span from 1789 to 2085, the graphic displays the period from 1789 to 2022 on the x-axis.
+
+To achieve a custom separation between each year on the x-axis, adjustments were made in the theme section, specifically in 
+*axis.text.x*, where the spacing between each year was manually configured in order to be exactly the distance displayed 
+in the graphic of reference.
+
+### Final touches
+
+I generated custom labels with corresponding colors and segments, mirroring the structure observed in the graphic that I aimed 
+to replicate.
+
+```{r}
+custom_legend <- data.frame(
+  Democracy_Type = levels(df_long$Democracy_Type),
+  x = rep(2022, length(levels(df_long$Democracy_Type))),
+  y = seq(0, 1, length.out = length(levels(df_long$Democracy_Type))),
+  label = c("Polyarchies",
+            "Electoral\ndemocracies",
+            "Male\ndemocracies",
+            "Exclusive\ndemocracies",
+            "Multi-party\nautocracy",
+            "Multi-party\nautocracies\nwithout elected\nexecutive",
+            "One-party\nautocracies",
+            "Non-electoral\nautocracies"
+  ),
+  label_distance = c(11, 11, 11, 21, 4, 31, 4, 8),
+  segment_distance = c(10, 10, 10, 20, 3, 30, 3, 7), 
+  vertical_offset_segment = c(0.20, 0.33, 0.338, -0.16, 0.15, 0.09, 0.01, -0.04),
+  vertical_offset_label = c(0.20, 0.33, 0.338, -0.16, 0.15, 0.09, 0.01, -0.04)
+)
+
+corrected_Democracy_Type <- rev(custom_legend$Democracy_Type)
+
+
+```
+
+To replicate the specific placement of labels and segments in the target graphic, I modified the code to permit manual 
+adjustments for the angle, vertical, and horizontal placement of both text and segments. Thus, *segment_distance* makes 
+reference to the horizontal placement of the segment and *vertical_offset_segment* 
+is for the vertical placement.
+
+Furthermore, I introduced a custom legend to the plot and fine-tuned the size parameters to precisely match the dimensions of 
+the desired graphic.
+
+```{r}
+plot2 <- plot +
+  geom_text(
+    data = custom_legend,
+    aes(x = x + label_distance, 
+        y = y + vertical_offset_label, 
+        label = label, 
+        color = corrected_Democracy_Type),
+    size = 2.5,
+    family = "Lato",
+    hjust = 0
+  ) +
+  geom_segment(
+    data = custom_legend,
+    aes(x = x + segment_distance, 
+        xend = x + 1, 
+        y = y + vertical_offset_segment, 
+        yend = y + vertical_offset_segment, 
+        color = "#5b5b5b"),
+    size = 0.5
+  ) +
+  theme(
+    plot.margin = margin(0.3, 0.3, 0.3, 0.3, "cm")
+  )
+
+plot2
+
+```
+
+## Improving the chart
+
+Upon careful consideration, I determined that there was no apparent need for enhancements in the replicated graphic. Consequently,
+ I opted to generate a new visual representation utilizing the same dataset.
+
+### Building the new chart
+
+In an effort to retain as much of the original code as possible, I generated a new custom color palette to address perceived 
+deficiencies in the previous one. This adjustment was made to enhance visibility, ensuring that all colors are easily discernible.
+ Additionally, I maintained the code for creating custom labels in the process as I wanted to highlight that code and expand the
+  use of it to improve the new graphic.
+
+```{r}
+democracy_colors <- c(
+  "Frec.Non.electoral.autocracies" = "#081d58",
+  "Frec.One.party.autocracies" = "#253494",
+  "Frec.Multi.party.autocracies.without.elected.executive" = "#225ea8",
+  "Frec.Multi.party.autocracy" = "#41b6c4",
+  "Frec.Exclusive.democracies" = "#7fcdbb",
+  "Frec.Male.democracies" = "#c7e9b4",
+  "Frec.Electoral.democracies" = "#1d91c0",
+  "Frec.Polyarchies" = "black"
+)
+custom_legend <- data.frame(
+  Democracy_Type = levels(df_long$Democracy_Type),
+  x = rep(2022, length(levels(df_long$Democracy_Type))),
+  y = seq(0, 1, length.out = length(levels(df_long$Democracy_Type))),
+  label = c(
+    "Polyarchies",
+    "Electoral democracies",
+    "Male democracies","Exclusive democracies",
+    "Multi-party autocracy",
+    "Multi-party autocracies without elected executive",
+    "One-party autocracies",
+    "Non-electoral autocracies"
+  ),
+  label_distance = c(3, -20, 3, 3, -60, -220  , 3, -220),
+  vertical_offset_label = c(0.38, 0.17,-0.28, -0.27, -0.59, -0.32, -0.76, 0)
+)
+
+corrected_Democracy_Type <- rev(custom_legend$Democracy_Type)
+```
+
+The chosen type of chart for improvements was a **Parallel Plot** utilizing the *geom_line* function from *ggplot*. I chose this
+ approach as it provides a clearer representation of the evolution of each democracy type throughout the analysis period.
+
+In trying to create the new graphic, I aimed for a fresh look while retaining the essence of the original one I sought to 
+replicate. To achieve this, I employed much of the existing code I had created for the previous graphic. Additionally, I 
+introduced some modifications to add distinctive elements that I deemed necessary, resulting in a new and improved interpretation 
+of the same data set.
+
+```{r}
+plot_parallel_custom <- ggplot(df_long, aes(x = Year, y = n, color = Democracy_Type)) +
+  geom_line(aes(group = Democracy_Type), alpha = 0.8, size = 1) +
+  scale_x_continuous(limits = c(1789, 2065), breaks = interval_x, minor_breaks = NULL) +
+  scale_y_continuous(labels = scales::percent_format(scale = 100), breaks = interval_y) +
+  geom_text(
+    data = custom_legend,
+    aes(x = x + label_distance, 
+        y = y + vertical_offset_label, 
+        label = label, 
+        color = corrected_Democracy_Type),
+    size = 2.8,
+    family = "Playfair Display ExtraBold",
+    hjust = 0) +
+  scale_color_manual(values = democracy_colors) +
+  labs(
+    x = "Years",
+    y = "Percentage of Countries",
+    title = "Countries that are democracies and autocracies, World.",
+    subtitle = "Political regimes based on the classification and assessment by Skaaning et al. (2015)."
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    plot.title = element_text(
+      color = "#252525", family = "serif", size = 15, face = "bold", 
+      hjust = -0.1, vjust = 0),
+    axis.title.x = element_text(
+      color = "#252525", family = "serif", size = 12, hjust = 0.44, vjust = -1),   
+    axis.title.y = element_text(
+      color = "#252525", family = "serif", size = 12,vjust = 3), 
+    plot.subtitle = element_text(
+      color = "#252525", family = "Lato", size = 9, hjust = -0.1, 
+      vjust = 0, face = "italic"),
+    axis.text.x = element_text(
+      color = "#5b5b5b", size = 9, family = "Playfair Display ExtraBold", 
+      vjust = 0 , hjust = c(0, 0, 0, 0, 0.5, 1), margin = margin(t = -9)),
+  axis.text.y = element_text(
+    color = "#5b5b5b", size = 9, family = "Playfair Display ExtraBold", 
+    vjust = 0, hjust = 0, margin = margin(r = -22 )
+    )
+  ) +
+  theme(
+    plot.margin = margin(0.4, 0.4, 0.5, 0.7, "cm"), 
+  ) +
+  guides(color = "none")
+
+plot_parallel_custom
+```
+
+Recognizing the need for enhanced interpretability, I decided to include legends for both the x-axis and y-axis, making it easier 
+to understand the various measures depicted in the plot. To improve readability, I made adjustments such as changing the font 
+color to black. Moreover, I relocated the labels inside the graphic instead of just using segments, believing that this 
+modification would enhance comprehension of each type of democracy and its evolution over time.
