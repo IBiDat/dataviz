@@ -1,0 +1,459 @@
+---
+title: "Change in abortion after Dobbs"
+description: |
+  A visualization of how abortions changed after Dobbs
+categories: "2023"
+author: Clara Espinosa Acevedo
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+STARTING PROJECT
+
+Preparing the dataframe
+
+```{r}
+df <- data.frame(
+  x = c(1, 8, 6, 3, 2, 4, 11, 11, 11, 10, 9, 1, 6, 3, 6, 7, 5, 7, 5, 11, 10, 
+        12, 8, 6, 6, 7, 4, 10, 5, 5, 12, 10, 4, 3, 10, 8, 4, 2, 9, 12, 9, 
+        5, 8, 5, 3, 9, 11, 2, 7, 8, 4),
+  y = c(8, 2, 2, 3, 4, 4, 5, 3, 4, 1, 2, 2, 5, 6, 4, 4, 3, 3, 2, 6, 4, 8, 
+        6, 6, 3, 2, 6, 3, 6, 4, 7, 5, 3, 4, 6, 5, 2, 5, 5, 6, 3, 5, 3, 1, 5, 4, 7, 6, 5, 4, 5),
+  state = c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA", 
+            "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME", 
+            "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM", 
+            "NV", "NY", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", 
+            "UT", "VA", "VT", "WA", "WI", "WV", "WY"),
+  state.color = c("black", "#BE8DB7", "#BE8DB7", "black", "black", 
+                  "black", "black", "black", "black", "black", 
+                  "black", "black", "black", "black", "black",
+                  "black", "black", "#BE8DB7", "#BE8DB7", "black",
+                  "black", "black", "black", "black", "white",
+                  "#BE8DB7", "black", "black", "#BE8DB7", "black",
+                  "black", "black", "black", "black", "black",
+                  "white", "#BE8DB7", "black", "black", "black",
+                  "black", "#BE8DB7", "white", "#BE8DB7", "black",
+                  "black", "black", "black","#BE8DB7", "black", "black"),
+  value = c(2, -100, -100, -53, 1, 33, -1, 0, 24, 10, -57, 4, -27, -48, 28,
+           15, 36, -100, -100, -3, 1, 18, 8, 14, -83, -100, 30, 37, -100, 30,
+           -6, 7, 12, 21, 12, -65, -100, 18, 6, -7, -56, -100, -78, -100, -3,
+           -4, 16, 5, -100, -8, -5))
+
+```
+
+REPLICATION
+
+Base graph of the dataframe
+
+```{r}
+library(ggplot2)
+ggplot(df) +
+  aes(x, y, fill=value) +
+  geom_tile(color="white", linewidth=2) +
+  geom_text(aes(label=state, color=state.color), size=6) +
+  coord_fixed() +
+  scale_fill_distiller(type="div", palette="PRGn") +
+  scale_color_identity() +
+  theme_void()
+```
+Gradient color
+
+```{r}
+q <- ggplot(df) +
+  aes(x, y, fill=value) +
+  geom_tile(color="white", linewidth=2) +
+  geom_text(aes(label=state, color=state.color), size=5) +
+  coord_fixed() +
+  scale_fill_gradientn(colors = c("#4A0B35","#7D3F62", "#92597A","#AB7D99", "#CBA8C2", "#E8D0E9","#F0F0F0", "#DBF2D5", "#C1DCB8", "#B4D2AB", "#A9C89E", "#9CBD8F","#7EA370", "#2B5F1D"),
+                       breaks = c(-100, -78, -65, -48, -27, -8, 0, 5, 18, 24, 30, 37, 50, 100),
+                       limits = c(-100, 100)) +
+  scale_color_identity() + 
+  theme_void()
+```
+
+Legend
+
+```{r}
+q <- q + guides(fill = guide_colorbar(title = "PERCENT CHANGE",
+                                 title.position = "top",
+                                 title.theme = element_text(size = 10,
+                                                            family = "Helvetica"),
+                                 #title.hjust = 0.5,
+                                 #title.vjust = 0.5,
+                                 label = FALSE,
+                                 barheight = 0.7,
+                                 barwidth = 9,
+                                 #nbin = 100,
+                                 ticks = FALSE,
+                                 direction = "horizontal")) +
+  theme(legend.position = c(0.13, 0.93))
+```
+
+Titles and subtitles
+
+```{r}
+q <- q + labs(
+  title = "Several states saw a complete drop in abortions after Dobbs",
+  subtitle = "Percentage change in number of abortions from April to August 2022, by state",
+  caption = paste("Percent change in abortions is calculated from #WeCount's unrounded data. Less-populated states might see larger",
+                  "percentage shifts because the raw number of abortions in those states tend to be smaller.",
+                  sep = "\n")
+) +
+  theme(plot.title = element_text(size = 18, color = "#222222", face = "bold", family = "Helvetica", hjust = 0.1, vjust = 3)) +
+  theme(plot.subtitle = element_text(size = 14, color = "#222222", face = NULL, family = "Helvetica", hjust = 0.1, vjust = 3)) +
+  theme(plot.caption = element_text(size = 10, color = "#999999", face = NULL, family = "Helvetica", hjust = 0, vjust = 0.1))
+
+q
+
+```
+
+Square annotations
+
+```{r}
+# Base
+q <- q + annotate("rect", xmin = 6.5, xmax = 7.5, ymin = 8.65, ymax = 9.65, alpha = 0, color = "#D8726F")
+
+# SD
+q <- q + annotate("rect", xmin = 4.5, xmax = 5.5, ymin = 4.5, ymax = 5.5, alpha = 0, color = "#D8726F")
+
+# WI
+q <- q + annotate("rect", xmin = 6.5, xmax = 7.5, ymin = 4.5, ymax = 5.5, alpha = 0, color = "#D8726F")
+
+# OH
+q <- q + annotate("rect", xmin = 7.5, xmax = 8.5, ymin = 4.5, ymax = 5.5, alpha = 0, color = "#D8726F")
+
+# KY
+q <- q + annotate("rect", xmin = 6.5, xmax = 7.5, ymin = 2.5, ymax = 3.5, alpha = 0, color = "#D8726F")
+
+# MO
+q <- q + annotate("rect", xmin = 5.5, xmax = 6.5, ymin = 2.5, ymax = 3.5, alpha = 0, color = "#D8726F")
+
+# TN
+q <- q + annotate("rect", xmin = 7.5, xmax = 8.5, ymin = 2.5, ymax = 3.5, alpha = 0, color = "#D8726F")
+
+# SC
+q <- q + annotate("rect", xmin = 8.5, xmax = 9.5, ymin = 2.5, ymax = 3.5, alpha = 0, color = "#D8726F")
+
+# AZ
+q <- q + annotate("rect", xmin = 2.5, xmax = 3.5, ymin = 2.5, ymax = 3.5, alpha = 0, color = "#D8726F")
+
+# OK
+q <- q + annotate("rect", xmin = 3.5, xmax = 4.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#D8726F")
+
+# LA
+q <- q + annotate("rect", xmin = 4.5, xmax = 5.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#D8726F")
+
+# AR
+q <- q + annotate("rect", xmin = 5.5, xmax = 6.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#D8726F")
+
+# MS
+q <- q + annotate("rect", xmin = 6.5, xmax = 7.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#D8726F")
+
+# AL
+q <- q + annotate("rect", xmin = 7.5, xmax = 8.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#D8726F")
+
+# GA
+q <- q + annotate("rect", xmin = 8.5, xmax = 9.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#D8726F")
+
+# TX
+q <- q + annotate("rect", xmin = 4.5, xmax = 5.5, ymin = 0.5, ymax = 1.5, alpha = 0, color = "#D8726F")
+
+q
+```
+
+Line annotations
+
+```{r}
+## Lines ##
+# CA
+q <- q + annotate("segment", x = 2, xend = 2, y = 3.5, yend = 1)
+
+# AZ
+q <- q + annotate("segment", x = 3, xend = 3, y = 2.5, yend = 2)
+
+# CA&AZ
+q <- q + annotate("segment", x = 2, xend = 3, y = 2, yend = 2)
+
+# ND
+q <- q + annotate("segment", x = 5.3, xend = 5.3, y = 6.5, yend = 7.1)
+
+# AR
+# AR1
+q <- q + annotate("segment", x = 6, xend = 6, y = 1.5, yend = -0.2)
+# AR2
+q <- q + annotate("segment", x = 6, xend = 6.3, y = -0.2, yend = -0.2)
+
+q
+```
+
+Text annotations
+
+```{r}
+# Base square
+library(ggtext)
+
+q <- q + annotate(geom = "richtext", x = 7.5, y = 9.15, 
+                  label = "Outlines indicate that abortion was **fully**<br>**illegal** or **illegal after about six weeks** for<br>at least half of the two months after Dobbs", 
+                  size = 5, fill = NA, label.color = NA, hjust = 0, color = "#555555", family = "Helvetica")
+
+# ND
+
+q <- q + annotate(geom = "richtext", x = 2.6, y = 7.7,
+             label = "The only abortion clinic in <span style = 'color:#480A34'>**North Dakota**</span><br> moved to <span style = 'color:#567F4D'>**Minnesota**</span>, where the number<br>of abortions rose by <span style = 'color:#567F4D'>**14%**",
+             size = 5, fill = NA, label.color = NA, hjust = 0, color = "#555555", family = "Helvetica")
+
+# CA & AZ
+
+q <- q + annotate(geom = "richtext", x = 0.5, y = 0.25,
+             label = "Abortions in <span style = 'color:#567F4D'>**California**</span><br>rose by only <span style = 'color:#567F4D'>**1%**</span>, although<br>they declined by <span style = 'color:#99607E'>**53%**</span> in<br>neighboring <span style = 'color:#99607E'>**Arizona**",
+             size = 5, fill = NA, label.color = NA, hjust = 0, color = "#555555", family = "Helvetica")
+
+# AR
+
+q <- q + annotate(geom = "richtext", x = 6.4, y = -0.4,
+             label = "Many Southern states saw a<br><span style = 'color:#480A34'>**100% decline**</span> in the number<br>of abortions as a result of<br>post-Dobbs legislation",
+             size = 5, fill = NA, label.color = NA, hjust = 0, color = "#555555", family = "Helvetica") +
+  xlim(-0.5, 13.5) + ylim(-0.7, 9.7)
+
+# Legend
+q <- q + annotate(geom = "richtext", x = -0.8, y = 9,
+             label = "-100%",
+             size = 3, fill = NA, label.color = NA, hjust = 0) 
+
+q <- q + annotate(geom = "richtext", x = 0.05, y = 9,
+             label = "No change",
+             size = 3, fill = NA, label.color = NA, hjust = 0)
+
+q <- q + annotate(geom = "richtext", x = 1.3, y = 9,
+             label = "+100%",
+             size = 3, fill = NA, label.color = NA, hjust = 0) 
+
+q + xlim(-0.8, 14) + ylim(-0.7, 9.7)
+```
+
+ENHACEMENT
+
+New dataframe
+
+```{r}
+df <- data.frame(
+  x = c(1, 8, 6, 3, 2, 4, 11, 11, 11, 10, 9, 1, 6, 3, 6, 7, 5, 7, 5, 11, 10, 
+        12, 8, 6, 6, 7, 4, 10, 5, 5, 12, 10, 4, 3, 10, 8, 4, 2, 9, 12, 9, 
+        5, 8, 5, 3, 9, 11, 2, 7, 8, 4),
+  y = c(8, 2, 2, 3, 4, 4, 5, 3, 4, 1, 2, 2, 5, 6, 4, 4, 3, 3, 2, 6, 4, 8, 
+        6, 6, 3, 2, 6, 3, 6, 4, 7, 5, 3, 4, 6, 5, 2, 5, 5, 6, 3, 5, 3, 1, 5, 4, 7, 6, 5, 4, 5),
+  state = c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA", 
+            "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME", 
+            "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM", 
+            "NV", "NY", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", 
+            "UT", "VA", "VT", "WA", "WI", "WV", "WY"),
+  state.color = c("black", "black", "white", "black", "black", 
+                  "black", "black", "black", "black", "black", 
+                  "black", "black", "black", "black", "black",
+                  "black", "black", "white", "white", "black",
+                  "black", "black", "black", "black", "white",
+                  "white", "black", "black", "white", "black",
+                  "black", "black", "black", "black", "black",
+                  "white", "white", "black", "black", "black",
+                  "black", "white", "white", "white", "black",
+                  "black", "black", "black","white", "black", "black"),
+  value = c(2, -100, -100, -53, 1, 33, -1, 0, 24, 10, -57, 4, -27, -48, 28,
+           15, 36, -100, -100, -3, 1, 18, 8, 14, -83, -100, 30, 37, -100, 30,
+           -6, 7, 12, 21, 12, -65, -100, 18, 6, -7, -56, -100, -78, -100, -3,
+           -4, 16, 5, -100, -8, -5))
+```
+
+
+Base
+
+```{r}
+library(ggdark)
+q <- ggplot(df) +
+  aes(x, y, fill=value) +
+  geom_tile(color="black", linewidth=2.5) +
+  geom_text(aes(label=state, color=state.color), size=6) +
+  coord_fixed() +
+  scale_fill_gradientn(colors = c("#31572c","#F0F0F0", "#003049"),
+                       breaks = c(-100, 0, 100),
+                       limits = c(-100, 100)) +
+  scale_color_identity() +
+  theme_void() +
+  dark_theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_blank(),
+        panel.grid = element_blank())
+  
+
+q
+```
+
+Legend
+
+```{r}
+q <- q + guides(fill = guide_colorbar(#title = "PERCENT CHANGE",
+                                      #title.position = "top",
+                                      #title.theme = element_text(size = 10,
+                                                                 #family = "Helvetica"),
+                                      #title.hjust = 0.5,
+                                      #title.vjust = 0.5,
+                                      label = FALSE,
+                                      barheight = 0.7,
+                                      barwidth = 9,
+                                      #nbin = 100,
+                                      ticks = FALSE,
+                                      direction = "horizontal", )) +
+  theme(legend.position = c(0.15, 0.92),
+        legend.title = element_blank())
+q
+
+```
+
+Text annotations
+
+```{r}
+q <- q + labs(
+  title = "Several states saw a complete drop in abortions after Dobbs",
+  subtitle = "Percentage change in number of abortions from April to August 2022, by state",
+  caption = paste("Percent change in abortions is calculated from #WeCount's unrounded data. Less-populated states might see larger",
+                  "percentage shifts because the raw number of abortions in those states tend to be smaller.",
+                  sep = "\n")
+) +
+  theme(plot.title = element_text(size = 18, color = "white", face = "bold", family = "Helvetica", hjust = 0.1, vjust = 0)) +
+  theme(plot.subtitle = element_text(size = 14, color = "white", face = NULL, family = "Helvetica", hjust = 0.1, vjust = 0)) +
+  theme(plot.caption = element_text(size = 10, color = "white", face = NULL, family = "Helvetica", hjust = 0, vjust = 2))
+
+q
+```
+
+Square anotations
+
+```{r}
+# Base
+q <- q + annotate("rect", xmin = 6.5, xmax = 7.5, ymin = 8.65, ymax = 9.65, alpha = 0, color = "#edafb8")
+
+# OK
+q <- q + annotate("rect", xmin = 3.5, xmax = 4.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#edafb8")
+
+# AR
+q <- q + annotate("rect", xmin = 5.5, xmax = 6.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#edafb8")
+
+# LA
+q <- q + annotate("rect", xmin = 4.5, xmax = 5.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#edafb8")
+
+# KY
+q <- q + annotate("rect", xmin = 6.5, xmax = 7.5, ymin = 2.5, ymax = 3.5, alpha = 0, color = "#edafb8")
+
+# TN
+q <- q + annotate("rect", xmin = 7.5, xmax = 8.5, ymin = 2.5, ymax = 3.5, alpha = 0, color = "#edafb8")
+
+# MS
+q <- q + annotate("rect", xmin = 6.5, xmax = 7.5, ymin = 1.5, ymax = 2.5, alpha = 0, color = "#edafb8")
+
+# AK
+q <- q + annotate("rect", xmin = 0.5, xmax = 1.5, ymin = 7.5, ymax = 8.5, alpha = 0, color = "#edafb8")
+
+# WY
+q <- q + annotate("rect", xmin = 3.5, xmax = 4.5, ymin = 4.5, ymax = 5.5, alpha = 0, color = "#edafb8")
+
+# UT
+q <- q + annotate("rect", xmin = 2.5, xmax = 3.5, ymin = 4.5, ymax = 5.5, alpha = 0, color = "#edafb8")
+
+# NE
+q <- q + annotate("rect", xmin = 4.5, xmax = 5.5, ymin = 3.5, ymax = 4.5, alpha = 0, color = "#edafb8")
+
+# IN
+q <- q + annotate("rect", xmin = 6.5, xmax = 7.5, ymin = 3.5, ymax = 4.5, alpha = 0, color = "#edafb8")
+
+# WV
+q <- q + annotate("rect", xmin = 7.5, xmax = 8.5, ymin = 3.5, ymax = 4.5, alpha = 0, color = "#edafb8")
+
+
+q
+```
+
+Legend text
+
+```{r}
+# Legend text
+
+q <- q + annotate(geom = "richtext", x = 7.5, y = 9.15, 
+                  label = "States in which more than **40%** <br>of the people supported overturning<br>**Roe v. Wade**", 
+                  size = 4.5, fill = NA, label.color = NA, hjust = 0, family = "Helvetica", color = "white")
+
+
+q
+```
+
+Text anotations
+
+```{r}
+# ANNOTATION 1: ND AND MN
+
+# ND
+q <- q + annotate("segment", x = 5.3, xend = 5.3, y = 6.5, yend = 7.1, color = "white")
+
+q <- q + annotate(geom = "richtext", x = 2.6, y = 7.7,
+                  label = "The only abortion clinic in <span style = 'color:#4F772D'>**North Dakota**</span><br> moved to <span style = 'color:#D6D9DE'>**Minnesota**</span>, where the number<br>of abortions rose by <span style = 'color:#D6D9DE'>**14%**",
+                  size = 5, fill = NA, label.color = NA, hjust = 0, color = "white")
+q
+
+# ANNOTATION 2: CA AND AZ
+
+# CA
+q <- q + annotate("segment", x = 2, xend = 2, y = 3.5, yend = 1, color = "white")
+
+# AZ
+q <- q + annotate("segment", x = 3, xend = 3, y = 2.5, yend = 2, color = "white")
+
+# CA&AZ
+q <- q + annotate("segment", x = 2, xend = 3, y = 2, yend = 2, color = "white")
+
+q <- q + annotate(geom = "richtext", x = 0.5, y = 0.25,
+             label = "Abortions in <span style = 'color:#EEEEEE'>**California**</span><br>rose by only <span style = 'color:#EEEEEE'>**1%**</span>, although<br>they declined by <span style = 'color:#879C82'>**53%**</span> in<br>neighboring <span style = 'color:#879C82'>**Arizona**",
+             size = 5, fill = NA, label.color = NA, hjust = 0, color = "white")
+q <- q + xlim(-0.1, 12.5) + ylim(-0.5, 9.7)
+
+q
+
+# ANNOTATION 3: AR
+
+# AR
+# AR1
+q <- q + annotate("segment", x = 6, xend = 6, y = 1.5, yend = -0.2)
+# AR2
+q <- q + annotate("segment", x = 6, xend = 6.3, y = -0.2, yend = -0.2)
+
+# AR
+
+q <- q + annotate(geom = "richtext", x = 6.4, y = -0.4,
+                  label = "<span style = 'color:#4F772D'>**Arizona**</span> is the state in which<br>more people are in favor of<br>overturning Roe v. Wade:<span style = 'color:#edafb8'> **48%**",
+                  size = 5, fill = NA, label.color = NA, hjust = 0, color = "white") 
+q
+
+# Legend
+q <- q + annotate(geom = "richtext", x = -0.2, y = 9,
+                  label = "-100%",
+                  size = 3, fill = NA, label.color = NA, hjust = 0, family = "Helvetica", color = "white") +
+  xlim(-0.2, 12.5) + ylim(-0.8, 9.7)
+
+q <- q + annotate(geom = "richtext", x = 0.73, y = 9,
+                  label = "No change",
+                  size = 3, fill = NA, label.color = NA, hjust = 0, color = "white") 
+
+q <- q + annotate(geom = "richtext", x = 2.1, y = 9,
+                  label = "+100%",
+                  size = 3, fill = NA, label.color = NA, hjust = 0, color = "white")
+
+q <- q + annotate(geom = "richtext", x = -0.1, y = 9.7,
+                  label = "PERCENT CHANGE",
+                  size = 3.5, fill = NA, label.color = NA, hjust = 0, color = "white", family = "Helvetica")
+```
+
+
+
+
