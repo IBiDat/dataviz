@@ -1,0 +1,571 @@
+---
+title: "Sex gap in Life expectancy in Spain"
+description: |
+  A short description of the post.
+categories: "2023"
+author: Alicia Talavera Marcos
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+<https://ourworldindata.org/why-do-women-live-longer-than-men>
+
+Packages
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(extrafont)
+library(patchwork)
+
+```
+
+
+
+Importing data
+
+```{r}
+
+lifex <- read.csv("C:/Users/alici/OneDrive/Documentos/Clase/Máster/Visualización de datos/dataviz_aliciatm/projects/2023/100508665/lifeexpectancy.csv")
+
+```
+
+Code
+
+```{r}
+View(lifex)
+
+#Rename columns
+
+lifex_r <-
+  lifex |> 
+  rename(
+    "Age 0 (infancy)" = Contribution.to.sex.gap.in.life.expectancy..years....Age_group..0,
+    
+    "Ages 1-14" = Contribution.to.sex.gap.in.life.expectancy..years....Age_group..1.14,
+    
+    "Ages 15-39" = Contribution.to.sex.gap.in.life.expectancy..years....Age_group..15.39, 
+    
+    "Ages 40-59" = Contribution.to.sex.gap.in.life.expectancy..years....Age_group..40.59,
+    
+    "Ages 60-79" = Contribution.to.sex.gap.in.life.expectancy..years....Age_group..60.79,
+    
+    "Ages 80+" = Contribution.to.sex.gap.in.life.expectancy..years....Age_group..80.) 
+
+#Tidy the data
+
+tidy_lifex_r <- 
+  lifex_r |>
+  pivot_longer(cols = "Ages 80+":last_col(),
+               names_to = "Age_group",
+               values_to = "Contribution_to_gap")
+```
+
+-   
+
+```{r}
+#Spain data
+
+spain <- 
+  tidy_lifex_r |> 
+  filter(Entity == "Spain" & Contribution_to_gap >= 0) |> 
+  mutate(Age_group = fct_rev(Age_group)) #Change order of groups to replicate the original
+
+
+```
+
+leyenda
+
+```{r}
+ylegend_80 <- 
+  spain |> 
+  filter(Age_group == "Ages 80+", Year == 2018) |> 
+  pull(Contribution_to_gap)
+
+ylegend_60 <- 
+  spain |> 
+  filter(Age_group == "Ages 60-79", Year == 2018) |> 
+  pull(Contribution_to_gap)
+
+ylegend_40 <- 
+  spain |> 
+  filter(Age_group == "Ages 40-59", Year == 2018) |> 
+  pull(Contribution_to_gap)
+
+ylegend_15 <- 
+  spain |> 
+  filter(Age_group == "Ages 15-39", Year == 2018) |> 
+  pull(Contribution_to_gap)
+
+ylegend_1 <- 
+  spain |> 
+  filter(Age_group == "Ages 1-14", Year == 2018) |> 
+  pull(Contribution_to_gap)
+
+ylegend_0 <- 
+  spain |> 
+  filter(Age_group == "Age 0 (infancy)", Year == 2018) |> 
+  pull(Contribution_to_gap)
+
+ylegend_0_final <- ylegend_0/2
+ylegend_1_final <- ylegend_1/2 + ylegend_0
+ylegend_15_final <- ylegend_15/2 + ylegend_0 + ylegend_1
+ylegend_40_final <- ylegend_40/2 + ylegend_0 + ylegend_1 + ylegend_15
+ylegend_60_final <- ylegend_60/2 + ylegend_0 + ylegend_1 + ylegend_15 + ylegend_40
+ylegend_80_final <- ylegend_80/2 + ylegend_0 + ylegend_1 + ylegend_15 + ylegend_40 + ylegend_60
+```
+
+\-
+
+OLD
+
+```{r}
+# Old one with manual margin and limit x 2018
+  ggplot(spain) +
+    aes(Year, Contribution_to_gap) +
+  
+  scale_y_continuous(limits=c(0, 10), breaks=c(0, 2, 4, 6, 8)) +
+  scale_x_continuous(limits=c(1908, 2018), breaks=c(1908, 1920, 1940, 1960, 1980, 2000, 2018), labels=c(1908, 1920, 1940, 1960, 1980, 2000, 2018)) +
+  coord_cartesian(expand = FALSE) +
+  
+  theme_classic(base_size=14) +
+  theme(
+    panel.grid.major.y=element_line(linetype = "dotted"), #lineas fondo
+    legend.position="none", 
+    axis.line = element_blank(), 
+      axis.ticks.x = element_line(color = "darkgray"), 
+      axis.ticks.length = unit(0.15, "cm"),
+      axis.ticks.y = element_blank(),
+      axis.text.x = element_text(color = "#6C6C6C", family = "Segoe UI Emoji"),
+      axis.text.y = element_text(color = "#6C6C6C", family = "Segoe UI Emoji"),
+    plot.margin = margin(0, 100, 0, 0)) + #big margin on right to legend
+    labs(x = "", y= "", title = "") +
+  
+  geom_area(aes(fill = Age_group, color = Age_group), alpha = 0.6) +
+  scale_fill_discrete(aesthetics = "fill", breaks = fct_rev(levels(spain$Age_group))) 
+#p
+
+
+
+#old event  marks
+   #geom_vline(xintercept=1918, color="darkgray", linetype = "dashed") +
+  #annotate("text", x=1909, y=9, color="darkgray", vjust=0, size=3, label="GRIPE ESPAÑOLA") +
+```
+
+\-
+
+```{r}
+#Basic form
+
+p <- ggplot(spain) +
+    aes(Year, Contribution_to_gap) +
+  
+#Scales and size
+  scale_y_continuous(limits=c(0, 9.5), breaks=c(0, 2, 4, 6, 8)) +
+  scale_x_continuous(limits=c(1908, 2045), breaks=c(1908, 1920, 1940, 1960, 1980, 2000, 2018), labels=c(1908, 1920, 1940, 1960, 1980, 2000, 2018)) +
+  coord_cartesian(expand = FALSE) +
+
+#Colors of axis, axis text, title
+  theme_classic(base_size=14) +
+  theme(
+    legend.position="none", #remove legens
+    axis.line = element_blank(), #axis lines, colors
+      axis.ticks.x = element_line(color = "darkgray"), 
+      axis.ticks.length = unit(0.15, "cm"),
+      axis.ticks.y = element_blank(),
+      axis.text.x = element_text(color = "#6C6C6C", family = "Segoe UI Emoji"),
+      axis.text.y = element_text(color = "#6C6C6C", family = "Segoe UI Emoji")) + #big margin on right to legend
+    labs(x = "", y= "", 
+        
+          title = "How do death rates in each age group contribute to the overall sex gap in life\nexpectancy? Spain", 
+         
+         subtitle = "The height of the curve shows the gap in life expectancy in years (female minus male). Positive values indicate higher\nlife expectancy in females. The stacked areas show how the gap arises from sex differences in death rates in each age\ngroup.") +
+  
+    theme(
+      plot.title = element_text(size = 14, family = "Times New Roman", color = "#5B5B5B"),
+      
+      plot.subtitle = element_text(size = 9, family = "Segoe UI Emoji", color = "#5B5B5B"),
+      
+      plot.title.position = "plot",
+      
+      plot.margin = margin(10, 0, 0, 10)) + 
+
+#Background lines
+    geom_segment(data = data.frame(y = c(0, 2, 4, 6, 8), yend = c(0, 2, 4, 6, 8), x = 1908, xend = 2018),
+    aes(x = x, xend = xend, y = y, yend = yend),
+    linetype = "dashed", color = "lightgray") +
+
+#Areas
+  geom_area(aes(fill = Age_group, color = Age_group), alpha = 0.8, linewidth = 0.3) +
+  scale_fill_manual(values = c("Ages 80+" = "#B26257", 
+                               "Ages 60-79" = "#BE9053", 
+                               "Ages 40-59" = "#82A954", 
+                               "Ages 15-39" = "#49A892", 
+                               "Ages 1-14" = "#6281BC", 
+                               "Age 0 (infancy)" = "#58495D")) +
+  
+    scale_color_manual(values = c("Ages 80+" = "#BF6B60", 
+                               "Ages 60-79" = "#BE9053", 
+                               "Ages 40-59" = "#8AAD61", 
+                               "Ages 15-39" = "#62A685", 
+                               "Ages 1-14" = "#657EAD", 
+                               "Age 0 (infancy)" = "#5F5D75")) +
+
+#Legend 
+   annotate("text", x = 2026, y = (ylegend_80_final-0.15), hjust = 0, vjust = 0, label = "Ages 80+", family = "Segoe UI Emoji", size = 3, color = "#B26257") +
+  annotate("text", x = 2026, y = (ylegend_60_final-0.15), hjust = 0, vjust = 0, label = "Ages 60-79", family = "Segoe UI Emoji", size = 3, color = "#BE9053") +
+  annotate("text", x = 2026, y = (ylegend_40_final+0.9), hjust = 0, vjust = 0, label = "Ages 40-59", family = "Segoe UI Emoji", size = 3, color = "#8AAD61") +
+  annotate("text", x = 2026, y = (ylegend_15_final+1), hjust = 0, vjust = 0, label = "Ages 15_39", family = "Segoe UI Emoji", size = 3, color = "#62A685") +
+  annotate("text", x = 2026, y = (ylegend_1_final+0.6), hjust = 0, vjust = 0, label = "Ages 1-14", family = "Segoe UI Emoji", size = 3, color = "#657EAD") +
+  annotate("text", x = 2026, y = (ylegend_0_final+0.1), hjust = 0, vjust = 0, label = "Age 0 (infancy)", family = "Segoe UI Emoji", size = 3, color = "#5F5D75") +
+
+#Lines of the legend
+  
+  #Red line
+  geom_segment(data = data.frame(y = ylegend_80_final, yend = ylegend_80_final, x = 2019, xend = 2025),
+    aes(x = x, xend = xend, y = y, yend = yend), color = "darkgray") +
+  
+  #Orange line
+  geom_segment(data = data.frame(y = ylegend_60_final, yend = ylegend_60_final, x = 2019, xend = 2025),
+    aes(x = x, xend = xend, y = y, yend = yend), color = "darkgray") +
+
+  #Green line
+    geom_segment(data = data.frame(y = ylegend_40_final, yend = ylegend_40_final, x = 2019, xend = 2021),
+    aes(x = x, xend = xend, y = y, yend = yend), color = "darkgray") +
+
+geom_segment(data = data.frame(y = ylegend_40_final+1, yend = ylegend_40_final+1, x = 2021, xend = 2025),
+    aes(x = x, xend = xend, y = y, yend = yend), color = "darkgray") +
+  
+    geom_segment(data = data.frame(y = ylegend_40_final, yend = ylegend_40_final+1, x = 2021, xend = 2021),
+    aes(x = x, xend = xend, y = y, yend = yend), color = "darkgray") +
+
+  #Teal line
+    geom_segment(data = data.frame(y = ylegend_15_final, yend = ylegend_15_final, x = 2019, xend = 2022),
+    aes(x = x, xend = xend, y = y, yend = yend), color = "darkgray") +
+
+geom_segment(data = data.frame(y = ylegend_15_final+1.1, yend = ylegend_15_final+1.1, x = 2022, xend = 2025),
+    aes(x = x, xend = xend, y = y, yend = yend), color = "darkgray") +
+  
+    geom_segment(data = data.frame(y = ylegend_15_final, yend = ylegend_15_final+1.1, x = 2022, xend = 2022),
+    aes(x = x, xend = xend, y = y, yend = yend), color = "darkgray") +
+  
+  #Blue line
+      geom_segment(data = data.frame(y = ylegend_1_final, yend = ylegend_1_final, x = 2019, xend = 2023),
+    aes(x = x, xend = xend, y = y, yend = yend), color = "darkgray") +
+
+geom_segment(data = data.frame(y = ylegend_1_final+0.7, yend = ylegend_1_final+0.7, x = 2023, xend = 2025),
+    aes(x = x, xend = xend, y = y, yend = yend), color = "darkgray") +
+  
+    geom_segment(data = data.frame(y = ylegend_1_final, yend = ylegend_1_final+0.7, x = 2023, xend = 2023),
+    aes(x = x, xend = xend, y = y, yend = yend), color = "darkgray") +
+  
+  #Violet line
+      geom_segment(data = data.frame(y = ylegend_1_final, yend = ylegend_1_final, x = 2019, xend = 2024),
+    aes(x = x, xend = xend, y = y, yend = yend), color = "darkgray") +
+
+geom_segment(data = data.frame(y = ylegend_1_final+0.2, yend = ylegend_1_final+0.2, x = 2024, xend = 2025),
+    aes(x = x, xend = xend, y = y, yend = yend), color = "darkgray") +
+  
+    geom_segment(data = data.frame(y = ylegend_1_final, yend = ylegend_1_final+0.2, x = 2024, xend = 2024),
+    aes(x = x, xend = xend, y = y, yend = yend), color = "darkgray")
+
+
+p
+
+```
+
+\-
+
+IMPROVEMENTS
+
+```{r}
+
+#Improvements
+
+p <- ggplot(spain) +
+    aes(Year, Contribution_to_gap) +
+  
+#Scales and size
+  scale_y_continuous(limits=c(0, 11), breaks=c(0, 2, 4, 6, 8)) +
+  scale_x_continuous(limits=c(1908, 2018), breaks=c(1908, 1920, 1940, 1960, 1980, 2000, 2018), labels=c(1908, 1920, 1940, 1960, 1980, 2000, 2018)) +
+  coord_cartesian(expand = FALSE) +
+
+#Colors of axis, axis text, title
+  theme_classic(base_size=14) +
+  theme(
+    
+    legend.position="right", 
+    legend.title = element_blank(),
+    legend.text = element_text(size = 9, family = "Segoe UI Emoji", color = "#5B5B5B"),
+    legend.key.size = unit(0.4, "cm"), 
+    legend.key.width = unit(0.5, 'cm'),
+    
+    axis.line = element_blank(), #axis lines, colors
+      axis.ticks.x = element_line(color = "darkgray"), 
+      axis.ticks.length = unit(0.15, "cm"),
+      axis.ticks.y = element_blank(),
+      axis.text.x = element_text(color = "#6C6C6C", family = "Segoe UI Emoji"),
+      axis.text.y = element_text(color = "#6C6C6C", family = "Segoe UI Emoji")) + #big margin on right to legend
+    labs(x = "", y= "", 
+        
+          title = "How do death rates in each age group contribute to the overall sex gap in life\nexpectancy? Spain", 
+         
+         subtitle = "The height of the curve shows the gap in life expectancy in years (female minus male). Positive values indicate higher\nlife expectancy in females. The stacked areas show how the gap arises from sex differences in death rates in each age\ngroup.") +
+  
+    theme(
+      plot.title = element_text(size = 14, family = "Times New Roman", color = "#5B5B5B"),
+      
+      plot.subtitle = element_text(size = 9, family = "Segoe UI Emoji", color = "#5B5B5B", hjust= 0),
+      
+      plot.title.position = "plot") +
+
+#Background lines
+    geom_segment(data = data.frame(y = c(0, 2, 4, 6, 8), yend = c(0, 2, 4, 6, 8), x = 1908, xend = 2018),
+    aes(x = x, xend = xend, y = y, yend = yend),
+    linetype = "dashed", color = "lightgray") +
+
+#Areas
+  geom_area(aes(fill = Age_group, color = Age_group), alpha = 0.8, linewidth = 0.3) +
+  scale_fill_manual(values = c("Ages 80+" = "#B26257", 
+                               "Ages 60-79" = "#BE9053", 
+                               "Ages 40-59" = "#BEBA54", 
+                               "Ages 15-39" = "#82A954", 
+                               "Ages 1-14" = "#6281BC", 
+                               "Age 0 (infancy)" = "#58495D")) +
+  
+    scale_color_manual(values = c("Ages 80+" = "#BF6B60", 
+                               "Ages 60-79" = "#BE9053", 
+                               "Ages 40-59" = "#BEBA54", 
+                               "Ages 15-39" = "#8AAD61", 
+                               "Ages 1-14" = "#657EAD", 
+                               "Age 0 (infancy)" = "#5F5D75")) +
+  
+#Event marks
+    geom_segment(aes(x = 1936, xend=1936, y=0, yend = 10), color = "#5B5B5B", linetype = "dotted") +
+  annotate("text", x=1936, y=10.5, color="#5B5B5B", vjust=0, size=3, label="CIVIL WAR") +
+  annotate("text", x=1936, y=10.10, color="#5B5B5B", vjust=0, size=3, label="◆") +
+  
+       geom_segment(aes(x = 1918, xend = 1918, y = 0, yend = 10), color = "#5B5B5B", linetype = "dotted") +
+  annotate("text", x=1918, y=10.5, color="#5B5B5B", vjust=0, size=3, label="SPANISH FLU") +
+    annotate("text", x=1918, y=10.10, color="#5B5B5B", vjust=0, size=3, label="◆") +
+  
+       geom_segment(aes(x = 1981, xend = 1981, y = 0, yend = 10), color = "#5B5B5B", linetype = "dotted") +
+  annotate("text", x=1981, y=10.5, color="#5B5B5B", vjust=0, size=3, label="AIDS CRISIS") +
+    annotate("text", x=1981, y=10.10, color="#5B5B5B", vjust=0, size=3, label="◆")
+
+p
+
+  
+```
+
+\-
+
+facets
+
+```{r}
+facets <- ggplot(spain) +
+    aes(Year, Contribution_to_gap) +
+    facet_wrap(Age_group ~ .) +
+  
+#Scales and size
+  scale_y_continuous(limits=c(0, 4.5), breaks=(4)) +
+  scale_x_continuous(limits=c(1908, 2018), breaks=c(1908, 1930, 1960, 1990, 2018), labels=c(1908, 1930, 1960, 1990, 2018)) +
+  coord_cartesian(expand = FALSE) +
+
+#Colors of axis, axis text, title
+  theme_classic(base_size=11) +
+  theme(
+    strip.text = element_text(size = 10, family = "Segoe UI Emoji", color="#5B5B5B", face= "bold"),
+    strip.background = element_blank(),
+
+    legend.position = "null", 
+    axis.line = element_line(color = "gray"),
+    axis.ticks.x = element_line(color = "darkgray"), 
+    axis.ticks.length = unit(0.15, "cm"),
+    axis.ticks.y = element_blank(),
+    axis.text.x = element_text(color = "#6C6C6C", family = "Segoe UI Emoji"),
+    axis.text.y = element_text(color = "#6C6C6C", family = "Segoe UI Emoji"),
+    panel.spacing.x = unit(2, "lines")) + 
+    labs(x = "", y= "", 
+          title = "How do death rates in each age group contribute to the overall sex gap in life\nexpectancy? Spain", 
+          subtitle = "The height of the curve shows the gap in life expectancy in years (female minus male). Positive values indicate higher\nlife expectancy in females. The stacked areas show how the gap arises from sex differences in death rates in each age\ngroup.") +
+  
+    theme(
+      plot.title = element_text(size = 14, family = "Times New Roman", color = "#5B5B5B"),
+      plot.subtitle = element_text(size = 9, family = "Segoe UI Emoji", color = "#5B5B5B", hjust= 0),
+      plot.title.position = "plot",
+      plot.margin = margin(0.5, 1, 0, 0.5, "cm")) +
+
+#Background lines
+    geom_segment(data = data.frame(y = 4, yend = 4, x = 1908, xend = 2018),
+    aes(x = x, xend = xend, y = y, yend = yend),
+    linetype = "dashed", color = "lightgray") +
+
+#Areas
+  geom_area(aes(fill = Age_group, color = Age_group), alpha = 0.8, linewidth = 0.3) +
+  scale_fill_manual(values = c("Ages 80+" = "#B26257", 
+                               "Ages 60-79" = "#BE9053", 
+                               "Ages 40-59" = "#BEBA54", 
+                               "Ages 15-39" = "#82A954", 
+                               "Ages 1-14" = "#6281BC", 
+                               "Age 0 (infancy)" = "#58495D")) +
+  
+    scale_color_manual(values = c("Ages 80+" = "#BF6B60", 
+                               "Ages 60-79" = "#BE9053", 
+                               "Ages 40-59" = "#BEBA54", 
+                               "Ages 15-39" = "#8AAD61", 
+                               "Ages 1-14" = "#657EAD", 
+                               "Age 0 (infancy)" = "#5F5D75")) +
+  
+      geom_segment(aes(x = 1936, xend=1936, y=0, yend = 4.5), color = "darkgrey", linetype = "dotted") +
+
+       geom_segment(aes(x = 1918, xend = 1918, y = 0, yend = 4.5), color = "darkgrey", linetype = "dotted") +
+
+       geom_segment(aes(x = 1981, xend = 1981, y = 0, yend = 4.5), color = "darkgrey", linetype = "dotted") 
+
+facets
+```
+
+patchwork
+
+```{r}
+facets2 <-
+  ggplot(spain) +
+    aes(Year, Contribution_to_gap) +
+    facet_wrap(Age_group ~ .) +
+  
+#Scales and size
+  scale_y_continuous(limits=c(0, 4.5), breaks=(4)) +
+  scale_x_continuous(limits=c(1908, 2018), breaks=c(1908, 1930, 1960, 1990, 2018), labels=c(1908, 1930, 1960, 1990, 2018)) +
+  coord_cartesian(expand = FALSE) +
+
+#Colors of axis, axis text, title
+  theme_classic(base_size=11) +
+  theme(
+    strip.text = element_text(size = 10, family = "Segoe UI Emoji", color="#5B5B5B", face= "bold"),
+    strip.background = element_blank(),
+
+    legend.position = "null", 
+    axis.line = element_line(color = "gray"),
+    axis.ticks.x = element_line(color = "darkgray"), 
+    axis.ticks.length = unit(0.15, "cm"),
+    axis.ticks.y = element_blank(),
+    axis.text.x = element_text(color = "#6C6C6C", family = "Segoe UI Emoji"),
+    axis.text.y = element_text(color = "#6C6C6C", family = "Segoe UI Emoji"),
+    panel.spacing.x = unit(2, "lines")) + 
+    labs(x = "", y= "") +
+
+    theme(
+      plot.title = element_text(size = 14, family = "Times New Roman", color = "#5B5B5B"),
+      plot.subtitle = element_text(size = 9, family = "Segoe UI Emoji", color = "#5B5B5B", hjust= 0),
+      plot.title.position = "plot",
+      plot.margin = margin(0, 1, 0, 0.5, "cm")) +
+
+#Background lines
+    geom_segment(data = data.frame(y = 4, yend = 4, x = 1908, xend = 2018),
+    aes(x = x, xend = xend, y = y, yend = yend),
+    linetype = "dashed", color = "lightgray") +
+
+#Areas
+  geom_area(aes(fill = Age_group, color = Age_group), alpha = 0.8, linewidth = 0.3) +
+  scale_fill_manual(values = c("Ages 80+" = "#B26257", 
+                               "Ages 60-79" = "#BE9053", 
+                               "Ages 40-59" = "#BEBA54", 
+                               "Ages 15-39" = "#82A954", 
+                               "Ages 1-14" = "#6281BC", 
+                               "Age 0 (infancy)" = "#58495D")) +
+  
+    scale_color_manual(values = c("Ages 80+" = "#BF6B60", 
+                               "Ages 60-79" = "#BE9053", 
+                               "Ages 40-59" = "#BEBA54", 
+                               "Ages 15-39" = "#8AAD61", 
+                               "Ages 1-14" = "#657EAD", 
+                               "Age 0 (infancy)" = "#5F5D75")) +
+  
+      geom_segment(aes(x = 1936, xend=1936, y=0, yend = 4.5), color = "darkgrey", linetype = "dotted") +
+
+       geom_segment(aes(x = 1918, xend = 1918, y = 0, yend = 4.5), color = "darkgrey", linetype = "dotted") +
+
+       geom_segment(aes(x = 1981, xend = 1981, y = 0, yend = 4.5), color = "darkgrey", linetype = "dotted") 
+
+#-------------------------------------------------------
+
+p2 <-ggplot(spain) +
+    aes(Year, Contribution_to_gap) +
+  
+#Scales and size
+  scale_y_continuous(limits=c(0, 12), breaks=c(0, 2, 4, 6, 8)) +
+  scale_x_continuous(limits=c(1908, 2018), breaks=c(1908, 1920, 1940, 1960, 1980, 2000, 2018), labels=c(1908, 1920, 1940, 1960, 1980, 2000, 2018)) +
+  coord_cartesian(expand = FALSE) +
+
+#Colors of axis, axis text, title
+  theme_classic(base_size=14) +
+  theme(
+    
+    legend.position="null", 
+    legend.title = element_blank(),
+    legend.text = element_text(size = 9, family = "Segoe UI Emoji", color = "#5B5B5B"),
+    legend.key.size = unit(0.4, "cm"), 
+    legend.key.width = unit(0.5, 'cm'),
+    
+    axis.line = element_blank(), #axis lines, colors
+      axis.ticks.x = element_line(color = "darkgray"), 
+      axis.ticks.length = unit(0.15, "cm"),
+      axis.ticks.y = element_blank(),
+      axis.text.x = element_text(color = "#6C6C6C", family = "Segoe UI Emoji"),
+      axis.text.y = element_text(color = "#6C6C6C", family = "Segoe UI Emoji")) + #big margin on right to legend
+    labs(x = "", y= "", 
+        
+          title = "How do death rates in each age group contribute to the overall sex gap in life\nexpectancy? Spain", 
+         
+         subtitle = "The height of the curve shows the gap in life expectancy in years (female minus male). Positive values indicate higher\nlife expectancy in females. The stacked areas show how the gap arises from sex differences in death rates in each age\ngroup.") +
+  
+    theme(
+      plot.title = element_text(size = 14, family = "Times New Roman", color = "#5B5B5B"),
+      
+      plot.subtitle = element_text(size = 9, family = "Segoe UI Emoji", color = "#5B5B5B", hjust= 0),
+      
+      plot.title.position = "plot") +
+
+#Background lines
+    geom_segment(data = data.frame(y = c(0, 2, 4, 6, 8), yend = c(0, 2, 4, 6, 8), x = 1908, xend = 2018),
+    aes(x = x, xend = xend, y = y, yend = yend),
+    linetype = "dashed", color = "lightgray") +
+
+#Areas
+  geom_area(aes(fill = Age_group, color = Age_group), alpha = 0.8, linewidth = 0.3) +
+  scale_fill_manual(values = c("Ages 80+" = "#B26257", 
+                               "Ages 60-79" = "#BE9053", 
+                               "Ages 40-59" = "#BEBA54", 
+                               "Ages 15-39" = "#82A954", 
+                               "Ages 1-14" = "#6281BC", 
+                               "Age 0 (infancy)" = "#58495D")) +
+  
+    scale_color_manual(values = c("Ages 80+" = "#BF6B60", 
+                               "Ages 60-79" = "#BE9053", 
+                               "Ages 40-59" = "#BEBA54", 
+                               "Ages 15-39" = "#8AAD61", 
+                               "Ages 1-14" = "#657EAD", 
+                               "Age 0 (infancy)" = "#5F5D75")) +
+  
+#Event marks
+    geom_segment(aes(x = 1936, xend=1936, y=0, yend = 10), color = "#5B5B5B", linetype = "dotted") +
+  annotate("text", x=1936, y=11, color="#5B5B5B", vjust=0, size=3, label="CIVIL WAR") +
+  annotate("text", x=1936, y=10.10, color="#5B5B5B", vjust=0, size=3, label="◆") +
+  
+       geom_segment(aes(x = 1918, xend = 1918, y = 0, yend = 10), color = "#5B5B5B", linetype = "dotted") +
+  annotate("text", x=1918, y=11, color="#5B5B5B", vjust=0, size=3, label="SPANISH FLU") +
+    annotate("text", x=1918, y=10.10, color="#5B5B5B", vjust=0, size=3, label="◆") +
+  
+       geom_segment(aes(x = 1981, xend = 1981, y = 0, yend = 10), color = "#5B5B5B", linetype = "dotted") +
+  annotate("text", x=1981, y=11, color="#5B5B5B", vjust=0, size=3, label="AIDS CRISIS") +
+    annotate("text", x=1981, y=10.10, color="#5B5B5B", vjust=0, size=3, label="◆")
+
+
+p2/facets2
+```
+
+\
