@@ -13,6 +13,14 @@ output:
 
 # Introduction
 
+Eurostat provided comprehensive statistical indicators and data visualisations on key figures on the overall economic situation of the Europe Union in 2023 in the sixth edition of Key figures on Europe. One interesting graph was about the household consumption spending in which the author demonstrated the difference in choices in spending of European households between 2022 and 2023. The author also detailed the changes in spending behaviours since the pandemic of COVID-19 in 2020.
+
+Eurostat also provides the source of the data and we will use it to replicate the graph in this project. Later, an alternative graph will be presented as a suggestion for improving the original graph.
+
+Here is the original graph:
+
+![Household consumption expenditure by Eurostat](Original%20graph.png)
+
 # Collecting and Processing Data
 
 ## Loading Packages
@@ -31,9 +39,13 @@ library(patchwork)
 
 ## Getting the data
 
+Like previously said, Eurostat includes a link in the graph to find the [source data](https://ec.europa.eu/eurostat/databrowser/bookmark/f30337fc-6fd2-41dc-86ef-18d3fdd54952?lang=en). It is possible to include more data from other years as well as from specific countries.
+
 ```{r}
 data <- read_csv("EU_data.csv.gz")
 ```
+
+The data file only included coded names for the categories so we will need to create a new column with the names similarly to the graph. The guidelines for the names according to the coded names are also provided by Eurostat ([link](https://ec.europa.eu/eurostat/cache/metadata/en/prc_hicp_esms.htm). We will also add a percent column for more ease to work with as the original data column (OBS_VALUE) is on the scale of 1000. Finally, we only need the data from year 2022 and 2023 so we will filter the data accordingly and select the necessary columns to build the graph.
 
 ## Transforming data
 
@@ -63,6 +75,8 @@ dataset <- data %>%
 # Replicating the Plot
 
 ## Building the basic elements
+
+Now we already have the data set ready, we will start reproducing the graph, first by the basic elements (bar chart, correct axes' positions and scales, and theme). We need to customise the labels on the y axis so that we would not have to rewrite the names on the data set. The colors of the bars also need to be manually picked, this can be done by using a third party web application to identify the color and then simply plug them into manual scale in ggplot (scale_fill_manual).
 
 ```{r fig.width = 7, fig.height = 8.5, preview = TRUE}
 p_main <- ggplot(dataset, aes(x = percent,y = reorder(coicop_name, percent))) +
@@ -112,7 +126,9 @@ p_main <- p_main + scale_y_discrete(name = NULL,labels = labels)
 p_main
 ```
 
-We split the original graph into 2 parts: icons and the rest. We start by building the main plot (bars, etc.). We change the y axis labels manually to match the original graph. Next we add the annotation text on the right.
+It is noted that in this project, we are replicating the original graph by building 2 separate graphs then later patch them together to achieve a similar look to the original graph. This is because using graphic icons (on the axis label) is not native to ggplot2. Additionally, there was no package that could directly attach the illustrations exactly in the manner of the original graph. Therefore, we will manually create a graph that only has a vector of the icons then attach it to the graph we just created above to achieve the same effect of the original graph.
+
+First we will complete replicating the first part of the graph by adding the annotation text on the right side of the plot.
 
 ```{r fig.width = 7, fig.height = 8.5, preview = TRUE}
 caption_text <- "In January 2023, the largest categories of
@@ -152,7 +168,7 @@ p_main <- p_main +
 p_main
 ```
 
-The basics of the main plot is done. We will adjust the details of the text now.
+Now we already have all the elements of the main part of the original graph, we can adjust the text so that it looks like the original one. The original graph used an Adobe font, which is also not openly available, therefore we will use another font from Google fonts that closely resembles it (Open Sans).
 
 ```{r fig.width = 7, fig.height = 8.5, preview = TRUE}
 #Fonts
@@ -173,7 +189,9 @@ p_main <- p_main +
 p_main
 ```
 
-We now will build the second part of the plot (icons).
+### Icon graph (Second graph)
+
+We now create the second part of the graph which is the icons. To do this, we would first need to cut out the icons manually from the original graph and process them into appropriate file type (e.g. png). This can be done by using different third-party applications (such as Photoshop, Illustrator, Affinity Designer, etc.). We then use ggimage to turn the pictures into usable R object and plot them on a ggplot graph. We also need to remove all other elements (i.e. axis, grid, text, background, etc.) to have a singular graphic vector of the icons.
 
 ```{r fig.width = 7, fig.height = 8.5, preview = TRUE}
 #Add images path
@@ -206,7 +224,9 @@ p_icon <- ggplot(dataset, aes(x = percent,y = reorder(coicop_name, percent))) +
 p_icon
 ```
 
-We just created the second part of the graph. Now we merge the 2 together to create a unified graph.
+### Patching things up...
+
+Having 2 parts of the graph created, we now only need to merge them together to create a unified graph. Using patchwork package, we can adjust the size of the 2 graphs so that they look similar to the original graph. We also need to add the title and subtitle, along with the source of the data at the foot of the plot. Since the original graph has a second subtitle with a different color (which is also not native to ggplot2), we will write it as an html element using ggtext package.
 
 ```{r fig.width = 7, fig.height = 9, preview = TRUE, fig.showtext=TRUE, out}
 caption_source = "Source: Eurostat (online data code: <span style = 'color:#2a46aa'>prc_hicp_inw</span>)"
