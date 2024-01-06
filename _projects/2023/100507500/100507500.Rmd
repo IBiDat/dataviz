@@ -266,3 +266,166 @@ p_replicated
 ```
 
 ## Alternative Graph
+
+### Loading Libraries
+
+```{r}
+library(scales)
+library(ggstance)
+library(fontawesome) #For icons in table in second plot
+library(gt) #For creating nice tables
+library(gtExtras) #For icons in gt
+library(cowplot) #For joining table and plot
+library(emojifont) #For easy plotting fontawesome
+```
+
+### Font
+
+```{r}
+font_add_google("Montserrat", family="montserrat")
+showtext_auto()
+font <- "montserrat"
+```
+
+### Load and Transform Data
+
+```{r}
+data <- read_csv("custom_data.csv")
+data <- data %>% 
+  select(coicop, geo, TIME_PERIOD, OBS_VALUE)
+
+eu <- data %>% filter(geo == "EU27_2020" & coicop != "CP00" & TIME_PERIOD >= 2015) %>%
+  mutate(coicop_name = case_when(
+    coicop == "CP01" ~ "Food and non-alcoholic beverages",
+    coicop == "CP02" ~ "Alcoholic beverages, tobacco and narcotics",
+    coicop == "CP03" ~ "Clothing and footwear",
+    coicop == "CP04" ~ "Housing, water and energy", #change to fit the graph
+    coicop == "CP05" ~ "Household equipment and maintenance", #Change to fit the graph
+    coicop == "CP06" ~ "Health",
+    coicop == "CP07" ~ "Transport",
+    coicop == "CP08" ~ "Communications",
+    coicop == "CP09" ~ "Recreation and culture",
+    coicop == "CP10" ~ "Education", 
+    coicop == "CP11" ~ "Restaurants and hotels",
+    coicop == "CP12" ~ "Miscellaneous goods and services"
+    ),
+    percent = OBS_VALUE / 10) %>% 
+  select(coicop, coicop_name, TIME_PERIOD, percent) %>% 
+  rename(year = TIME_PERIOD) %>% 
+  group_by(coicop) %>% 
+  mutate(
+    change = percent - lag(percent)
+  ) %>% ungroup()
+```
+
+### Building the Graph
+
+#### Background
+
+```{r}
+bg <- ggplot(eu, aes(y = reorder(coicop_name, percent), x = percent)) +
+  scale_x_continuous(limits = c(0,20),breaks = c(0,5,10,15,20), position = "top",
+                     labels = function(x) paste0(x, "%")) +
+  labs(subtitle = "Share of total household consumption expenditure, European Union") +
+  theme(
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_line(colour = "grey",linetype = "dashed"),
+    panel.background = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_text(size = 12),
+    plot.title.position = "plot",
+    plot.subtitle = element_text(family = font, colour = "grey60", 
+                                   size = 16 ,face = "bold")
+  ) 
+bg
+```
+
+#### Main Plot
+
+```{r}
+#Data for plot
+y2223 <- eu %>% filter(year >= 2022)
+#Colours
+p_color = "blue"
+```
+
+```{r preview = TRUE}
+p_main <- bg +
+  geom_point(data = y2223,
+             aes(percent, 
+                 reorder(coicop_name,percent), 
+                 shape = as.factor(year)),
+             size = 5,
+             colour = p_color) +
+  scale_shape_manual(values = c(1, 19)) +
+  theme(
+    plot.margin = margin(10,10,10,10),
+    legend.position = "top",
+    legend.justification = "right",
+    legend.title = element_blank(),
+    legend.key = element_blank(),
+    legend.text = element_text(size = 12, family = "montserrat"),
+    legend.direction = "horizontal",
+    axis.text = element_text(family = "montserrat"),
+    axis.text.y = element_text(colour = p_color, size = 13) 
+  )
+p_main
+```
+
+### Second plot
+
+```{r}
+#Dataframe for second plot
+p2_df <- eu %>% filter(year >= 2020) %>% 
+  mutate(icon = if_else(change < 0, "fa-angle-down", "fa-angle-up"))
+
+# Icon size
+icon_size <- 8
+y_label_pos <- filter(p2_df, year == 2023) %>% arrange(desc(percent)) %>% pull(coicop_name) %>% rev()
+
+p2 <- ggplot(p2_df, aes(x = year, y = factor(coicop_name, levels = factors))) +
+  scale_x_discrete(limits = c(2020, 2021, 2022, 2023),position = "top") +
+  geom_text(data = filter(p2_df, year == 2020),
+            aes(x = 2020, y = coicop_name, label = fontawesome(icon), color = icon),
+            family = "fontawesome-webfont",
+            size = icon_size)+
+  geom_text(data = filter(p2_df, year == 2021),
+            aes(x = 2021, y = coicop_name, label = fontawesome(icon), color = icon),
+            family = "fontawesome-webfont",
+            size = icon_size) +
+  geom_text(data = filter(p2_df, year == 2022),
+            aes(x = 2022, y = coicop_name, label = fontawesome(icon), color = icon),
+            family = "fontawesome-webfont",
+            size = icon_size) +
+  geom_text(data = filter(p2_df, year == 2023),
+            aes(x = 2023, y = reorder(coicop_name, percent), label = fontawesome(icon), color = icon),
+            family = "fontawesome-webfont",
+            size = icon_size) +
+  scale_colour_manual(values = c("red", "blue")) +
+  scale_y_discrete(limits = y_label_pos) +
+  theme(
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.background = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_text(size = 12, family = font, face = "bold"),
+    axis.text.y = element_blank(),
+    legend.position = "none"
+  ) 
+p2
+```
+
+### Final result
+
+```{r layout = "l-page", fig.dim = c(12,8), preview= TRUE, fig.showtext = TRUE}
+wrap_plots(list(p_main, p2), widths = c(17,6.5)) & 
+  plot_annotation(
+    title = "Household Consumption Expenditure",
+    theme = theme(
+      plot.title = element_text(size = 26, family = font, 
+                                colour = "blue", face = "bold")
+    )
+  )
+```
