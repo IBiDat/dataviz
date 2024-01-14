@@ -3,7 +3,7 @@ title: "The Phenomenon of Poverty"
 description: |
   Visualizing the global distribution of disposable income between 1990 and 2019- Our World in Data.
 categories: "2023"
-author: "Frederick Peña Sims"
+author: "Frederick Peña-Sims"
 date: "`r Sys.Date()`"
 output:
   distill::distill_article:
@@ -15,9 +15,7 @@ output:
 knitr::opts_chunk$set(out.width="100%", fig.align="center")
 ```
 
-## The Phenomenon of Poverty
-
-### Introduction
+## Introduction
 
 Poverty is a longstanding issue of known human societies ingrained into the logic of ['Capital and Ideology'](https://www.hup.harvard.edu/books/9780674980822). Be it out of colonial motivation, the United Nations, after the great catastrophe that was the second world war, set out its aim to diminish poverty globally and is now prominently presented as the first of 17 Sustainable Development Goals for 2030. While progress has been made, the Covid-19 pandemic, certainly, undid previously made progress. This project takes a look at the historical development of global distribution of the population between different poverty thresholds.
 
@@ -25,11 +23,13 @@ Poverty is a longstanding issue of known human societies ingrained into the logi
 
 The original graph can be found on the web page of [Our World in Data](https://ourworldindata.org/grapher/distribution-of-population-between-different-poverty-thresholds-up-to-30-dollars?time=earliest..2008). It, visually, portrays how daily disposable income has been globally distributed between 1990 and 2019. One major strength of this graph is that, at a glance, one is able to see, tentatively, historical developments of each disposable income bracket in relation to each other.
 
+![Original chart from [Our World in Data](https://ourworldindata.org/grapher/distribution-of-population-between-different-poverty-thresholds-up-to-30-dollars?time=earliest..2008).](original.png){.external}
+
 ## Getting the data right
 
 ### Packages
 
-```{r, echo=TRUE, results='hide'}
+```{r, results='hide'}
 library(tidyverse)
 library(ggplot2)
 library(gganimate)
@@ -41,7 +41,7 @@ library(ggrepel)
 
 The data is easily accessible under the integrated download button below the graph on the previously indicated web page of [Our World in Data](https://ourworldindata.org/grapher/distribution-of-population-between-different-poverty-thresholds-up-to-30-dollars).
 
-```{r, echo=TRUE}
+```{r}
 data_raw <- read.csv("data/distribution-of-population-between-different-poverty-thresholds-up-to-30-dollars.csv")
 data_raw <- as_tibble(data_raw)
 ```
@@ -50,7 +50,7 @@ data_raw <- as_tibble(data_raw)
 
 A first step, I cleaned the data adhering to the tidy data principle that one variable should be stored in one column. To achieve that, the *pivot_longer* command is used. Before, the previous column names are renamed to render them more intuitive to understand. Finally, we end up with to new columns, *'disp_inc'* expressing the classification of the poverty threshold (daily disposable income) and *'am_people'* allocating the amount of people.
 
-```{r, echo=TRUE}
+```{r}
 sum(is.na(data_raw))
 
 data <-
@@ -72,7 +72,7 @@ data <-
 
 As the final graph is based on the 'natural' order of the poverty thresholds, this logic must be replicated in the data. As such, the variable on (daily) disposable income is reverted into an ordered factor variable, with specified levels.
 
-```{r, echo=TRUE}
+```{r}
 data <-
   data |> 
   mutate(disp_inc = factor(disp_inc, 
@@ -92,7 +92,7 @@ Finally, the original data set contains data not only on the global scale but al
 
 Note, that a lot of country level data is missing for a considerable amount of years. This will be of great importance when an alternative graph is proposed.
 
-```{r, echo=TRUE}
+```{r}
 data_world <-
   data |> 
   filter(Entity == "World") |> 
@@ -106,7 +106,7 @@ data_world <-
 
 A major part of this graph is Our World in Data's distinctive theme. To replicate the theme, I developed my own theme function based on the theme 'minimal', allowing me to easily draw the required plot background. Using the '%+replace%' function, I allowed myself to easily change the base theme manually. The entire function code is provided down below. Bits and pieces of the function code were added throughout the coding process.
 
-```{r, echo=TRUE}
+```{r}
 theme_owid <- function(){ 
   font <- "Etoile"   
   
@@ -145,7 +145,7 @@ theme_owid <- function(){
 
 The preliminary theme function was based on the subsequent lines of code. First, all lines (called grid), part of the original theme are redacted with the command 'element_blank()'. Subsequently, the x-axis ticks were adjusted in size and color, and the x-axis labels were assigned there correct position. The legend was disbanded as labels will replace it subsequently.
 
-```{r, echo = TRUE, eval=FALSE}
+```r
 
 theme(
       panel.grid.minor = element_blank(),
@@ -161,7 +161,7 @@ theme(
 
 The final theme background is accomplished by manually creating grid lines with the *'geom_segment'* argument. To encompass the subsequent incorporation of the labels, the *'coord_cartesian'* function extends the plot space to the imaginative x-axis spot 2025. With the application of the theme function and the removal of the axes labels, the subsequent basic structure is attained.
 
-```{r, echo=TRUE, fig.asp= 0.75}
+```{r, fig.asp= 0.75}
 
 p <- 
   ggplot() +
@@ -192,7 +192,7 @@ p
 
 Quite obviously, the axes labeling is skewed (look at the '2020'), badly positioned (the space between x-axis labels and the actual x-axis), and simply illegibly labeled (y-axis labels). The subsequent code rectifies these issues.
 
-```{r, echo=TRUE, fig.asp= 0.75}
+```{r, fig.asp= 0.75}
 p <-    
   p +
   scale_x_continuous(breaks = c(1990, 1995, 2000, 2005, 2010, 2015, 2019),
@@ -208,7 +208,7 @@ p
 
 As can be seen on the x-axis, the labels '2000' and '2019' were adjusted concerning their placement relative to the x-axis tick. For this the subsequent code was used, manually setting the positioning of the x-axis labels.
 
-```{r, echo = TRUE, eval=FALSE}
+```r
 theme(axis.text.x = element_text(hjust = c(0, 0.5, 0.5, 0.5, 0.5, 0.5, 1),
                                  size = 11))
 ```
@@ -217,7 +217,7 @@ theme(axis.text.x = element_text(hjust = c(0, 0.5, 0.5, 0.5, 0.5, 0.5, 1),
 
 FINALLY, it is time to fill the plot. I use the *'geom_area'* function to create a stacked plot with filled areas. The areas are stacked according to the levels assigned to each category of disposable income in the data cleaning procedure. The colors of the areas were manually set according to the colors in the original plot. Also, the areas are slightly transparent, also replicated in this code (*'alpha = 0.8'*).
 
-```{r, echo=TRUE, fig.asp= 0.75}
+```{r, fig.asp= 0.75}
 p <-    
   p + 
   geom_area(data = data_world,
@@ -239,7 +239,7 @@ p
 
 Now onto the labels. These gave me the biggest problems. First and foremost, aligning labels with their correct position in the plot was a mess to say the least. Either the labeling was bunched up in the bottom right indicating where each area would end as if they were not stacked or labels were inverted, were the lowest category '*below 1\$ a day*' was displayed at the top of the plot. Both these problems were solved within the geom_text_repel function delineating the 'y =' option. After subsetting the data set to only values for the year 2019, the aes function provides information on the labels properties. To label each area correctly, I had to create the total sum of people from which I would subtract the accumulated sum of the variable 'am_people'. As the original labeling was inverted this would correct this initial malfunction. Furthermore, labels were supposed to be 'attached' to the middle of the geom_area. To solve this issue, the previously described score was combined (through addition) with the mathematical expression halving the amount of people variable. Label names were adjusted within a '*case_when*' function and nudged so they do not overlap. Unfortunately, I was not able to recreate the exact shape and arrangement of the labels and their according lines.
 
-```{r, echo=TRUE}
+```{r}
 data_world_2019 <-   
   data_world |>    
   filter(Year == 2019)
@@ -247,7 +247,7 @@ data_world_2019 <-
 total_sum_people <- sum(data_world_2019$am_people)
 ```
 
-```{r, echo=TRUE, fig.asp= 0.75}
+```{r, fig.asp= 0.75}
 p <-   
   p +
   geom_text_repel(data = filter(data_world, Year == 2019),
@@ -289,7 +289,7 @@ p
 
 I added labels with 'labs' function. I was unable to create three different captions with varying text sizes.
 
-```{r, echo=TRUE, fig.asp= 0.75}
+```{r, fig.asp= 0.75}
 p <-   
   p +
   theme_owid() +
@@ -300,14 +300,6 @@ p <-
                        "Depending on the country and year,\nit relates to income measured after", 
                        "taxes and benefits, or to consumption, per capita.\nOurWorldInData.org/poverty | CC BY"))
 p
-```
-
-### Saving the graph
-
-To save the graph, I tested varying width and height inputs.
-
-```{r, echo=TRUE, eval=FALSE}
-ggsave("test/replication_approach.png", width = 15, height = 8, bg = "white")
 ```
 
 ### Limitations
@@ -330,7 +322,7 @@ However, Our World in Data's version has some shortcomings. First, there is no s
 
 To create a more informative plot background, I adjusted my own Our World in Data inspired function to the requirements of a facet plot. This included the code for the position for the x-axes labels, which I reduced to four and the placement and color of each facet's title. Additionally, the spacing between facets was adjusted manually and the properties of the strip titles were defined.
 
-```{r, echo=TRUE}
+```{r}
 theme_owid_facet <- 
   function(){font <- "Etoile"    
   theme_minimal() %+replace%   
@@ -371,7 +363,7 @@ To create the plot, first the labels of the facets were created and stored in an
 
 So I had to create a workaround. First, I created an object ('*custom_levels*'), storing the levels of the variable about to be faceted. This was then plugged into a data frame, created to only select the first level from the '*custom_levels*' object in an '*if_else*' structure to assign the label '*1.5 billion*' storing it under the variable '*label*'. If the label for the variable for disposable income equals the first level of the custom levels object, '*1.5 billion*' is pasted, else nothing is specified. This would generate a facet plot, where the remainder of the facets are allocated '*geom_text*' according to their '*custom_levels*'. To prevent this from happening, the label variable of created data frame is altered, setting the label for every disposable income variable to empty except for the first level in the '*custom_levels*' object. Lastly, I ensured that there is only 9 options for the '*geom_text*' to be applied with the '*unique*' function.
 
-```{r, echo=TRUE}
+```{r}
 
 labels <- c("b_40_dollars_and_more" = "above $40 a day", 
             "b_30_40_dollars" = "$30-$40 a day",      
@@ -406,7 +398,7 @@ dat_text <- unique(dat_text)
 
 This data frame information is then plugged into the '*geom_text*' function in the final code, using the label column to label each facet (with only the first facet being visually labeled).
 
-```{r, echo=TRUE, fig.asp= 0.75}
+```{r, fig.asp= 0.75}
 a <- 
   data_world |> 
   ggplot(aes(x = Year, y = am_people, group = disp_inc)) +
@@ -444,7 +436,7 @@ a
 
 Title, subtitle, and caption were again included by simply adding the '*labs*' function.
 
-```{r, echo=TRUE, fig.asp= 0.75}
+```{r, fig.asp= 0.75}
 a <-  
   a +  
   labs(
@@ -458,22 +450,14 @@ a <-
 a
 ```
 
-### ...save it...
-
-```{r, echo=TRUE, eval=FALSE}
-ggsave("test/alternative_approach.png", width = 8, height = 8, bg = "white")
-```
-
-### ...and make it move.
+### and make it move
 
 For the facet wrap, I was able to animate it. Instead of leaving the x-axis free, it is fixed in my animation, making it easier to to understand the relationship between year and amount of people pertaining to a certain category of disposable income. To only create one loop, the gifski package provides to opportunity to manually set 'looping' to false.
 
-```{r, echo = TRUE, eval = FALSE, fig.asp= 0.75}
+```{r, fig.asp= 0.75}
 a_fluid <-  
   a + 
   transition_reveal(Year) 
 
 animate(a_fluid, renderer = gifski_renderer(loop = FALSE))
 ```
-
-![](images/animated_plot-02.gif)
