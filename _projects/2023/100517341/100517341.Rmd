@@ -19,7 +19,6 @@ output:
 
 library(tidyverse) 
 rm(list=ls())
-
 ```
 
 Fortunately, the data used to create this graph was already available on Our Word In Data and can be downloaded in a CSV format. This dataset was orignally published by the Institute of Health Metrics and Evaluation, an American research institute in the area of global health statistics. It consists of the number of deaths attributed to low physical activity per country per year. As the data is already available, I will not make use of the `{owidR}` package that enable to load OWID data in R. Let's import the dataset.
@@ -102,7 +101,7 @@ world <- ne_countries(
 
 We know need to join the `world` dataset and the `data` dataset to create the dataset that will be used to project the world map in ggplot2 and display the number of deaths due to low physical activity at the same time.
 
-```{r join world data with 'data'}
+```{r join world data with data}
 
 data <-
   world |>
@@ -291,6 +290,8 @@ p
 
 ```
 
+## Adjustments
+
 One striking difference with the original plot is the legend. We need to move the legend to the bottom of the chart and change the color palette. We need to change the legend key into a color bar. This can be done by using a "[Discretized colourbar guide](https://ggplot2.tidyverse.org/reference/guide_coloursteps.html)": the `guide_colorsteps()` guide. Within this guide, the "YlorRd" palette seems exactly the one that was used by Our Word In Data for their map.
 
 ```{r legend modification}
@@ -432,7 +433,7 @@ p
 
 ```
 
-Some adjustments still need to be done:
+Some adjustments also need to be done:
 
 -   The borders of the polygons projected by `geom_sf()` seem to be a bit thicker than on our original OWID graph.
 
@@ -443,6 +444,16 @@ Some adjustments still need to be done:
 For the first two issues, it seems that the solution could lie in the fact that the resolution/definition of the geometry variable used to project polygons on the graph and thus create a world map, is too high. I tried to use the `st_simplify()` function from the `sf` package but wasn't able to then map my data. However, a much simpler way to do so worked well, by just lowering the `scale` of the `ne_countries()` function. This results in less details in the geometry variable, and thus, a less messy visual appearance. Of course, this option is not the optimal one in terms of precision, but it seems that Our World In Data opted for displaying the data for not all countries and island worldwide.
 
 The 3rd issue can easily be solved with some little modifications of the `theme()` by passing a `hjust` argument to `plot.title = element_text()` and so on for the subtitle and caption.
+
+The look is a lot cleaner, with softer edges. Let's then try to :
+
+-   Space the title, subtitle, caption, and tag a bit from the left of the plot. This can be achieved by playing on the `hjust` (`margin` for the tag) argument of each of these `element_text()` in the `theme()`.
+
+-   Get the title bold, the caption at the same size as the subtitle, the size of the tag a bit lower than the caption. To do so, we will add `face` and `size` arguments to `element_text()` in the `theme()`.
+
+-   Get the "Data source" string in the caption bold. For this, we will modify the plot_caption variable, load the `{ggtext}` library, and set `plot.caption` to `ggtext::element_markdown`.
+
+Finally, the color of the text is not black in the original plot, but this color: #5b5b5b.
 
 ```{r data processing recap}
 
@@ -506,132 +517,12 @@ data <-
 
 ```{r slight additional changes}
 
-# The plot, with this slight change}
-p <-
-  data |>
-  filter(Year == 2019) |>
-  ggplot() +   
-  geom_sf(aes(
-    fill = Deaths_disc)) +
-  coord_sf(crs = '+proj=robin') +   
-  labs(
-    title = plot_title,        
-    subtitle = plot_subtitle,        
-    caption = plot_caption,        
-    tag = plot_tag) +   
-  theme_void() +   
-  theme(
-    plot.title = element_text(
-      family = 'merriweather', 
-      size = 15),
-    plot.caption = element_text(
-      hjust = 0),
-    plot.tag.position = 'bottom',
-    plot.tag = element_text(
-      size = 10,                                  
-      margin = margin(l = -340)),
-    legend.position = 'bottom',
-    legend.title = element_blank(),
-    legend.text = element_text(           
-      margin = margin(t = -22)          
-      )
-    ) +
-  scale_fill_brewer(
-    palette = 'YlOrRd',                   
-    guide = guide_coloursteps(                      
-      show.limits = TRUE,                       
-      ticks = TRUE,                       
-      barwidth = 25,                       
-      barheight = 0.5,                       
-      frame.colour = 'black',
-      frame.linewidth = 0.01,                       
-      ticks.colour = 'black',
-      ticks.linewidth = 0.01
-      )
-    )   
-
-p
-
-```
-
-The look is a lot cleaner, with softer edges. Let's finally try to :
-
--   Space the title, subtitle, caption, and tag a bit from the left of the plot. This can be achieved by playing on the `hjust` (`margin` for the tag) argument of each of these `element_text()` in the `theme()`.
-
--   Get the title bold, the caption at the same size as the subtitle, the size of the tag a bit lower than the caption. To do so, we will add `face` and `size` arguments to `element_text()` in the `theme()`.
-
--   Get the "Data source" string in the caption bold. For this, we will modify the plot_caption variable, load the `{ggtext}` library, and set `plot.caption` to `ggtext::element_markdown`.
-
-```{r labs adjustements}
+# The plot, with these changes
 
 library(ggtext)  
 
 plot_caption <- "\n**Data source**: IHME, Global Burden
 of Disease (2019) - Learn more about this data"  
-
-p <-
-  data |>   
-  filter(Year == 2019) |>
-  ggplot() +   
-  geom_sf(
-    aes(fill = Deaths_disc)
-    ) +   
-  coord_sf(crs = '+proj=robin') +
-  labs(
-    title = plot_title,        
-    subtitle = plot_subtitle,        
-    caption = plot_caption,        
-    tag = plot_tag
-    ) +   
-  theme_void() +   
-  theme(
-    plot.title = element_text(
-      family = 'merriweather',                                    
-      face = 'bold', # face added
-      size = 15,                                   
-      hjust = 0.1, # hjust added
-      margin = margin(t = -10)
-      ),
-    plot.subtitle = element_text(
-      hjust = 0.11, # hjust added
-      size = 11), # size added
-    plot.caption = ggtext::element_markdown(
-      hjust = 0.11, # hjust modified                                                 
-      size = 11,# size added
-      margin = margin(t = 20)
-      ),          
-    plot.tag.position = 'bottom',
-    plot.tag = element_text(
-      size = 10,                                  
-      vjust = -1, # vjust added
-      margin = margin(l = -301) # margin modified
-      ),        
-    legend.position = 'bottom',
-    legend.title = element_blank(),         
-    legend.text = element_text(           
-      margin = margin(t = -22)          
-      )
-    ) + 
-  scale_fill_brewer(
-    palette = 'YlOrRd',
-    guide = guide_coloursteps(
-      show.limits = TRUE,
-      ticks = TRUE,
-      barwidth = 25,                       
-      barheight = 0.5,                       
-      frame.colour = 'black',
-      frame.linewidth = 0.01,     
-      ticks.colour = 'black',
-      ticks.linewidth = 0.01)
-    )   
-
-p
-
-```
-
-Final tweaks? The color of the text is not black in the original plot, but this color: #5b5b5b. Also, why not adding the nice OWID logo on the top of the graph. Let's make this slight changes:
-
-```{r font color}
 
 p <-
   data |>
@@ -694,7 +585,6 @@ p <-
     ) 
 
 p 
-
 ```
 
 ## Interactive version of the plot
@@ -710,7 +600,7 @@ ggplotly(p %+% data + aes(frame=Year)) |>
 
 ```
 
-A solution that I found was to use the `{ggiraph}` package to make the plot interactive. The filtering function seems requiring some features to create interfaces that ggplot cannot provide, such as integrating the plot in a Shiny application. Therefore, we will give up this feature.
+A solution that I found was to use the `{ggiraph}` package to make the plot interactive. The filtering function seems requiring some features to create interfaces that ggplot cannot provide, such as integrating the plot in a Shiny application. Therefore, we will give up this last feature.
 
 ### `{ggiraph}` version of the map plot
 
@@ -787,7 +677,11 @@ girafe(ggobj = p_girafe)
 
 ```
 
-YEAH it works. A few things need to be modifed. "A few". First, the position of the plot in the panel is not good. After a few iterations, I noticed that this was just a matter of playing on the margins already existing in our ggplot. Similarly, other `theme()` elements need to be adjusted.
+YEAH it works. A few things need to be modifed. "A few".
+
+#### Adjustments
+
+First, the position of the plot in the panel is not good. After a few iterations, I noticed that this was just a matter of playing on the margins already existing in our ggplot. Similarly, other `theme()` elements need to be adjusted.
 
 ```{r ggiraph plot adjustments}
 
@@ -1461,7 +1355,7 @@ girafe(ggobj = p_line_girafe)
 
 ```
 
-## Final Adjustments
+## Adjustments
 
 We can notice that the lines are displaying the number of deaths due to low physical activity for year 1990 (which is not what we want), and that even if the points display the year and number of deaths, they are super hard to hover over with the mouse. A cool feature that has been included on the OWID graph is that when you hover your mouse over the graph, a table is displayed with the following information :
 
@@ -1479,7 +1373,7 @@ I actually found a great tutorial to do so: <https://uncharteddata.netlify.app/p
 
 We first need to create a summary table of the pieces of information we want to display in our tooltip. We can do so by extracting the following columns from our `data` dataset: `Entity`, `Year`, `Deaths`. It is advised to use the `{kableExtra}` package to do so.
 
-```{r sample table for tooltip}
+```{r  sample table for tooltip, eval=FALSE}
 
 library(kableExtra)  
 
@@ -1498,6 +1392,8 @@ If we pass the newly created table to our `tooltip` aesthetic in the line graph,
 
 ```{r crafting a function for the tables}
 
+library(kableExtra)  
+
 make_table <- 
   function(year){
     data |>
@@ -1510,15 +1406,15 @@ make_table <-
 
 ```
 
-This function is intended to create a table from the `data` dataset according to the specified year parameter. However, expecting that my computer is going to go crazy if we do so with the more than 5000 rows of the dataset, we can apply it to only the top 10 countries used until now in our line graph. To apply this function to each row, we can use the `map()` function from the `{purrr}` library.
+This function is intended to create a table from the `data` dataset according to the specified year parameter. However, expecting that my computer is going to go crazy if we do so with the more than 5000 rows of the dataset, we can apply it to only the top 10 countries used until now in our line graph. To apply this function to each row, we can use the `map()` function from the `{purrr}` library. I purposefully don't run these code chunk because creating a table for every single line in very heavy on my computer and takes forever. I will therefore only run the final function and "tooltip_table" variable.
 
-```{r testing the function}
+```{r testing the function, eval=FALSE}
 
 tooltip_table <-    
   data |>
   filter(Entity %in% top10_countries_2019) |>
   mutate(tooltip_table = purrr::map(Year, make_table)) |>
-  select(Entity, Year, Deaths, table)
+  select(Entity, Year, Deaths, tooltip_table)
 
 ```
 
@@ -1526,7 +1422,7 @@ tooltip_table <-
 
 To do so, the author advises to modify the style of the table directly in the function that created them, the `make_table()` function. Also, it seems that a good appearance can be achieved by using the `{gt}` and `{gtExtras}` packages. We will start from the styling of the author and try to customize it.
 
-```{r table customization}
+```{r table customization, eval=FALSE}
 
 make_table <- 
   function(year){
@@ -1561,6 +1457,9 @@ IT WORKS. Let's add some new adjustments:
 -   Tweaking the style of our tooltip tables a bit.
 
 ```{r further table customization}
+
+library(gt)
+library(gtExtras)
 
 make_table <- function(year){     
     data |>     
@@ -1604,8 +1503,6 @@ tooltip_table <-
 
 p_line_girafe <-
   tooltip_table |>  
-  #  group_by(Year) |>  
-  #  slice_max(n = 10, order_by = Deaths) |>   
   drop_na() |>
   ggplot(aes(
     x = Year, 
@@ -1725,11 +1622,11 @@ To be honest, I find that the original Our World In Data graph is very complete,
 
 However, all the data that is displayed by these graphs are absolute numbers. We now that China is the country with most deaths due to low physical activity in 2019, but China is also the country with the most deaths all causes combined, because China is of course the most populated country in the world. Therefore, it seemed to me that these absolute values failed to convey the information we want to extract from the graphs, which might be something like: "Which country best meet physical activity standards in the world?" for instance.
 
-Therefore, the alternative graphs proposed are replicates of the original, but showing the data as percentage of the population that died from low physical activity.
+Therefore, the alternative graphs proposed are replicates of the original, but showing the data as percentages of the population that died from low physical activity.
 
 ## The Data
 
-Thanks to the `Population` column that we added during the first process of the data to replicate the original graph, we just need to add a `Percentage` column to the data dataset (for sake of clarity, we'll create a second dataset for the alternative graphs, called `data_alt`. and to discretize the Percentage variable for the alternative map.
+Thanks to the `Population` column that we added during the first process of the data to replicate the original graph, we just need to add a `Percentage` column to the 'data' dataset (for sake of clarity, we'll create a second dataset for the alternative graphs, called `data_alt` and to discretize the Percentage variable for the alternative map.
 
 ```{r modifying the data}
 
@@ -1820,6 +1717,8 @@ p_map_alt
 ### Interactive version
 
 ```{r interaction version of the alternative map}
+
+plot_subtitle_alt <- "Estimated annual percentage of the populations with deaths attributed to low physical activity." 
 
 # Still a ' symbol for the country "Cote d'Ivoire" causing errors in ggiraph 
 data_alt <-
@@ -2055,7 +1954,6 @@ The line graph is now a bit messier since the values for mortality due to low ph
 
 ```{r creating two slope charts}
 
-plot_subtitle_alt <- "Estimated annual percentage of the populations with deaths attributed to low physical activity."  
 # Slope graph of the countries which had the highest death rates in 1990.
 p_slope_1990 <-    
   data_alt |>
@@ -2086,8 +1984,8 @@ p_slope_1990 <-
     subtitle = plot_subtitle_alt,        
     caption = plot_caption,        
     tag = plot_tag
-    )
-+   theme_classic() +   
+    ) +
+  theme_classic() +   
   theme(
     axis.line.y = element_blank(),
     axis.line.x = element_line(
