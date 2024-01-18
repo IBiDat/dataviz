@@ -1,0 +1,262 @@
+---
+title: "Seizures of ammunition in relation to seizures of arms, by country, 2017"
+description: "A brief report based on UNs 2020 Global Study on Firearms Trafficking"
+  A short description of the post.
+author: Mecki Hamed Guerrero
+date: 2023-12-20
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(datapasta)
+library(tibble)
+library(tidyr)
+library(tidyverse)
+library(dplyr)
+library(readxl)
+library(ggplot2)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(sf)
+
+```
+
+# 1: Importar dataset:
+
+
+```{r echo=TRUE}
+
+data <- read_excel("C:/Users/Usuario/Desktop/Master/Mecki/Data Visualization/data_iafq_firearms_trafficking.xlsx", skip=2)
+View(data)
+
+```
+
+# 2: La columna "Year" representa el año en la base de datos. Seleccionamos el año 2017
+
+
+```{r echo=TRUE}
+
+data <- read_excel("C:/Users/Usuario/Desktop/Master/Mecki/Data Visualization/data_iafq_firearms_trafficking.xlsx", skip=2)
+View(data)
+
+```
+
+# 2: La columna "Year" representa el año en la base de datos. Seleccionamos el año 2017
+
+
+```{r echo=TRUE}
+
+data <- data[data$Year == 2017, ]
+view(data)
+
+```
+
+# 3: La columna "Indicator" indica si el dato pertenece a "Arms seized" o a "Parts and components seized". Por lo que debemos filtrar ambos valores:
+
+
+```{r echo=TRUE}
+
+data <- data |>
+  filter(Indicator %in% c("Arms seized", "Ammunition seized"))
+view(data)
+
+```
+
+# 4: De igual modo, las columnas "Dimension" y "Category" indican la dimensión y el origen de la incautación. En este caso nos interesa la sumatoria total de cada una de las columnas:
+
+```{r echo=TRUE}
+
+data <- data |>
+  filter(Dimension == "Total" & Category == "Total")
+view(data)
+
+```
+
+# 5: Cambiamos la información de la columna "VALUE" (número total de incautaciones) a un valor numérico:
+
+```{r echo=TRUE}
+
+data$VALUE <- as.numeric(data$VALUE)
+view(data)
+
+```
+
+# 6: Calculamos el ratio de "Ammunition seized" por "Arms seized"
+
+```{r echo=TRUE}
+
+ratiocalc <- data |>
+  group_by(data$Country) |>
+  reframe(
+    ratio = VALUE[Indicator == "Ammunition seized"] / VALUE[Indicator == "Arms seized"])
+view(ratiocalc)
+
+```
+
+# 7: Creamos la gráfica ya ordenada junto con la mediana
+
+```{r echo=TRUE}
+
+mediana <- median(ratiocalc$ratio)
+
+ggplot(ratiocalc, aes(x=reorder(`data$Country` , log10(ratio*1000)), y=log10(ratio*1000))) +
+  geom_col() +
+  scale_y_continuous(labels = function(x) 10^x/100) +
+  labs(x = ' ',
+       y= "Ratio of seized rounds of ammunition to seized arms
+(logarithmic scale)"
+  ) +
+  geom_hline(yintercept = log10(mediana*100), linetype = "dashed", color = "red") +
+  geom_hline(yintercept = log10(100), linetype = "dashed", color = "red")
+
+```
+
+# 8:Edición y color
+
+```{r echo=TRUE}
+
+ggplot(ratiocalc, aes(x=reorder(`data$Country` , log10(ratio*1000)), y=log10(ratio*1000))) +
+  geom_col() +
+  scale_y_continuous(labels = function(x) 10^x/100) +
+  labs(x = ' ',
+       y= "Ratio of seized rounds of ammunition to seized arms
+(logarithmic scale)") +
+  ggtitle("Seizures of ammunition in relation to seizures of arms, by country, 2017") +
+  theme_minimal() +
+  geom_hline(yintercept = log10(mediana*100), linetype = "dashed", color = "red") +
+  geom_hline(yintercept = log10(100), linetype = "dashed", color = "red")
+
+```
+
+```{r echo=TRUE}
+
+  ggplot(ratiocalc, aes(x=reorder(`data$Country` , log10(ratio*1000)), y=log10(ratio*1000))) +
+  geom_col() +
+  scale_y_continuous(labels = function(x) 10^x/100) +
+  labs(x = ' ',
+       y= "Ratio of seized rounds of ammunition to seized arms
+(logarithmic scale)") +
+  ggtitle("Seizures of ammunition in relation to seizures of arms, by country, 2017") +
+  theme_minimal() +
+    scale_fill_manual(values = c("blue")) +
+    theme(axis.text.x = element_text(face = "bold", size = 8, vjust = -0.5)) +
+    theme(axis.text.y = element_text(face = "bold", size = 14)) +
+  geom_hline(yintercept = log10(mediana*100), linetype = "dashed", color = "red") +
+  geom_hline(yintercept = log10(100), linetype = "dashed", color = "red")
+
+```
+
+```{r echo=TRUE}
+
+  ggplot(ratiocalc, aes(x=reorder(`data$Country` , log10(ratio*1000)), y=log10(ratio*1000))) +
+    geom_col() +
+    scale_y_continuous(labels = function(x) 10^x/100) +
+    labs(x = ' ',
+         y= "Ratio of seized rounds of ammunition to seized arms
+(logarithmic scale)") +
+    ggtitle("Seizures of ammunition in relation to seizures of arms, by country, 2017") +
+    theme_minimal() +
+    scale_fill_manual(values = c("blue")) +
+    theme(axis.text.x = element_text(face = "bold", size = 8, vjust = -0.5)) +
+    theme(axis.text.y = element_text(face = "bold", size = 14)) +
+    geom_hline(yintercept = log10(mediana*100), linetype = "dashed", color = "red") +
+    geom_hline(yintercept = log10(100), linetype = "dashed", color = "red") +
+    annotate("segment", x = 0, y = log10(mediana*100), xend = 0.1, yend = log10(mediana*100), color = "red") +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+```
+
+```{r echo=TRUE}
+
+  ggplot(ratiocalc, aes(x=reorder(`data$Country` , log10(ratio*1000)), y=log10(ratio*1000))) +
+  geom_col(width = 0.5, fill = "#D2691E", position = "identity") +
+  scale_y_continuous(labels = function(x) 10^x/100) +
+  labs(x = ' ',
+       y= "Ratio of seized rounds of ammunition to seized arms
+(logarithmic scale)") +
+  ggtitle("Seizures of ammunition in relation to seizures of arms, by country, 2017") +
+  theme_minimal() +
+  scale_fill_manual(values = c("blue")) +
+  theme(axis.text.x = element_text(face = "bold", size = 8, vjust = -0.5)) +
+  theme(axis.text.y = element_text(face = "bold", size = 14)) +
+  geom_hline(yintercept = log10(mediana*100), linetype = "solid", size = 1, color = "red") +
+  geom_hline(yintercept = log10(100), linetype = "solid", size = 1, color = "black") +
+  annotate("segment", x = 0, y = log10(mediana*100), xend = 0.1, yend = log10(mediana*100), color = "red") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  theme(panel.background = element_rect(fill = "lightgrey"),
+        plot.background = element_rect(fill = "white"))
+
+```
+
+# 9: Common Range:
+
+```{r echo=TRUE}
+
+  cuartil_ratio <- quantile(ratiocalc$ratio, c(0.25, 0.75))
+
+```
+
+# Calcula el rango intercuartílico para cada columna
+
+```{r echo=TRUE}
+
+  rango_intercuartil_ratio <- cuartil_ratio[2] - cuartil_ratio[1]
+
+```
+
+
+# 10: Gráfica final:
+
+```{r echo=TRUE}
+
+ggplot(ratiocalc, aes(x=reorder(`data$Country` , log10(ratio*1000)), y=log10(ratio*1000))) +
+  geom_col(width = 0.5, fill = "#D2691E", position = "identity") +
+  scale_y_continuous(labels = function(x) 10^x/100) +
+  labs(x = ' ',
+       y= "Ratio of seized rounds of ammunition to seized arms
+(logarithmic scale)") +
+  ggtitle("Seizures of ammunition in relation to seizures of arms, by country, 2017") +
+  theme_minimal() +
+  scale_fill_manual(values = c("blue")) +
+  theme(axis.text.x = element_text(face = "bold", size = 8, vjust = -0.5)) +
+  theme(axis.text.y = element_text(face = "bold", size = 14)) +
+  geom_hline(yintercept = log10(mediana*100), linetype = "solid", size = 1, color = "red") +
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = log10(cuartil_ratio[1]*100), ymax = log10(cuartil_ratio[2]*100)),
+            fill = "red", alpha = 0.003) +
+  annotate("segment", x = -0.1, y = log10(100), xend = -0.1, yend = log10(1000), linetype = "solid") +
+  geom_hline(yintercept = log10(100), linetype = "solid", size = 1, color = "black") +
+  annotate("segment", x = 0, y = log10(mediana*100), xend = 0.1, yend = log10(mediana*100), color = "red") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  theme(panel.background = element_rect(fill = "#EEE9E9"),
+        plot.background = element_rect(fill = "white")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+
+```
+
+# 11: Mejora: Mapear --> CAMBIAR LA ESCALA DE COLORES!
+
+```{r echo=TRUE}
+
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+names(ratiocalc) <- c("Country", "ratio")
+
+merged_data <- merge(world, ratiocalc, by.x = "name", by.y = "Country", all.x = TRUE)
+
+ggplot(merged_data, aes(fill = log10(ratio*1000))) +
+  geom_sf() +
+  scale_fill_gradient(low = "green", high = "red") +
+  labs(fill = "Ratio",
+       title = "Seizures of ammunition in relation to seizures of arms, by country, 2017") +
+  theme_minimal()
+
+head(world)
+
+```
