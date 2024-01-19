@@ -1,0 +1,588 @@
+---
+title: "Mexico's Export Dynamics from 1996 to 2020 by Sector"
+description: |
+  Replication and alternative version of the over time graph sector exports of Mexico by the Growth Lab at Harvard University.
+author: Valeria Contreras
+categories: "2023"
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+## Introduction
+
+The Atlas of Economic Complexity, developed by the Growth Lab at Harvard University, introduced a comprehensive profile of countries in the year 2019. Where users are invited to embark enter on an interactive exploration, navigating through the economic structures and growth dynamics of over 130 nations. Within this context, our focus turns to México, where we start our visual journey through its economic landscape, observing the details of export dynamics across diverse sectors in the previous years.
+
+This tutorial aims to replicate the existing graph and present an alternative visualization using the identical dataset.
+
+![Original graph from the [Atlas of Economic Complexity](https://atlas.cid.harvard.edu/).](images/original-plot.jpeg){.external}
+
+The x-axis represents the timeline from 1996 to 2020, offering a chronological journey through the years. Meanwhile, the y-axis measures the current gross export in billions of dollars, serving as a measure for the economic impact of each sector where each sector is distinguished by a unique color.
+
+## Replica
+
+Starting with the journey of replication, we start by recreating the above plot and below you will find the complete code along with some insights into the challenges I faced while recreating it.
+
+```{r fig.width=80}
+library(ggplot2)
+library(readxl)
+library(dplyr)
+library(ggthemes)
+library(ggstream)
+library(ggrepel)
+library(RColorBrewer)
+
+
+exportmex <- read_xlsx("EXPORTS-MEXICO.xlsx")
+
+
+colors <-
+  c(
+    "#b33d6d",
+    "#2b607c",
+    "#7cdada",
+    "#7ba2d9",
+    "#8c7ad7",
+    "#c47cda",
+    "#d87b7a",
+    "#bb9689",
+    "#dab57c",
+    "#f4d025",
+    "#7cdaa0"
+  )
+
+legend_colors <-
+  c(
+    "#b33d6d",
+    "#7cdaa0",
+    "#f4d025",
+    "#dab57c",
+    "#bb9689",
+    "#d87b7a",
+    "#c47cda",
+    "#8c7ad7",
+    "#7ba2d9",
+    "#7cdada",
+    "#2b607c"
+  )
+
+sysfonts::font_add_google("Noto Sans JP", family = "sans-serif")
+
+exportmex <-
+  exportmex |> mutate(`Current Gross Export` = sub("\\$", "", `Current Gross Export`))
+Current_Gross_Export <- as.numeric(exportmex$`Current Gross Export`)
+year <- as.numeric(exportmex$Year)
+
+
+exclude_value <- 550
+label_positions <- data.frame(
+  Sector = c(
+    "Agriculture",
+    "Minerals",
+    "Vehicles",
+    "Machinery",
+    "Electronics"
+  ),
+  Position = c(30, 60, 170, 250, 330)
+)
+
+```
+
+```{r fig.showtext=TRUE}
+
+exportmex |> ggplot() +
+  aes(Year, Current_Gross_Export, fill = Sector) +
+  scale_y_continuous(
+    name = "Current Gross Export",
+    breaks = seq(0, 550, 50),
+    labels = function(x) 
+      paste0("$", x, "B")
+  ) +
+  coord_cartesian(ylim = c(0, exclude_value), expand = FALSE) +
+  scale_x_continuous(
+    name = " ",
+    breaks = seq(1996, 2020, 2),
+    limits = c(min(exportmex$Year), max(exportmex$Year))
+  ) +
+  scale_fill_manual(values = colors) +
+  geom_stream(aes(fill = Sector),
+              type = "ridge",
+              bw = .60,
+              n_grid = 200) +
+  theme_gray() +
+  theme(
+    text = element_text(family = "sans-serif"),
+    panel.background = element_rect(fill =  "#f5f5f5"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(color = "grey80", size = .3),
+    axis.ticks.length = unit(0.2, "cm"),
+    axis.ticks = element_line(color = "grey80", size = .3),
+    plot.margin = margin(l = 5, t = -15),
+    axis.text = element_text(color = "#616161"),
+    axis.text.x = element_text(
+      angle = 60,
+      hjust = 1,
+      size = 5,
+      margin = margin(5, 0, 0, 0)
+    ),
+    axis.text.y = element_text(
+      size = 5,
+      family = "sans-serif",
+      margin = margin(0, 0, 0, 5)
+    ),
+    axis.title.y = element_text(
+      size = 8,
+      family = "sans-serif",
+      color = "#616161",
+      margin = margin(r = 1)
+    ),
+    legend.position = "bottom",
+    legend.text = element_blank(),
+    legend.spacing.x = unit(0.1, "cm"),
+    legend.text.align = 10,
+    legend.box.spacing = unit(1, "cm"),
+    legend.key.height = unit(0.35, "cm"),
+    legend.key.width = unit(0.35, "cm"),
+    legend.title = element_text(color = "#616161", size = 6),
+    legend.justification = c(0.3, 0),
+    legend.margin = margin(t = -25)
+  ) +
+  labs(title = " ",
+       fill = paste("PRODUCT", "SECTORS", sep = "\n")) +
+  guides(fill = guide_legend(nrow = 1, override.aes = list(fill = legend_colors))) +
+  geom_text(
+    data = label_positions,
+    aes(x = Inf, y = Position, label = Sector),
+    color = "#E8E9EB",
+    angle = ifelse(
+      label_positions$Sector == "Electronics",
+      15,
+      ifelse(
+        label_positions$Sector == "Minerals",
+        8,
+        ifelse(label_positions$Sector == "Machinery", 8, 0)
+      )
+    ),
+    hjust = ifelse(
+      label_positions$Sector == "Electronics",
+      2,
+      ifelse(
+        label_positions$Sector == "Machinery",
+        2.1,
+        ifelse(
+          label_positions$Sector == "Minerals",
+          5.2,
+          ifelse(label_positions$Sector == "Agriculture", 3, 1.8)
+        )
+      )
+    ),
+    vjust = ifelse(
+      label_positions$Sector == "Electronics",
+      -2,
+      ifelse(
+        label_positions$Sector == "Machinery",
+        -.9,
+        ifelse(
+          label_positions$Sector == "Minerals",
+          -5,
+          ifelse(label_positions$Sector == "Agriculture", 0.6, 0.2)
+        )
+      )
+    ),
+    size = ifelse(
+      label_positions$Sector == "Electronics",
+      4,
+      ifelse(
+        label_positions$Sector == "Machinery",
+        4,
+        ifelse(
+          label_positions$Sector == "Minerals",
+          3,
+          ifelse(label_positions$Sector == "Agriculture", 2.8, 6)
+        )
+      )
+    ),
+    na.rm = TRUE
+  )
+
+
+```
+
+There were some series of challenged that added both complexity and valuable lessons, to start with, the first challenge was on the current gross export amounts, since the original data set already had the sign "\$" and the letter "B" on the numbers, the ggplot didn't organize well the amounts, I had to remove those characters from the "Current Gross Export" variable and then convert it to number as below,
+
+```{r}
+
+exportmex <-
+  exportmex |> mutate(`Current Gross Export` = sub("\\$", "", `Current Gross Export`))
+Current_Gross_Export <- as.numeric(exportmex$`Current Gross Export`)
+
+```
+
+In second place, I must mention the sectors, since ggplot2 order alphabetically by default I needed to modify them so I can give them the same order as on the original graph.
+
+```{r}
+colors <-
+  c(
+    "#b33d6d",
+    "#2b607c",
+    "#7cdada",
+    "#7ba2d9",
+    "#8c7ad7",
+    "#c47cda",
+    "#d87b7a",
+    "#bb9689",
+    "#dab57c",
+    "#f4d025",
+    "#7cdaa0"
+  )
+
+```
+
+An aesthetic where I invested a lot of time was, setting up the correct angles and direction of each label per sector, I used if else function so I can move the label of each sector separately, I had to be very meticulous on this because if I move the angle the other aesthetics of the label would change, and to set them up exactly as the original plot was a challenge.
+
+```{r eval = FALSE}
+
+geom_text(
+  data = label_positions,
+  aes(x = Inf, y = Position, label = Sector),
+  color = "#E8E9EB",
+  angle = ifelse(
+    label_positions$Sector == "Electronics",
+    15,
+    ifelse(
+      label_positions$Sector == "Minerals",
+      8,
+      ifelse(label_positions$Sector == "Machinery", 8, 0)
+    )
+  ),
+  hjust = ifelse(
+    label_positions$Sector == "Electronics",
+    2,
+    ifelse(
+      label_positions$Sector == "Machinery",
+      2.1,
+      ifelse(
+        label_positions$Sector == "Minerals",
+        5.2,
+        ifelse(label_positions$Sector == "Agriculture", 3, 1.8)
+      )
+    )
+  ),
+  vjust = ifelse(
+    label_positions$Sector == "Electronics",
+    -2,
+    ifelse(
+      label_positions$Sector == "Machinery",
+      -.9,
+      ifelse(
+        label_positions$Sector == "Minerals",
+        -5,
+        ifelse(label_positions$Sector == "Agriculture", 0.6, 0.2)
+      )
+    )
+  ),
+  size = ifelse(
+    label_positions$Sector == "Electronics",
+    4,
+    ifelse(
+      label_positions$Sector == "Machinery",
+      4,
+      ifelse(
+        label_positions$Sector == "Minerals",
+        3,
+        ifelse(label_positions$Sector == "Agriculture", 2.8, 6)
+      )
+    )
+  ),
+  na.rm = TRUE
+)
+
+```
+
+The last thing that was also complicated for me to recreate was the legend, even though I did not put the images as the original plot, I spent a lot of time investigating on how to set up the colors horizontally and just in 1 row, and finally came up with below setting,
+
+```{r,eval = FALSE}
+
+labs(title = " ",
+     fill = paste("PRODUCT", "SECTORS", sep = "\n")) + guides(fill = guide_legend(
+       nrow = 1,
+       override.aes = list(fill = legend_colors)
+     ))
+
+```
+
+I adjusted the number of rows within the "guides" function to reflect the changes. Additionally, I redefined the order of the key legend colors, aligning the legend with the same color sequence as in the original plot.
+
+```{r}
+
+legend_colors <-
+  c(
+    "#b33d6d",
+    "#7cdaa0",
+    "#f4d025",
+    "#dab57c",
+    "#bb9689",
+    "#d87b7a",
+    "#c47cda",
+    "#8c7ad7",
+    "#7ba2d9",
+    "#7cdada",
+    "#2b607c"
+  )
+
+```
+
+I opted to not include the images in the legend and the arrow in the Y-axis title, as these are interactive elements, they weren't considered for the replication plot.
+
+The curves deviate slightly from those in the original plot. Despite experimenting with the parameters "bw" and "n_grid" in the geom_stream, I couldn't achieve the exact smoothness of the original plot. Consequently, I changed from geom_stream to geom_area, resulting in the plot shown below,
+
+```{r, fig.showtext = TRUE, preview=TRUE}
+
+exportmex |> ggplot() +
+  aes(Year, Current_Gross_Export, fill = Sector) +
+  scale_y_continuous(
+    name = "Current Gross Export",
+    breaks = seq(0, 550, 50),
+    labels = function(x)
+      paste0("$", x, "B")
+  ) +
+  coord_cartesian(ylim = c(0, exclude_value), expand = FALSE) +
+  scale_x_continuous(
+    name = " ",
+    breaks = seq(1996, 2020, 2),
+    limits = c(min(exportmex$Year), max(exportmex$Year))
+  ) +
+  scale_fill_manual(values = colors) +
+  geom_area() +
+  theme_gray() +
+  theme(
+    text = element_text(family = "sans-serif"),
+    panel.background = element_rect(fill =  "#f5f5f5"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(color = "grey80", size = .3),
+    axis.ticks.length = unit(0.2, "cm"),
+    axis.ticks = element_line(color = "grey80", size = .3),
+    plot.margin = margin(l = 10),
+    axis.text = element_text(color = "#616161"),
+    axis.text.x = element_text(
+      angle = 60,
+      hjust = 1,
+      size = 5,
+      margin = margin(5, 0, 0, 0)
+    ),
+    axis.text.y = element_text(
+      size = 5,
+      family = "sans-serif",
+      margin = margin(0, 0, 0, 5)
+    ),
+    axis.title.y = element_text(
+      size = 8,
+      family = "sans-serif",
+      color = "#616161",
+      margin = margin(r = 10)
+    ),
+    legend.position = "bottom",
+    legend.text = element_blank(),
+    legend.spacing.x = unit(0.1, "cm"),
+    legend.text.align = 10,
+    legend.box.spacing = unit(1, "cm"),
+    legend.key.height = unit(0.4, "cm"),
+    legend.key.width = unit(0.4, "cm"),
+    legend.title = element_text(color = "#616161", size = 6),
+    legend.justification = c(0.3, 0)
+  ) +
+  labs(title = " ",
+       fill = paste("PRODUCT", "SECTORS", sep = "\n")) +
+  guides(fill = guide_legend(nrow = 1, override.aes = list(fill = legend_colors))) +
+  geom_text(
+    data = label_positions,
+    aes(x = Inf, y = Position, label = Sector),
+    color = "#E8E9EB",
+    angle = ifelse(
+      label_positions$Sector == "Electronics",
+      15,
+      ifelse(
+        label_positions$Sector == "Minerals",
+        8,
+        ifelse(label_positions$Sector == "Machinery", 8, 0)
+      )
+    ),
+    hjust = ifelse(
+      label_positions$Sector == "Electronics",
+      2,
+      ifelse(
+        label_positions$Sector == "Machinery",
+        2.1,
+        ifelse(
+          label_positions$Sector == "Minerals",
+          5.2,
+          ifelse(label_positions$Sector == "Agriculture", 3, 1.8)
+        )
+      )
+    ),
+    vjust = ifelse(
+      label_positions$Sector == "Electronics",
+      -2,
+      ifelse(
+        label_positions$Sector == "Machinery",
+        -.9,
+        ifelse(
+          label_positions$Sector == "Minerals",
+          -5,
+          ifelse(label_positions$Sector == "Agriculture", 0.6, 0.2)
+        )
+      )
+    ),
+    size = ifelse(
+      label_positions$Sector == "Electronics",
+      4,
+      ifelse(
+        label_positions$Sector == "Machinery",
+        4,
+        ifelse(
+          label_positions$Sector == "Minerals",
+          3,
+          ifelse(label_positions$Sector == "Agriculture", 2.8, 6)
+        )
+      )
+    ),
+    na.rm = TRUE
+  )
+
+```
+
+The curves closely resemble those of the original plot, although they may lack the same level of smoothness. However, their distinct features are as pronounced as those in the original plot.
+
+Given that Geom stream is not perfect, I chose to include both plots in the project. This allows us to observe the replication that most closely aligns with the original plot.
+
+## Enhacement
+
+As I aimed to illustrate the evolution of each sector, I transitioned from a stream graph to a geom_area, applying facet wrap to assign each sector to a distinct grid. I originally contemplate a line graph, and reconsidered due to the 11 sectors, realizing it might result in a spaghetti chart, making it visually overwhelming and challenging to interpret. Opting for facet wrap, I allocated a dedicated section to each sector, improving the graphic's clarity and making it more accessible to recognize individual sector patterns.
+
+```{r}
+display.brewer.all()
+
+my_palette <- brewer.pal(11, "Paired")
+print(my_palette)
+
+```
+
+Below is the code,
+
+```{r, fig.showtext=TRUE}
+
+exportmex |> ggplot()  +
+  aes(Year, Current_Gross_Export, fill = Sector) +
+  geom_area() +
+  facet_wrap (
+    ~ factor(
+      Sector,
+      levels = c(
+        "Vehicles",
+        "Machinery",
+        "Electronics",
+        "Minerals",
+        "Agriculture",
+        "Other",
+        "Services",
+        "Chemicals",
+        "Metals",
+        "Textiles",
+        "Stone"
+      )
+    ),
+    scales = "free_y",
+    nrow = 3,
+    strip.position = "top"
+  ) +
+  theme(strip.background = element_blank(),
+        legend.position = "none") +
+  scale_fill_manual(
+    values = my_palette
+  ) +
+  scale_y_continuous(
+    name = "Current Gross Export",
+    expand = c(0, 0),
+    labels = function(x)
+      paste0("$", x, "B")
+  ) +
+  scale_x_continuous(
+    name = " Years" ,
+    breaks = seq(1996, 2020, 6),
+    limits = c(min(exportmex$Year),
+               max(exportmex$Year))
+  ) +
+  ggtitle("Export Trends (1996-2020) in Mexico by Sector in Current Gross $ ") +
+  theme(
+    axis.text.y = element_text(
+      size =  5,
+      family = "sans-serif",
+      margin = margin(l = 10)
+    ),
+    axis.title.y = element_text(
+      size = 10,
+      family = "sans-serif",
+      color = "#616161"
+    ),
+  ) +
+  theme(
+    legend.position = "none",
+    strip.text = element_text(size = 10, family = "sans-serif"),
+    axis.ticks = element_line(color = "grey80"),
+    plot.margin = margin (l = 10, b = 8, t = 10),
+    plot.title = element_text(
+      face = "bold",
+      hjust = 0,
+      size = 11,
+      vjust = 3
+    ),
+    axis.text.x = element_text(margin = margin(b = 10), size = 5)
+  )
+
+```
+
+Firstly, my goal was to change the color palette of the original graph, as certain colors give challenges for individuals with color blindness. I discovered the "Viridis" library in R, which allows us to implement a colorblind-friendly palette. This palette became the foundation for the enhanced graph. It's essential to consider inclusivity in data visualization since color plays an important role. By accommodating color-blind individuals, we expand our audience and amplify the impact of our work.
+
+```{r,eval = FALSE}
+
+library(RColorBrewer)
+my_palette <- brewer.pal(11, "Paired")
+print(my_palette)
+
+scale_fill_manual(
+  values = my_palette)
+
+```
+
+Secondly, I arranged each sector in descending order based on their current gross export values. This deliberate arrangement places the sector with the highest current gross export impact at the top left, gradually descending to the sector with the lowest impact at the bottom right. The objective behind this strategic organization is to offer readers a more structured and intuitive visualization of the data.
+
+To achieve this, I employed a systematic approach by establishing specific levels for the "Sector" variable and ordering them according to the desired organization, as mentioned earlier. The relevant code part for this configuration is provided below,\
+
+```{r,eval=FALSE}
+facet_wrap ( ~ factor(
+  Sector,
+  levels = c(
+    "Vehicles",
+    "Machinery",
+    "Electronics",
+    "Minerals",
+    "Agriculture",
+    "Other",
+    "Services",
+    "Chemicals",
+    "Metals",
+    "Textiles",
+    "Stone"
+  )
+)
+
+
+```
+
+## Conclusion
+
+In the journey of replicating the existing graph, I navigated through data and visualization challenges, where tested my analytic and coding skills, ultimately, I'm proud of the progress made on ggplot2 and R. The replica thought me how to handle complex data sets to address them into a visual representation and to critically evaluate the choices of the creators so I could improve the graph according to my criteria, and for the enhancement, I provide an illustrate representation of my intended improvement representing the Current Gross Export for each sector over the years with spontaneity and clarity of each sector.
+
+And lastly, I would like to thank Iñaki for all the help I receive to be able to recreate this plot and to learn all about ggplot2.

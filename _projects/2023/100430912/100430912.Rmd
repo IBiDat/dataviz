@@ -1,0 +1,249 @@
+---
+title: "Annual Global Corporate Investment in AI by Type"
+description: |
+  This project replicates a graph from Our World in Data and proposes an improvement.
+categories: "2023"
+author: María Jurado-Millán
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(out.width="100%", fig.align="center")
+
+```
+
+## Introduction
+
+This graph was published by Our World in Data in June 2023 and shows the evolution of investment in artificial intelligence by type from 2013 to 2022. The unit of measure is US dollars adjusted by inflation. This is important because it allow us to make comparisons across time, taking into account that prices change over time. Data is adjusted according the US Consumer Price Index (CPI).
+
+I chose this chart because nowadays, artificial intelligence is a very trending topic and it is interesting to see how the investment market has behaved the past years. It is not surprising that the investment trend is increasing because it is a booming sector, but it is interesting that it reached a peak in 2021 and decreased in 2022. Does the pandemic have anything to do with this?
+
+The purpose of this project is to replicate the original graph shown below and propose an improvement using the same data.
+
+![Annual global corporate investment in artificial intelligence, by type. Figure from [ourworldindata.org](https://ourworldindata.org/grapher/corporate-investment-in-artificial-intelligence-by-type).](screenshot-graph.png){.external width="100%"}
+
+## Replication
+
+The first step is to run necessary libraries and the database.
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+
+```
+
+### Cleaning and preparing data
+
+The original database contains 50 observations from 2013 to 2022 and 5 variables, Merger/Acquisition, Public Offering, Private Investment, Minority Stake and Total. The names of the columns are modified to simplify the coding and rows names are reordered to follow the graph's structure. Since the graph doesn't show the Total investment, these information can be omitted, as well as the "Code" column that only has NA's an as is not giving any information at all, can be eliminated.
+
+Steps:
+
+1.  Open the database and rename columns to simplify the code.
+
+```{r}
+data<-read_csv(file="corporate-investment-in-artificial-intelligence-by-type.csv")
+head(data)
+data<-data |> 
+  rename(entity = Entity, year = Year,
+         amount = "Total corporate investment - inflation adjusted")
+
+```
+
+2.  Eliminate non useful information.
+
+```{r}
+data<- data |> 
+  select(-Code) |> 
+  filter(entity != "Total")
+```
+
+3.  Convert year column into a date variable instead of numeric.
+
+```{r}
+data<- data |>
+  mutate(year=make_date(year=year, month=1, day=1),
+         year=as.Date(year))
+```
+
+4.  Order data in the same structure as the graph.
+
+```{r}
+data<-data |> 
+  mutate(entity=factor(entity, levels=c(
+    "Merger/Acquisition", "Public Offering", "Private Investment", "Minority Stake")))
+head(data)
+```
+
+### Building the graph and scales
+
+Now that data is cleaned and prepared,we can start building the graph. This graph is plotted using geom_col function, which is the R function used for bar charts in ggplot2 package.The fill aesthetic is set to the variable "entity", and the color palette is introduced manually with the function rgb() that allow us to find the exact color from the HTML format in R.
+
+Steps:
+
+1.  Create the plot and define the axes.
+
+```{r}
+g<-ggplot(data,
+       aes(x=year,y=amount, fill=entity))
+```
+
+2.  Properly scale the axes, including the breaks and renaming these breaks.
+
+```{r}
+g<- g + 
+  scale_x_date(date_breaks="year",
+               date_labels = "%Y")+
+  scale_y_continuous(breaks=c(0,50000000000,100000000000,150000000000,200000000000,250000000000),
+                     labels = c("$0","$50 billion","$100 billion","$150 billion","$200 billion","$250 billion"))
+```
+
+3.  Include the dotted lines.
+
+```{r}
+g<- g +
+  geom_hline(yintercept=c(50000000000,100000000000,150000000000,200000000000,250000000000),
+             linetype="dotted")
+```
+
+4.  Add the necessary information to fill the plot with and their corresponding color.
+
+```{r}
+g<- g +
+  geom_col() + scale_fill_manual(values = c(
+    "Merger/Acquisition" = "#B13507",
+    "Public Offering" = "#4C6A9C",
+    "Private Investment" = "#578145",
+    "Minority Stake" = "#883039"
+  ))
+g
+```
+
+### Labs and themes
+
+This section is formed by the final retouches. The tittle and subtitle are added in the same font as the original graphic and located at the right position and size. The background and the legend are also modified.
+
+Steps:
+
+1.  Include the necessary fonts.
+
+```{r}
+sysfonts::font_add_google("Playfair Display", family="playfair_display")
+sysfonts::font_add_google("Roboto", family="roboto")
+showtext::showtext_auto()
+```
+
+2.  Add the tittle and subtitle.
+
+```{r}
+g<- g+
+  labs(x=NULL, y=NULL, 
+       title="Annual global corporate investment in artificial intelligence, by type", 
+       subtitle="This data is expressed in US dollars, adjusted for inflation.")
+```
+
+3.  Adjust them to the exact font, size and location.
+
+```{r}
+g<- g+
+theme(plot.title = element_text(color="#5b5b5b", size=20, family = "playfair_display"),
+        plot.subtitle=element_text(color="#5b5b5b", size=15, family = "roboto"),
+        plot.title.position = "plot")
+```
+
+4.  Eliminate the title of the legend.
+
+```{r}
+g<- g+
+  theme(legend.title = element_blank())
+```
+
+5.  Change the background of the graph to the same color as the original one.
+
+```{r, preview=TRUE}
+g<- g+
+  theme(plot.background = element_rect(fill = "white"), panel.background = element_rect(fill = "white"))
+g
+```
+
+## Improvement
+
+The suggested improvement involves transitioning from a bar chart to a line chart. This change is motivated by the current graphical representation's limitations, particularly because in year 2021 we can not see if Merger/Acquisition sector invested more than Private Investment. Given that data is a time series, I consider that a line chart would be more appropriate because it captures better the evolution over time. The objective of this adjustment is to enhance the clarity and interpretability of the presented data, providing a better overview of the evolution by type across the years.
+
+Steps:
+
+1.  Reorder data to show the variables from higher to lower investment.
+
+```{r}
+data<-data |> mutate(entity=factor(entity, levels=c(
+  "Private Investment", "Merger/Acquisition", "Public Offering", "Minority Stake"))) |> 
+  arrange(data)
+```
+
+2.  Create the line chart and specify the axes.
+
+```{r}
+p<- ggplot(data) +
+  aes(x=year,y=amount)+
+  geom_line(aes(color=entity))
+```
+
+3.  Properly scale the axes, including the breaks and renaming these breaks.
+
+```{r}
+p<- p +
+  scale_x_date(date_breaks="year",
+               date_labels = "%Y")+
+  scale_y_continuous(breaks = c(0,20000000000,40000000000,60000000000,80000000000,100000000000,120000000000),
+                     labels = c("$0","$20 billion","$40 billion","$60 billion","$80 billion","$100 billion", "$120 billion"))
+```
+
+4.  Include the dotted lines.
+
+```{r}
+p<- p +
+  geom_hline(yintercept=c(0,20000000000,40000000000,60000000000,80000000000,100000000000,120000000000),
+             linetype="dotted",color="#5b5b5b")
+
+```
+
+5.  Add the title and subtitle.
+
+```{r}
+p<- p +
+  labs(x=NULL, y=NULL,
+       title="Annual global corporate investment in artificial intelligence, by type", 
+       subtitle="This data is expressed in US dollars, adjusted for inflation.")
+```
+
+6.  Adjust them to the proper font, size and location.
+
+```{r}
+p<- p +
+  theme(plot.title = element_text(color="#5b5b5b", size=20, family = "playfair_display"),
+        plot.subtitle=element_text(color="#5b5b5b", size=15, family = "roboto"),
+    plot.title.position = "plot")
+```
+
+7.  Eliminate the title of the legend
+
+```{r}
+p<- p +
+  theme(legend.title = element_blank())
+```
+
+8.  Change the background of the graph.
+
+```{r}
+p<- p +
+  theme(plot.background = element_rect(fill = "white"), panel.background = element_rect(fill = "white"))
+
+p
+```
+
+This graph illustrates the evolution of Artificial Intelligence investments by type over time. In 2021, private investment surpasses Merger and Acquisition funding, a detail not evident in the original graph. This improvement makes the graph considerably more informative as it now displays the investment amounts for each type, enhancing clarity and ease of interpretation.
