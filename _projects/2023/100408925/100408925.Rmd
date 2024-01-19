@@ -15,9 +15,25 @@ output:
 knitr::opts_chunk$set(out.width="100%", fig.align="center")
 ```
 
-### Loading the necessary library
+Introduction
 
-```{r}
+The article from The New York Times, published on June 25, 2016, delves into the aftermath of the Brexit referendum, portraying it as a momentous and uncertain chapter in Britain's storied history. The piece captures the prevailing sentiments of shock and uncertainty following the unexpected decision to leave the European Union, as the country grapples with the potential economic, political, and social consequences.
+
+It reflects on the intricate challenges ahead, including the renegotiation of trade agreements, potential shifts in global influence, and the implications for the European Union itself. Through interviews with citizens, politicians, and analysts, the article captures the diverse reactions and apprehensions within the UK and abroad, emphasizing the profound impact of the referendum on the nation's trajectory and its place in the broader European context.
+
+Link to article
+
+The original graph
+
+The original graph can be found on the New York Times graph repository and uses maps and charts to illustrate the voting patterns across various regions, highlighting stark divisions between areas that voted to remain in the European Union and those that opted to leave and providing a detailed breakdown of the results of the Brexit referendum in the United Kingdom.
+
+Original graph, source: NYT
+
+Getting the data right
+
+Packages
+
+{r}
 library(readr)
 library(dplyr)
 library(glue)
@@ -30,28 +46,32 @@ library(cowplot)
 library(maps)
 library(ggnewscale)
 library(ggtext)
-library(ggmap)
 library(RColorBrewer)
 library(mapproj)
-```
 
-I also recommend setting here our own working directory
+We should also set here our own working directory
 
-### 1. Loading and fixing the data
+Loading and fixing the data
 
-```{r}
-#csv data
+The data is not precisely easily accessible (or at least not all of it) so I recommend downloading it from Github.
+
+{r, results='hide'}
+# csv data for the UK
 referendum <- read_csv("EU-referendum-result-data.csv")
 
-#shapefile
+# shapefiles
 uk_shp <- read_sf("uk_constituencies_2016.shp")
 ireland_shp <- read_sf("IRL_adm1.shp")
 
-#check the geometries to see if they match
+# check the geometries to how many divisions they have
 length(st_geometry(uk_shp))
 length(st_geometry(ireland_shp))
 
-# eliminate meaningless columns: 
+
+After loading the data many variables that were meaningless for creating the graph were eliminated. Once that was done, certain variables were renamed so that the area name and area code were the same in both shapefiles for the UK and Ireland, aligned their coordinate systems so that they matched (at EPSG:4326) and merged the shapefiles altogether and also with the main dataset with all the information.
+
+{r, results='hide'}
+# eliminate meaningless columns of the shp: 
 uk_shp$ID <- NULL
 ireland_shp$ID_0 <- NULL
 ireland_shp$ISO <- NULL
@@ -61,30 +81,31 @@ ireland_shp$ENGTYPE_1 <- NULL
 ireland_shp$NL_NAME_1 <- NULL
 ireland_shp$VARNAME_1 <- NULL
 
-
+# rename variables
 names(ireland_shp)[names(ireland_shp) == "NAME_1"] <- "area_name"
 names(ireland_shp)[names(ireland_shp) == "ID_1"] <- "area_code"
-
-#transform and align the coordinate systems
-uk_shp <- st_transform(uk_shp, crs = st_crs("EPSG:4326"))
-ireland_shp <- st_transform(ireland_shp, crs = st_crs("EPSG:4326"))
-
-
-#look at their coordinates systems
-print(st_crs(uk_shp))
-print(st_crs(ireland_shp))
-
-#Merge shapefiles
-
-uk_shp1 <- rbind(uk_shp, ireland_shp)
 
 referendum <- referendum |> 
   rename(area_code = Area_Code)
 
-#Merge with dataset
+# transform and align the coordinate systems
+uk_shp <- st_transform(uk_shp, crs = st_crs("EPSG:4326"))
+ireland_shp <- st_transform(ireland_shp, crs = st_crs("EPSG:4326"))
 
+#check their coordinates systems
+print(st_crs(uk_shp))
+print(st_crs(ireland_shp))
+
+#Merge shapefiles
+uk_shp1 <- rbind(uk_shp, ireland_shp)
+
+#Merge with dataset
 brexit_data <- left_join(uk_shp1, referendum, by = "area_code")
 
+
+Also, I manually filled the referendum data (remain, leave and turnout percentages) for the districts of Northern Ireland with the information made available by the BBC.
+
+{r}
 #West Tyrone
 brexit_data$Pct_Turnout[18] <- 61.8
 brexit_data$Remain[18] <- 26765
@@ -215,25 +236,35 @@ brexit_data$Region_Code <- NULL
 brexit_data$Region <- NULL
 brexit_data$id <- NULL
 brexit_data$Area <- NULL
-```
 
-### 2. Creating two scales
+Creating two scales
 
-```{r}
+Since our map is based on two scales (Leave and Remain) with their own legends and positive graduated systems (percentage vote ranging from 1 to 100), we need to separate our dataset into two datasets.
+
+In order to do so first we have to classify our data according to which option won (got majority) in each district. For that we need to create a column that classifies each observation as "Leave" or "Remain". Then create the different datasets given the classifier just created.
+
+{r}
 # Making a winner column
 brexit_data <- mutate(brexit_data, winner = if_else(Pct_Remain > Pct_Leave, "Remain", "Leave"))
 
-#Add ireland as Pct_leave to have it in gray
+#Add ireland as Pct_leave to plot it gray 
 brexit_data$winner[399:424] <- "Leave"
 
 # Creating two different data frames
 leave_df <- brexit_data[brexit_data$winner == "Leave",]
 remain_df <- brexit_data[brexit_data$winner == "Remain",]
-```
 
-### 3. Fonts for the map
+On top of that, in the code all of the observations of Ireland were classified as "Leave". This is just to later be able to plot Ireland as a gray area so that the whole Island is displayed for geographical reference. As a result this displays the whole island of Ireland, the part corresponding to Northern Ireland with the corresponding colours for Leave and Remain in each district and the rest of the island in gray.
 
-```{r}
+Setting fonts for the map
+
+The provided R code below checks if the "extrafont" package is already installed, and if not, it installs the package. Subsequently, it loads the "extrafont" library. The code then imports the "Lora" font using the font_import function, making it available for use.
+
+Following this, it sets the base graphics parameter par(family = "Times") to specify the "Times" font family. The script proceeds to add fonts from Google Fonts using the font_add_google function from both the "Lora" and "DM Serif Display" font families. These are the fonts that will be used in the final map (I decided to choose those fonts instead of the ones in the original map as I liked better these).
+
+Finally, it activates font rendering with the showtext_auto() function from the "showtext" package, allowing the specified fonts to be used in subsequent graphical output. Overall, these lines of code ensure that the desired fonts are installed, imported, and configured for use in R graphics.
+
+{r, results='hide'}
 if (!requireNamespace("extrafont", quietly = TRUE)) {
   install.packages("extrafont")
 }
@@ -250,11 +281,18 @@ par(family = "Times")
 sysfonts::font_add_google("Lora", family="Lora")
 sysfonts::font_add_google("DM Serif Display", family="DM Serif Display")
 showtext::showtext_auto()
-```
 
-### Add tags for the map
+Creating tags for the map
 
-```{r}
+Before plotting the map it is also necessary to prepare some of the tags that will be displayed on the map (or at least the ones that are attached geographically to it).
+
+In this part of the code, two data frames related to the Brexit referendum leave_df and remain_df are manipulated together with a newly created data frame named country_tag that has the exact coordinates of where each of the tag is to be placed.
+
+For both leave_df and remain_df, it is added a new column named country based on a conditional logic using the case_when function. This logic assigns country names ("England," "Northern Ireland," "Wales," or "Scotland") to each row in the data frames based on the first letter of the area_code column.
+
+Additionally, the code reorders the columns to have the newly created country column as the first column. The final section of the code creates a new data frame, country_tag, containing information about the latitude and longitude of specific countries. In simpler terms, this chunk prepares and organizes data by assigning countries to rows based on their area codes and creates a separate data frame with geographical information.
+
+{r}
 leave_df <- leave_df |> 
   mutate(country = case_when(
     substr(area_code, 1, 1) == "E" ~ "England",
@@ -277,18 +315,35 @@ remain_df <- remain_df |>
 remain_df <- remain_df |> 
   select(country, everything())
 
-#Dataframe of tags
+#Dataframe of tags (locations on the map)
 country_tag <- data.frame(
   country = c("Scotland", "England", "Wales", "Nothern \nIreland"),
 latitude = c(56.999651, 54.383331, 52.000, 55.360043), 
 longitude = c(-4.809075, -1.866667, -4.933, -7.707558)
 )
 
-```
+Creating the base plot (map)
 
-### 5. Create the base plot
+The following R code constructs a thematic map using the ggplot2 package in R. The map visualizes the results of the E.U. Referendum in Britain, specifically focusing on the percentage of votes for remaining ("Remain") and leaving ("Leave") the European Union across different regions. Here's a detailed breakdown of the code:
 
-```{r}
+Base Plot Setup: The ggplot() function initializes the plot, and two separate layers are added for the "Remain" and "Leave" data frames using geom_sf. This function is specifically designed for creating visualizations with spatial data, where each observation in the dataset represents a geographic feature such as a point, line, or polygon. The aes argument within it specifies the variables (Pct_Remain or Pct_Leave respectively) to map to the fill color aesthetic. Remain is plotted with a blue scale and Leave with a scale of reds.
+
+Color Scales: scale_fill_stepsn is used to define color scales for "Remain" and "Leave" percentages. Colors are specified, breaks are set (starting at 50 and ending at 80, which covers the variability of the tunover data), and labels are assigned. The color gradients represent different levels of support, and breaks indicate specific percentage points. Also inside this command the legends are customised for each scale.
+
+Legend customization: the guide_colorsteps() function is utilized to customize the appearance of the legend associated with data. The configuration ensures even steps in the color scale (uniform distribution of colors across the scale), includes ticks on the legend with specified color and width, orients the legend horizontally, and provides a clear title ("Remain"). Additionally, lines are drawn at the lower and upper limits of the color scale, and the frame of the legend is set to black. The size of text labels within the legend is adjusted to 8 for optimal readability.
+
+Adding a New Fill Scale: The new_scale_fill() command is introduced to reset the fill scale specifically for the subsequent geom_sf layer that deals with "Leave" data. This is done to separate the color scales for "Remain" and "Leave," allowing independent customization of color gradients, breaks, labels, and other scale-related properties.
+
+Text Annotations: geom_text is employed to add labels to the map. The country_tag data frame provides coordinates (longitude and latitude) for text placement, and labels are drawn using the specified font ("Lora"). Country names are bold and sized appropriately.
+
+Themes and Formatting: The appearance of the map is controlled through various theme options. theme_minimal() provides a clean background, and additional adjustments are made for titles, legends, axis labels, grid lines, and font styles. The adjustments include setting the size of the legend title to 9, positioning the plot title to the left with a vertical justification of 0.5, and making the title bold. The legend is positioned at coordinates (0.15, 0.85) within the plot. The text across the plot is set to a specified font family ("DM Serif Display") and a size of 15. Various elements such as axis text, titles, ticks, and grid lines are removed for a cleaner and more minimalistic design. The legend is oriented horizontally, placed in a vertical box on the right, and justified to the right. The key size of the legend is set to a unit of 0.4 cm, and text within the legend is adjusted to a size of 6. The spacing between legend items along the y-axis is set to zero.
+
+Final Plot Object: The final plot object is stored in the variable map.
+
+The map effectively visualizes the voting patterns in the E.U. Referendum, distinguishing between regions that voted to remain or leave. The use of color gradients, text annotations, and a clear legend enhances the interpretability of the map.
+
+{r}
+
 map <- ggplot() +
   geom_sf(data = remain_df,
           aes(fill = Pct_Remain),
@@ -342,7 +397,7 @@ map <- ggplot() +
             size = 2.5, fontface = "bold",
             family = "Lora") +
   theme_minimal() +
-  labs(title = "           How Britain Voted in the E.U. Referendum",
+  labs(title =                           "How Britain Voted in the E.U. Referendum",
        x = NULL, 
        y = NULL, 
        fill = "Should Britain remain in the European Union?") +
@@ -363,11 +418,10 @@ map <- ggplot() +
         legend.spacing.y = unit(0, "cm"))
 map
 
-```
 
-As an extra point I expanded the coordinates of the map so that other plots can be added later in the design of the final plot
+As an extra point the coordinates of the map are expanded so that other plots can be added later in the design of the final plot
 
-```{r}
+{r}
 # Expand coordinates of map
 
 expanded_xmin <- -11.653038
@@ -382,18 +436,19 @@ map <- map +
 
 print(map)
 
-```
 
-### 6. Adding tags to the map
+Adding tags to the map
 
-```{r}
-#Cities annotations
+The code below seeks to generate a map visual using ggplot2, with additional annotations for selected cities. The cities data frame specifies the names, latitudes, and longitudes of several cities in the United Kingdom. Then, the "new" map (updated version of the previous one) is created by adding circles representing cities to the existing map (map). Each circle has a radius of 0.2 units, outlined in gray, and the city names are displayed at specified positions around their respective circles. The geom_text function is used to add city labels, adjusting the vertical and horizontal justification as well as font style and color for each city.
+
+{r}
+#Cities annotations & coordinates
 cities <- data.frame(
   city = c("London", "Manchester", "Cardiff", "Birmingham", "Edinburgh", "Liverpool", "Oxford", "Belfast"),
   latitude = c(51.509865, 53.4794, 51.4861, 52.479876, 55.9410, 53.3549, 51.750051, 54.5930),
   longitude = c(-0.118092, -2.2437, -3.1801, -1.9058, -3.29181, -3.0104, -1.25386, -5.9381))
 
-#MAP
+#MAP + tags/circles
 map1 <- map+
   geom_circle(data = cities,
               aes(x0 = longitude, y0 = latitude, r=0.2),  
@@ -409,12 +464,15 @@ map1 <- map+
             hjust = -0.5, size = 1.5, fontface = "bold", color = "gray24") +
   theme(aspect.ratio = 1.15)
 map1
-```
 
-### 7. London close-up
+The resulting map (map1) provides a visual representation of the geographical locations of these cities, enhancing the overall information conveyed by the map. Additionally, the theme function adjusts the aspect ratio of the map for better visual aesthetics.
 
-```{r}
-# Code that DOES work but is not round or adjusted to the bottom right  
+London close-up
+
+In this chunk a zoomed-in version of a map is created using ggplot2. The locations data frame contains geographical coordinates (longitude and latitude) defining bounding boxes for several cities. The location variable specifies the city for which the user wants to generate a zoomed map. In the code, it's set to "London," but users can change it to other cities from the list. The code then extracts the longitude and latitude ranges (xlim and ylim) for the specified city from the locations data frame.
+
+{r}
+# Locations dataframe with coordenates 
 locations <- data.frame(
   rbind(
     c("London", -0.58913, 0.3520155, 51.2318741, 51.7167602),
@@ -434,27 +492,39 @@ xlim <- as.numeric(locations[locations[, 1] == location, c(2, 3)])
 ylim <- as.numeric(locations[locations[, 1] == location, c(4, 5)])
 
 
+With this now the extraction of the map is plotted and stored:
+
+{r}
 zoomed_map1 <- map +
   theme(legend.position = "none", plot.title = element_blank(),
         panel.border = element_rect(color = "black", fill = NA, size = 1)) +
   coord_sf(xlim = c(xlim[1], xlim[2]), ylim = c(ylim[1], ylim[2]), crs = 4326) +
   theme(aspect.ratio = 1)
 zoomed_map1
-```
 
-### 8. Remain-Leave bar plot
+The resulting zoomed_map1 is generated by adjusting the original map (map) with additional themes and coordinates. The adjustments include removing the legend, hiding the plot title, adding a black border to the map, and setting the aspect ratio to maintain the correct proportions. The coord_sf function is used to set the limits for the x and y axes based on the extracted ranges for the chosen city. The resulting map (zoomed_map1) provides a closer look at the specified city by zooming in on its geographical coordinates.
 
-```{r}
-# Create data frame
+Remain-Leave bar plot
+
+After having ready the base map we need to start creating the adjacent plots. This code generates a bar plot using ggplot2 in R to visualize the results of the Brexit referendum in different regions of the United Kingdom. The data frame df contains information about the population, "Remain" votes, and "Leave" votes for regions such as Britain, England, London, Scotland, Wales, and Northern Ireland. The factor levels of the "Region" variable are reordered for better visualization.
+
+{r}
+# Create new data frame with the data
 df <- data.frame(Region = c("Britain", "England", "London", "Scotland", "Wales", "N. Ireland", " "),
                  Pop_M = c(64.1, 53.0, 8.5, 5.3, 3.0, 1.8, NA),
                  Remain = c(48, 47, 60, 62, 47, 56, NA),
                  Leave = c(52, 53, 40, 38, 53, 44, NA))
 
 # Reorder levels of factor
-
 df$Region <- factor(df$Region, levels = c("London", "N. Ireland", "Wales", "Scotland", "England", "Britain", " "), ordered = is.ordered(df$Region))
 
+
+Again, once the data is ready, it just needs to be plotted. The bar_plot is created by reshaping the data using the gather function to represent the "Remain" and "Leave" votes as separate bars for each region. The resulting plot shows a stacked bar chart where each region is divided into "Remain" and "Leave" segments. The code also includes text annotations for specific regions, emphasizing the vote percentages in key areas such as Northern Ireland, Scotland, and London.
+
+The plot is then flipped horizontally (coord_flip()) for simulating the one in the reference graph (which is a horizontal plot), and custom themes and color scales are applied to enhance the visual representation. The plot includes two sets of text annotations within the stacked bars, highlighting regions like "N. Ireland," "Scotland," and "London" with specific vertical adjustments. Additional annotations label "REMAIN" and "LEAVE," while the plot is customized with a minimal theme, flipped coordinates, color-filled bars for "Remain" and "Leave," removal of grid lines, and a dashed horizontal line at 50% for reference, indicating the threshold between "Remain" and "Leave" outcomes.
+
+{r}
+#plot bar plot
 bar_plot <- df |> 
   select(Region, Remain, Leave)  |> 
   tidyr::gather(key, VoteCount, -Region) |> 
@@ -480,11 +550,14 @@ bar_plot <- df |>
         axis.text.y = element_text(face = "bold", color = "black", size = 6, hjust = 0, family = "Lora"))+
   geom_hline(yintercept = 50, linetype = "dashed", color = "white", size=0.2)
 bar_plot
-```
 
-### 9. London zoom-up lines
+London zoom-up lines
 
-```{r}
+To make this plot closer to the reference plot dashed lines need to be added and connected to the zoomed-up map. he coordinates for the starting and ending points of each line are specified in the origin1, end1, origin2, and end2 vectors. They were manually chosen using a web that displays the coordenates of any point you might choose on a map.
+
+Two data frames, line1 and line2, were then created to represent the coordinates of each line. The code builds on an existing map (map1) and uses the geom_segment function to add two dashed line segments to the map. The aesthetics define the starting and ending points of each segment using the x and y coordinates from the respective data frames. The color is set to "grey38," the linetype to "dashed," and the size to 0.13, resulting in two visually distinct dashed lines representing the specified segments.
+
+{r}
 #LINE 1
 origin1 <- c(-0.090525, 51.757161)
 end1 <- c(1.904604, 52.578733)
@@ -505,11 +578,14 @@ map2 <- map1 +
                color = "grey38", linetype = "dashed", size = 0.13)
 map2
 
-```
 
-### 10. Putting everything together
+The resulting map, map2, displays the original map with the added line segments.
 
-```{r}
+Putting everything together
+
+In order to put everything together the coordinates (xmin, xmax, ymin, ymax) are specified to determine the placement of the zoomed map within the combined plot, focusing on a specific region. Similarly, coordinates (xmin1, xmax1, ymin1, ymax1) are specified for the placement of the bar plot. The annotation_custom function is then used to add each individual plot as a custom annotation to the main map (map2).
+
+{r}
 # Specify coordinates for the zoomed map
 xmin <- 1.5
 xmax <- 4.5
@@ -522,6 +598,9 @@ xmax1 <- 5.5
 ymin1 <- 55.5
 ymax1 <- 60.5
 
+The first annotation_custom call adds the zoomed map (zoomed_map1) to the specified region of the main map (map2). The second annotation_custom call adds the bar plot (bar_plot) to another specified region. The resulting plot, plot_w_addins, displays both the zoomed map and the bar plot in a single composite view. This approach allows for the juxtaposition of different visualizations within the same plot, providing a comprehensive overview of spatial and categorical information.
+
+{r}
 # Combine the maps into one
 combined_map <- annotation_custom(grob = ggplotGrob(zoomed_map1), 
                                 xmin = xmin, xmax = xmax, 
@@ -536,11 +615,13 @@ combined_bar <- annotation_custom(grob = ggplotGrob(bar_plot),
 plot_w_addins <- map2 + combined_map + combined_bar
 plot_w_addins
 
-```
+Final annotations
 
-### 11. Final annotations
+Finally, the big text annotations need to be added on top of everything else.
 
-```{r}
+First, geographical points and annotation texts related to specific regions are defined. Each set of points represents a geographic area (e.g., Scotland, London, Ireland, Wales), and the associated annotation_text provides information or context about that region in relation to the Brexit referendum
+
+{r}
 #Scotland
 point1 <- c(-0.666206, 55.598766)
 point2 <- c(-2.456146, 56.080442)
@@ -563,11 +644,16 @@ point8 <- c(-5.517893, 50.843996)
 point9 <- c(-4.524143, 51.599867)
 point10 <- c(-9.527097, 50.85646)
 annotation_text4 <- "The majority of Wales voted\nstrongly to leave, except for the\nlargest city Cardiff, which voted to\nremain by 60 percent."
-```
 
-Now the final plot with the annotations:
+Overall, this code helps position annotations on a map to provide additional information about key regions and their stances during the Brexit referendum.
 
-```{r}
+At last the final plot with the annotations:
+
+The code uses geom_curve to draw curved arrows between specific points, creating visual connections on the map. The arrows are labeled with text annotations, conveying additional information about each region's significance in the context of the Brexit referendum.
+
+The annotations are positioned strategically using annotate("text") along with specified coordinates for clarity. Additionally, the overall appearance of the plot is fine-tuned by adjusting the theme to minimize unnecessary elements, such as axis ticks and grid lines, and enhancing the overall aesthetics.
+
+{r}
 
 #final plot
 plot_w_addins+
@@ -608,4 +694,156 @@ plot_w_addins+
         legend.text = element_text(size = 6),
         legend.spacing.y = unit(0, "cm"))
 
-```
+
+he legend.position parameter determines the location of the legend, placing it slightly to the right and towards the top of the plot. The text parameter specifies the font family as "DM Serif Display" with a font size of 15, ensuring a consistent and aesthetically pleasing text style throughout the plot. Additionally, various elements such as axis labels, titles, ticks, and grid lines are removed using element_blank(), contributing to a clean and uncluttered layout.
+
+The legend is configured to be horizontal (legend.direction), and its box is styled to be vertical with justification to the right (legend.box and legend.box.just). Further customization includes adjusting the size of legend keys (legend.key.size), text size within the legend (legend.text), and eliminating vertical spacing between legend items (legend.spacing.y). Collectively, these theme settings enhance the plot's readability, maintain a coherent design, and prioritize the display of essential information.
+
+At the end the final plot should look like this:
+
+Resulting plot
+
+Limitations
+
+Some key limitations of this graph are the legend and the zoomed-up map. In the original map the legend was created with another program and with R this is the closest I could manage to get after making a few adjustments. Regarding the zoomed up map I tried different methods like buffer or ggmapinset, but given the structure of my data and layers I was not able to make the zoomed-up map round.
+
+Is there an alternative way?
+
+The remaining library that would be needed:
+
+{r}
+library(htmltools)
+library(leaflet)
+library(sf)
+library(sp)
+
+The data should be loaded again and the data for Northern Ireland should be manually loaded again just like for the previous map:
+
+{r}
+#csv
+referendum <- read_csv("EU-referendum-result-data.csv")
+#UK shapefile
+uk_shp <- read_sf("uk_constituencies_2016.shp")
+
+#modifications for merging
+referendum <- referendum |> 
+  rename(area_code = Area_Code)
+
+#merge
+brexit_data <- left_join(uk_shp, referendum, by = "area_code")
+
+#West Tyrone ...
+#brexit_data$Pct_Turnout[18] <- 61.8
+#brexit_data$Remain[18] <- 26765
+#...
+
+Then the cleaned data should be reprojected into WGS84
+
+{r}
+#Reproject data to WGS84
+brexit_data <- st_transform(brexit_data, 4326)
+
+Subsequently, the brexit_data dataframe is being modified with a new variable called margin. This variable is calculated as the absolute difference between the columns Pct_Remain and Pct_Leave. The mutate function from the dplyr package is used to create this new column.
+
+Then, the range function is applied to the margin variable within the brexit_data dataframe. The range function returns the minimum and maximum values of a numeric vector. In this context, it calculates the minimum and maximum values of the margin variable. The na.rm = TRUE argument is included to exclude any missing values (NA) when determining the range.
+
+{r}
+#min_max values
+brexit_data <- mutate(brexit_data, margin = abs(Pct_Remain - Pct_Leave))
+min_max_values <- range(brexit_data$margin, na.rm = TRUE)
+
+
+After that is done a colour palette for the plotted map must be created. This colour palette will take the lightest colour for the smallest number of the margin between votes.
+
+{r}
+#colour palette 
+
+leave_palette <- colorNumeric(palette = "Reds", domain=c(min_max_values[1], min_max_values[2]))
+remain_palette <- colorNumeric(palette = "Blues", 
+                               domain=c(min_max_values[1], min_max_values[[2]]))
+
+
+This code is creating two color palettes, leave_palette and remain_palette, for visualizing the margin between "Pct_Remain" and "Pct_Leave" in a graphical representation. The colorNumeric function is used from the leaflet package, and it allows for the creation of a color palette based on a numeric range.
+
+The palette argument specifies the color scheme, with "Reds" for leave_palette and "Blues" for remain_palette. The domain argument sets the range of values for which colors will be assigned. In this case, the range is determined by min_max_values[1] (minimum) and min_max_values[2] (maximum), which were calculated in the previous code block as the minimum and maximum values of the absolute margin between "Pct_Remain" and "Pct_Leave". The color palettes will be used later for mapping and visualizing the data, with lighter colors representing smaller margins and darker colors representing larger margins.
+
+For this visualization, two different dataframes are needed, so they are created in the same way as in the previous plot:
+
+{r}
+# Making a winner column
+brexit_data <- mutate(brexit_data, winner = if_else(Pct_Remain > Pct_Leave, "Remain", "Leave"))
+
+#Creating two different data frames
+leave_df <- brexit_data[brexit_data$winner == "Leave",]
+remain_df <- brexit_data[brexit_data$winner == "Remain",]
+
+
+Also, in order to have popups for each district to be used in conjunction with the leaflet map, they have to be previously set:
+
+This chunk is creating HTML-formatted popups for map markers in a geographic visualization. The popups provide information about the voting results for different areas, particularly focusing on the "Leave" and "Remain" campaigns in the context of the Brexit referendum.
+
+{r}
+#Create a popup
+
+leave_popup <- glue("<strong>{leave_df$area_name} AREA</strong><br />
+                    <strong>winner: Leave</strong><br />
+                    Leave: {scales::comma(leave_df$Pct_Leave, accuracy = 1)}<br />
+                    Remain: {scales::comma(leave_df$Pct_Remain, accuracy = 1)}<br />
+                    Margin: {scales::comma(leave_df$margin, accuracy = 1)}")  %>%   
+  lapply(htmltools::HTML)
+remain_popup <- glue("<strong>{remain_df$area_name} AREA</strong><br />
+                      <strong>winner: Remain</strong><br />
+                      Remain: {scales::comma(remain_df$Remain, accuracy = 1)}<br />
+                      Leave: {scales::comma(remain_df$Leave, accuracy = 1)}<br />
+                      Margin: {scales::comma(remain_df$margin, accuracy = 1)}")  %>%   
+  lapply(htmltools::HTML)
+
+
+For the "leave_popup," the information includes the area name, the winning campaign ("Leave"), the percentage of votes for "Leave," the percentage of votes for "Remain," and the margin between the two. The glue function is used to dynamically insert values from the leave_df dataframe into an HTML template. The lapply function is then applied to convert the resulting string into an HTML object.
+
+Similarly, for the "remain_popup," the information includes the area name, the winning campaign ("Remain"), the percentage of votes for "Remain," the percentage of votes for "Leave," and the margin between the two. The glue function is again utilized to create an HTML-formatted string, and lapply converts it into an HTML object.
+
+Lastly, the background for the map is set and the map is plotted:
+
+{r}
+#Set the background of the map
+
+leaflet() %>%
+  addProviderTiles("CartoDB.Positron")
+
+This code above uses the leaflet R package to create an interactive map, and it sets the background map tiles to be provided by CartoDB with a Positron theme. The leaflet() function initializes a new leaflet map, and addProviderTiles("CartoDB.Positron") adds the specified map tiles from CartoDB's Positron theme as the background to the leaflet map. This provides a clean and visually appealing base map for further layers and data visualization on the leaflet map.
+
+{r}
+#Then we overlay the data
+
+leaflet() %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(
+    data = leave_df,
+    fillColor = ~leave_palette(leave_df$margin),
+    label = leave_popup,
+    stroke = TRUE,
+    smoothFactor = 0.2,
+    fillOpacity = 0.8,
+    color = "#666",
+    weight = 1
+  ) %>%
+  addPolygons(
+    data = remain_df,
+    fillColor = ~remain_palette(remain_df$margin),
+    label = remain_popup,
+    stroke = TRUE,
+    smoothFactor = 0.2,
+    fillOpacity = 0.8,
+    color = "#666",
+    weight = 1
+  )
+
+
+The previous code just overlays a map on a cartographic base layer using CartoDB's Positron tiles.
+
+The addPolygons function is then used to overlay polygons on the map, representing geographical areas. Two sets of polygons are added to the map, corresponding to the leave_df and remain_df datasets, each with specific styling. The fillColor parameter is set dynamically using color palettes (leave_palette and remain_palette) based on the margin values in each dataset. This creates a choropleth map where different shades of color represent different margins between Leave and Remain votes in each geographic area.
+
+Additionally, the label parameter is used to create pop-up labels for each polygon, displaying relevant information such as the area name, the winning side (Leave or Remain), individual vote percentages, and the margin. The map is designed to be interactive, allowing users to explore the data by hovering over each area and viewing the associated information. The stroke, smoothFactor, fillOpacity, color, and weight parameters are set to control the appearance of the polygons, ensuring a visually informative and aesthetically pleasing map.
+
+And with this we have an alternative interactive map to visualize the data!!
