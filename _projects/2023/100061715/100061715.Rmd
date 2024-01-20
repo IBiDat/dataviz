@@ -1,7 +1,7 @@
 ---
 title: "Unveiling birth clinical practice in Spain: mapping the cesarian sections and birth dynamics"
 description: |
-  "Exploring the nuances of maternal healthcare in Spain through an augmented map, showcasing original cesarean section rates alongside additional insights such as total births per autonomous community and cesarean rates adjusted for the average maternal age."
+  Exploring the nuances of maternal healthcare in Spain through an augmented map, showcasing original cesarean section rates alongside additional insights such as total births per autonomous community and cesarean rates adjusted for the average maternal age.
 categories: "2023"
 author: Celia Muñoz
 date: "`r Sys.Date()`"
@@ -11,8 +11,8 @@ output:
     toc: true
 ---
 
-```{r setup, include=FALSE, fig.align='center', fig.showtext=TRUE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align="center", fig.showtext=TRUE)
 ```
 
 ## Background
@@ -43,7 +43,7 @@ library(fuzzyjoin)
 library(ggtext)
 ```
 
-```{r}
+```{r, fig.align='center'}
 # Adjusting locale settings
 my_locale <- locale(decimal_mark = ",", grouping_mark = ".")
 
@@ -71,7 +71,7 @@ Now that we have the data loaded and cleaned, we begin constructing our chart. I
 
 There are several libraries for creating map-based graphics; however, most of them place the Canary Islands in their original location. This can be problematic when representing territories that are geographically distant from the general country area. Fortunately, mapSpain comes with the default fictitious location for the Canary Islands, commonly used in such cases.
 
-```{r}
+```{r, fig.align='center'}
 # Loading map data
 spain <- esp_get_ccaa()
 
@@ -80,7 +80,7 @@ ggplot(spain) +
   geom_sf()
 ```
 
-```{r}
+```{r, fig.align='center'}
 # Verifying that the names of the CCAA match to enhance the join.
 c_section <- c_section %>% 
   stringdist_join(
@@ -108,7 +108,7 @@ str(c_section)
 ```
 The next task is to use our cesarean section rate variable to fill the different autonomous communities with varying color intensities according to their values.
 
-```{r}
+```{r, fig.align='center'}
 # Filling the map with cesarean rate data
 c_section_map <- ggplot(c_section) +
   geom_sf(aes(fill = c_section_rate), color = "white", linewidth = 0.2)
@@ -117,7 +117,7 @@ c_section_map
 ```
 Our original map uses various shades of bluish-green to represent the cesarean section rate. The color darkens with a higher cesarean section rate. These color specifications are determined based on specific values. We use the "colors," "breaks," and "limits" adjustments in the scale_fill_stepsn function to indicate these specifications.
 
-```{r}
+```{r, fig.align='center'}
 # Setting the specific colors and breaks
 c_section_map <- c_section_map +
   scale_fill_stepsn(
@@ -130,18 +130,18 @@ c_section_map
 ```
 Once we have the colors set for our chart, we slightly adjust the coordinates for a better framing of the graph.
 
-```{r}
+```{r, fig.align='center'}
 # Setting the coordinates so we can have space for the legend
 c_section_map <- c_section_map +
     coord_sf(xlim=c(-14, 5),
-           ylim=c(34, 46)) 
+           ylim=c(34.6, 45.5)) 
 
 c_section_map
 ```
 
 One of the challenges in our chart is the legend. It is placed at the top and in a horizontal position. In addition, the guiding numbers are aligned centrally with the points where the colour changes. This is true for all except the first data point, which is aligned to the left with the beginning of the legend.
 
-```{r}
+```{r, fig.showtext=TRUE, fig.align='center'}
 # Tunning the fonts
 sysfonts::font_add_google("Open Sans", family="Open Sans")
 
@@ -154,9 +154,7 @@ c_section_map <- c_section_map +
     legend.key.width = unit(12, "mm"),
     legend.key.height = unit(5, "mm"),
     legend.background = element_blank(),
-    legend.title = element_blank(),
-    panel.background = element_rect(fill = "#f5f5f5",
-                                    color = NA))
+    legend.title = element_blank())
 
 # Adjusting alignment of the legend
 c_section_map <- c_section_map + 
@@ -168,8 +166,18 @@ c_section_map <- c_section_map +
 c_section_map
 ```
 
+## Alternative visualisation
 
-```{r}
+One of the factors that may explain for the number of caesarean sections is the age of the pregnant woman.
+
+- The Ministry of Health website provides information on the average age of women at delivery in each autonomous community, but it is not used in the visualisation.
+
+- Information on the number of births per autonomous community is also provided.
+
+It is necessary to use all the provided information, including the average age of women at delivery and the number of births per autonomous community, to compose a new map depicting the age-adjusted caesarean section rate, while also considering the total number of births. This enhanced visualisation aims to provide insights into the correlation between maternal age and the prevalence of caesarean sections across different autonomous communities.
+
+
+```{r, fig.align='center'}
 # Enhancement
 # Obtaining the standarised cesarean rate
 model <- lm(c_section_rate ~ c_section_age, data = c_section)
@@ -182,11 +190,13 @@ c_section <- c_section %>%
 summary(c_section$c_section_age)
 ```
 
-```{r}
+```{r, fig.align='center'}
 c_section_centroid <- st_centroid(c_section, of_largest_polygon = TRUE)
 ```
 
-```{r}
+To show the total number of births in a community we will use bubbles that vary in size according to the number of births. We visualise the age-adjusted caesarean section rate using colour.
+
+```{r, fig.align='center'}
 # Visualising a bubble map
 bubble_map <- ggplot() +
   geom_sf(data = spain,
@@ -203,14 +213,15 @@ bubble_map <- ggplot() +
   
 bubble_map
 ```
+As this is a continuous variable, instead of using a static colour palette with shades very similar to each other, I will use a colour gradient. We set a gradient where the midpoint of the colour coincides with the average adjusted caesarean section rate.
 
-```{r}
+```{r, fig.align='center'}
 # Adjusting guides
 bubble_map <- bubble_map +
   scale_fill_gradient2(
-    low = "#fee8c8",
-    mid = "#fdbb84", 
-    high = "#e34a33",
+    low = "#4CAF50",
+    mid = "#FFC107",
+    high = "#FF5722",
     midpoint = mean(c_section$c_section_age),
     guide = guide_colorbar(
       title = "Cesarean section rate (%)",
@@ -219,15 +230,16 @@ bubble_map <- bubble_map +
   scale_size(
     breaks = c(20000, 40000),
     labels = c("20", "40"),
-    range = c(1, 15),
+    range = c(1, 14),
     guide = guide_legend(title="Number of births (K)", 
                          title.position="top",
-                         order=2)) # Ajusta según sea necesario +
+                         order=2)) 
 
 bubble_map
 ```
+Now we are using two visualisation elements (bubble size and colour), we will have one more legend than in the original chart. We adjust them so that they are placed on the left margin.
 
-```{r}
+```{r, fig.align='center'}
 # A few more tweaks 
 bubble_map <- bubble_map + 
   theme_void() +
@@ -242,8 +254,9 @@ bubble_map <- bubble_map +
 
 bubble_map
 ```
+Since we are visualising an adjusted rate, it is useful to add annotations to improve the understanding of the graph.
 
-```{r}
+```{r, fig.align='center'}
 # Including annotations
 bubble_map <- bubble_map +
   annotate("richtext", x = -8.5, y = 44.3, 
@@ -268,8 +281,9 @@ bubble_map <- bubble_map +
 
 bubble_map
 ```
+Finally we add the title and subtitle. Here is the alternative graph showing the number of births in Spain during 2019 and the age-adjusted caesarean section rate, so we can see that the communities in red have high rates and could be having an excess of non-recommendable clinical practices in all cases.
 
-```{r}
+```{r, fig.align='center'}
 # Adding title and subtitle
 bubble_map <- bubble_map + 
   labs(title = "**Regional disparities in childbirth clinical practice**",
