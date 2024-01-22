@@ -1,7 +1,7 @@
 ---
-title: "New dataviz project"
+title: "Changing sources of electricity generation in the United States"
 description: |
-  A short description of the post.
+  This graph describes how the sources of electricity generation in the United States have changed from 2001 tto 2017.
 author: JIEUN PARK
 date: 2023-12-11
 output:
@@ -33,19 +33,20 @@ library(ggsankey)
 
 ```
 
-This graph explains how the electricity generation sources have been changed in the United States from 2001 to 2017 over 16 years. The data covers all 50 states from the United States. Sources are arranged in order of percentages and it has crossover features in the graph. 
-
-Usually, over 16 years, coal, nuclear, and natural gas are the main resources of electric generation in the U.S. According to the article, the ranking of different sources have not been changed very much almost over 17 years for 13 states. In this other 37 states, both the percentages of electricity generated and the relative ordering for different sources have changed noticeably. Therefore, the crossovers of different sources for the electiricty generation in the graph are affected mostly by these 37 states. 
-
 ## Original graph
+
 ```{r}
-knitr::include_graphics("~/Desktop/data visualization/ElectricitySourcesLN-superJumbo.webp")
+knitr::include_graphics("~/Desktop/dataviz/ElectricitySourcesLN-superJumbo.webp")
 ```
 
-## Data and Data Processing
+The presented graphical representation delineates the evolution of electricity generation sources in the United States across the span of 16 years, from 2001 to 2017, encompassing data from all 50 states. You can find the data from this link: https://www.eia.gov/totalenergy/ 
+
+Traditionally, over the 16-year period under scrutiny, coal, nuclear, and natural gas have consistently constituted the primary resources for electricity generation in the U.S. A comprehensive analysis, as outlined in the accompanying article, suggests that the relative rankings of these sources have undergone minimal alteration over 17 years for 13 states. Contrarily, in the remaining 37 states, both the proportions of electricity generated and the hierarchical ordering of different sources exhibit discernible changes. Consequently, the points of intersection or crossovers in the graph predominantly stem from the dynamic shifts observed in these 37 states.
+
+## Data Processing
 
 ```{r}
-data <- read_excel("~/Desktop/data visualization/Net_generation_United_States_all_sectors_annual.xls")
+data <- read_excel("~/Desktop/dataviz/Net_generation_United_States_all_sectors_annual.xls")
 
 
 data <- data |> separate("Year,petroleum liquids thousand megawatthours,coal thousand megawatthours,natural gas thousand megawatthours,nuclear thousand megawatthours,conventional hydroelectric thousand megawatthours,wind thousand megawatthours,all solar thousand megawatthours,geothermal thousand megawatthours",
@@ -80,12 +81,10 @@ x$year <- sort(x$year, decreasing = TRUE)
 
 k <- pivot_longer(x, !year, names_to = "energy", values_to = "percent")
 k <- k |> mutate(percentage = percent * 100)
-
-
 ```
 
 This is the code that I used for the replication of the original graph.
-I'll explain challenges that I have been through with some codes below. 
+I'll explain some challenges that I have been faced using some codes below. 
 
 ## Replication
 
@@ -101,16 +100,16 @@ ggplot(k, aes(x = year,
   geom_sankey_bump(space = 0, type = "alluvial", color = "transparent", smooth = 13, alpha = 0.93) +
   theme_sankey_bump(base_size = 7)  +
   labs(x = NULL, y = NULL,
-       title = "Sources of electricity generation in the United States") +
+       title = "Change of electricity generation sources in the United States") +
   scale_x_continuous(breaks = c(2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
                                 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017),
-                     labels = c("2001", "02", "'03", "'04", "'05", "'06", "'07", "'08", "'09",
+                     labels = c("2001", "'02", "'03", "'04", "'05", "'06", "'07", "'08", "'09",
                                 "'10", "'11", "'12", "'13", "'14", "'15", "'16", "2017")) +
   scale_y_continuous(labels = NULL) +
   theme_bw() + coord_cartesian(expand = FALSE) +
-  theme(legend.position = c(0.8,-0.4),legend.title = element_blank(),
+  theme(legend.position = c(0.8,-0.4), legend.title = element_blank(),
         legend.direction = "horizontal",
-        legend.key.size = unit(c(0.4,0.4), "cm"),
+        legend.key.size = unit(c(0.35,0.35), "cm"),
         plot.title = element_text(size = 9, face = "bold"),
         legend.background = element_rect(color = "black"),
         legend.text = element_text(face = "bold", family = "Noto Sans KR", size = 7),
@@ -135,13 +134,14 @@ ggplot(k, aes(x = year,
 ```
 
 Code below is a fundamental structure of my graph replication. 
+
 I put node, fill, and value to ggplot function and it constructs nodes for different sources of electricity generation and fills it by each color of sources. Moreover, as I put the percentage into the value, the magnitude of node is specified.
 
 Then, geom_sankey_bump() is used to execute the basic ggplot code into geom_sankey graph format. With this function, I was able to smooth the graph and the type is specified as alluvial. 
 
 
 ```{r}
-ggplot(k, aes(x = year,
+k |> ggplot(aes(x = year,
               node = energy,
               fill = energy,
               value = percentage)) +
@@ -152,7 +152,7 @@ ggplot(k, aes(x = year,
 Because in the original graph, there is no background space except for the generated graph, I used theme_sankey_bump() function to adjust the base size of the graph.
 
 ```{r}
-ggplot(k, aes(x = year,
+k |> ggplot(aes(x = year,
               node = energy,
               fill = energy,
               value = percentage)) +
@@ -164,7 +164,34 @@ ggplot(k, aes(x = year,
 ## Enhancement
 
 ```{r}
+new_plot <- k |> 
+ggplot(aes(x=year, y=energy, fill=percentage)) +
+  geom_tile(col = "white") +
+  coord_equal() +
+  scale_fill_gradient(low="white", high="blue") +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(size = 11, face = "bold"),
+    legend.title = element_text(size = 11)
+  ) + labs(
+    x = NULL,
+    y = NULL,
+    title = "Change of electricity generation sources in the United States",
+    fill = "Percentage"
+  ) + coord_cartesian(expand = FALSE) + scale_x_continuous(breaks = c(2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017), labels = c("2001", "'02", "'03", "'04", "'05", "'06", "'07", "'08", "'09", "'10", "'11", "'12", "'13", "'14", "'15", "'16", "2017")) 
 
+#plotly
+#install.packages("ggplotly")
+library(plotly)
+ggplotly(new_plot)
+
+  
 ```
 
+In the pursuit of data visualization enhancement, I employed the ggplot2 package in R, leveraging the versatile geom_tile() function. This particular function facilitates the systematic examination of individual observations arranged by rows and tiles, offering an intuitive approach to data analysis. To further refine the visual representation, the coord_equal() function was utilized, contributing to the generation of tiles that appear more as squares than rectangles. This adjustment enhances the overall visual organization of the graph.
+
+In the realm of color aesthetics, the scale_fill_gradient() function played a pivotal role in orchestrating a gradient color scheme. By specifying "white" as the lower end and "blue" as the higher end of the gradient, the color spectrum effectively denotes the range of values within the dataset. The strategic arrangement of colors, transitioning from white for the lowest values to blue for the highest values, imparts a visual cue where darker hues correspond to higher values and lighter hues signify lower values. This gradient color mapping enhances the interpretability of the graph, fostering a more intuitive understanding of the underlying data.
+
+As a final touch, the ggplotly() function was employed to impart interactivity to the graph. This transformation elevates the visual experience by allowing users to dynamically explore and interact with the plotted data.
 
