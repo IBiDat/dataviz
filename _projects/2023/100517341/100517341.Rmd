@@ -1,23 +1,25 @@
 ---
-title: "Is the world moving enough?"
+title: "Is the World Moving Enough?"
 description: |
   A look at the mortality due to low physical activity worldwide.
 categories: "2023"
-author: Mathieu BIETRIX
-date: 2023-12-20
+author: Mathieu Bietrix
+date: "`r Sys.Date()`"
 output:
   distill::distill_article:
     self_contained: false
     toc: true
 ---
 
-# Original graph
+## Original graph
 
-The original graph can be found following this link: :<https://ourworldindata.org/grapher/deaths-due-to-low-physical-activity?time=latest&country=Eastern+Mediterranean+Region+%28WHO%29~Scotland~SRB~GNQ~TTO~SWZ~UKR~PHL~ATG>
+The original graph can be found following [this link](https://ourworldindata.org/grapher/deaths-due-to-low-physical-activity?time=latest&country=Eastern+Mediterranean+Region+%28WHO%29~Scotland~SRB~GNQ~TTO~SWZ~UKR~PHL~ATG).
 
-# The Data
+![Original graph](original-graph.png){.external}
 
-## Deaths due to low physical activity
+## The data
+
+### Deaths due to low physical activity
 
 ```{r initialization}
 # Libraries used
@@ -27,31 +29,25 @@ library(arules)
 library(sf) 
 library(rnaturalearth)  
 library(ggtext)  
-library(showtext)
-library(plotly)
 library(ggiraph)
 library(ggrepel)
 library(kableExtra) 
 library(gt)
 library(gtExtras)
-library(formatR)
 library(ggpp)
-
-rm(list=ls())
 ```
 
-Fortunately, the data used to create this graph was already available on Our Word In Data and can be downloaded in a CSV format. This dataset was orignally published by the Institute of Health Metrics and Evaluation, an American research institute in the area of global health statistics. It consists of the number of deaths attributed to low physical activity per country per year. As the data is already available, I will not make use of the `{owidR}` package that enable to load OWID data in R. Let's import the dataset.
+Fortunately, the data used to create this graph was already available on Our Word In Data and can be downloaded in a CSV format. This dataset was originally published by the Institute of Health Metrics and Evaluation, an American research institute in the area of global health statistics. It consists of the number of deaths attributed to low physical activity per country per year. As the data is already available, I will not make use of the `{owidR}` package that enable to load OWID data in R. Let's import the dataset.
 
 ```{r load dataset}
 
-data <- read_csv(file = "/08 - Skills Training/03 - UC3M/Data Visualization/Data Visualization - Final Project/Final_Project_Dataset.csv")  
-view(data)
+data <- read_csv(file = "Final_Project_Dataset.csv")  
 
 ```
 
 The dataset is already tidy data, and is ready to be used.
 
-## World's Population Data
+### World's population data
 
 In order to facilitate the modifications that we would like to do to the original graph later, we need to add a new column to the dataset with the population of the countries. To do so, we need a dataset of the total population of these countries from 1990 to 2019. One can be found one via [another chart created by Our World In Data](https://ourworldindata.org/population-growth#interactive-charts-on-population-growth).
 
@@ -59,7 +55,7 @@ We need to filter the data to only keep the data from 1990 to 2019. Also, the `p
 
 ```{r load population dataset , tidy=TRUE}
 
-population <- read_csv(file = "/08 - Skills Training/03 - UC3M/Data Visualization/Data Visualization - Final Project/Population_per_country_per_year.csv")  
+population <- read_csv(file = "Population_per_country_per_year.csv")  
 
 population <- 
   population |>   
@@ -100,24 +96,22 @@ data <-
 
 ```
 
-## World data
+### World data
 
 To plot a map of the deaths due to low physical activity, we obviously need a map. To build this map, we need data as longitudes and latitudes of the countries worldwide. We will use the `{sf}` package to represent visally the geographic data (which are polygons) and the `{rnaturalearth}` to obtain this data.
 
-First, we use the `ne_countries()` function from the `rnaturalearth` package. This function contains predownloaded vector maps for the world's countries. We also want to make our world data a `sf` object, so that we can use the `sf` package in the future. The latter can be done by providing the argument `returnclass = 'sf'`.
+First, we use the `ne_countries()` function from the `rnaturalearth` package. This function contains predownloaded vector maps for the world's countries. We also want to make our world data a `sf` object, so that we can use the `sf` package in the future. The latter can be done by providing the argument `returnclass = 'sf'` (the default).
 
 ```{r load world data}
 
 library(sf) 
 library(rnaturalearth)  
 
-world <- ne_countries(   
-  scale = 'large',
-  returnclass = 'sf')
+world <- ne_countries()
 
 ```
 
-## Final Dataset
+### Final dataset
 
 We know need to join the `world` dataset and the `data` dataset to create the dataset that will be used to project the world map in ggplot2 and display the number of deaths due to low physical activity at the same time.
 
@@ -160,8 +154,6 @@ data <-
          Population,          
          geometry)  
 
-view(data)
-
 ```
 
 On a visual standpoint, the OWID graph doesn't show Antartica, so we can remove the data linked to it in our dataset. Lastly, there are many islands that might pop on our graph. The simplest solution is to clear our `data` dataset from some of these islands, which seem to be Polynesia.
@@ -175,9 +167,9 @@ data <-
 
 ```
 
-# Main Chart
+## Main chart
 
-## Creating the world map
+### Creating the world map
 
 The first thing we need to do is to create a projection of the world. As mentioned earlier, we will use the `{sf}` package, particularly the `geom_sf()` geom that enables to easily visualize `sf` objects. One of the advantage of this geom is that it is smart enough to understand the geometry type to draw according to the dataset we provide it.
 
@@ -204,7 +196,7 @@ p
 
 ```
 
-## Adding the text elements
+### Adding the text elements
 
 Let's add:
 
@@ -239,7 +231,7 @@ p
 
 ```
 
-## Theme
+### Theme
 
 One thing that we notice is that the OWID graph has a clean white background, without any displayed meridian. As the meridians are already colored in white, adding a `theme_classic()` should give us the look we are looking for. But we also want to get rid of the longitude axis. Then, the most appropriate theme to use is the `theme_void()`.
 
@@ -257,10 +249,8 @@ We can also de-comment the tag, and set its size and position in the `theme()`. 
 
 ```{r eval=TRUE}
 
-library(showtext)  
-
-font_add_google('Merriweather', family = 'merriweather') 
-showtext_auto()
+sysfonts::font_add_google('Merriweather', family = 'merriweather') 
+showtext::showtext_auto()
 
 ```
 
@@ -285,7 +275,7 @@ p
 
 ```
 
-## Adding the Data
+### Adding the data
 
 So far, we have a chart that has some common appearance traits shared with the Our World in Data graph. We can now add the information we want to display, focusing on a single year: 2019.
 
@@ -314,7 +304,7 @@ p
 
 ```
 
-## Adjustments
+### Adjustments
 
 One striking difference with the original plot is the legend. We need to move the legend to the bottom of the chart and change the color palette. We need to change the legend key into a color bar. This can be done by using a "[Discretized colourbar guide](https://ggplot2.tidyverse.org/reference/guide_coloursteps.html)": the `guide_colorsteps()` guide. Within this guide, the "YlorRd" palette seems exactly the one that was used by Our Word In Data for their map.
 
@@ -445,9 +435,9 @@ Finally, the color of the text is not black in the original plot, but this color
 
 # Recap of the data processing with the modification on the ne_countries() function
 
-data <- read_csv(file = "/08 - Skills Training/03 - UC3M/Data Visualization/Data Visualization - Final Project/Final_Project_Dataset.csv")  
+data <- read_csv(file = "Final_Project_Dataset.csv")  
 
-population <- read_csv(file = "/08 - Skills Training/03 - UC3M/Data Visualization/Data Visualization - Final Project/Population_per_country_per_year.csv")  
+population <- read_csv(file = "Population_per_country_per_year.csv")  
 
 population <- 
   population |>
@@ -501,7 +491,7 @@ data <-
 
 ```
 
-```{r eval=TRUE}
+```{r eval=TRUE, preview=TRUE}
 
 # The plot, with these changes
 
@@ -582,18 +572,9 @@ p <-
 p 
 ```
 
-## Interactive version of the plot
+### Interactive version of the plot
 
 Exactly as in the **gapminder** project, one of the point of the graph is to get it display an evolution over time. So far, we've been plotting the data only for year 2019, but it would be nice to create a more interactive plot, just as the original Our World In Data graph, that enables the user to filter the data by year and continent. Unfortunately for me, the integration of `geom_sf()` into the `plotly` library is not optimal, rendering a plot that is dynamic, but looks awful, with quite all of the modifications to the `theme()` not taken into account.
-
-```{r eval=TRUE}
-
-library(plotly)  
-
-ggplotly(p %+% data + aes(frame=Year)) |>   
-  animation_opts(frame = 0)
-
-```
 
 A solution that I found was to use the `{ggiraph}` package to make the plot interactive. The filtering function seems requiring some features to create interfaces that ggplot cannot provide, such as integrating the plot in a Shiny application. Therefore, we will give up this last feature.
 
@@ -607,9 +588,9 @@ The ggiraph package is very easy to use and works the following way :
 
 -   We create a new and interactive graph by passing our plot to the `girafe()` function.
 
-### `{ggiraph}` version of the map plot
+#### `{ggiraph}` version of the map plot
 
-```{r eval=TRUE}
+```{r eval=FALSE}
 
 library(ggiraph)  
 
@@ -694,7 +675,7 @@ However, one drawback of the `{ggiraph}` package is that, without really knowing
 
 -   It seems that its integration to the different types of rendering such as Quarto Presentations or html also requires a lot of these micro-adjustments.
 
-```{r eval=TRUE}
+```{r eval=FALSE}
 
 # Micro adjustments of size, margin arguments, nothing mindblowing here
 p_girafe <-
@@ -774,7 +755,7 @@ Here are some improvements that we can still do:
 
 Note: After knitting, I end up with a location of the graph in the panel that is really not good. The aspect of the plot in R Studio is not how it will be rendered. I think I may have used an argument in a way that it is not purposed to, but I couldn't figure it out.
 
-```{r tooltip customization}
+```{r tooltip customization, eval=FALSE}
 
 # A " ' " symbol for the country "Cote d'Ivoire" was producing errors in ggiraph (God Bless French subtleties)  
 
@@ -869,13 +850,13 @@ girafe(ggobj = p_map_girafe,
 
 At this stage, I think my map is complete.
 
-# The Line Graph
+## The line graph
 
 A second graph is joined to the map, in a new tab, that contributes to make this Our World In Data plot so complete. It shows the evolution of the number of deaths due to low physical activity year after year between 1990 and 2019. Since we already have the dataset, we can create a line plot. It has to be noted we are not plotting the entire dataset, as you could access it on the original graph.
 
 If fact, one of the cool features that it has is that it provides a filter that enables you to select which countries you want to see on the graph. This greatly facilitates the comparison of evolutions between countries. However, I couldn't find ways to provide this feature other than placing the graph into a Shiny Application. Since I really don't know anything about Shiny, I'll focus on a graph of the 10 countries with most Deaths by year.
 
-## Coordinate and axes
+### Coordinate and axes
 
 Unlike the map, this type of graph has axis. These axes have:
 
@@ -918,7 +899,7 @@ p_line
 
 ```
 
-## Theme and labs
+### Theme and labs
 
 Let's now add some elements of `theme` to the plot, according to the original graph:
 
@@ -1047,7 +1028,7 @@ p_line
 
 ```
 
-## Adding the Data
+### Adding the data
 
 The aesthetic we want to get is `color`, with each color representing a country, so we map `Entity` to color. However, since there are more than 150 countries in our `data` dataset, the best option that we have for the moment is to filter our data with certain countries. For instance, we can get the 10 countries with most deaths in 2019.
 
@@ -1148,7 +1129,7 @@ p_line
   
 ```
 
-## Annotations
+### Annotations
 
 We can add the annotations thanks to the `{ggrepel}` package. To be honest, I had a lot of struggle to find the good balance between the size of the annotation, the segments and the alignment of the annotations. At this stage, it was mostly a matter of iterations playing on the arguments of the `geom_text_repel()` function.
 
@@ -1258,11 +1239,11 @@ p_line
 This is **my final line graph**.\
 Now, let's try to apply what we learned about `{ggiraph}` here.
 
-## `{ggiraph}` version of the line plot
+### `{ggiraph}` version of the line plot
 
 The `{ggiraph}` version follows the same logic as the map we previously created. We're therefore appending "\_interactive" to the `geom_line()` and to the `geom_point()` geoms.
 
-```{r eval=TRUE}
+```{r eval=FALSE}
 
 p_line_girafe <-
   data |>  
@@ -1370,7 +1351,7 @@ girafe(ggobj = p_line_girafe)
 
 ```
 
-## Adjustments
+### Adjustments
 
 We can notice that the lines are displaying the number of deaths due to low physical activity for year 1990 (which is not what we want), and that even if the points display the year and number of deaths, they are super hard to hover over with the mouse. A cool feature that has been included on the OWID graph is that when you hover your mouse over the graph, a table is displayed with the following information :
 
@@ -1384,14 +1365,15 @@ I actually don't know if I can include the legend, but it seems to me that I rea
 
 Edit: I actually found a great tutorial to do so: <https://uncharteddata.netlify.app/posts/2022-09-30-interactive-tooltip-tables/>
 
-### Create the table for the tooltip
+#### Create the table for the tooltip
 
 We first need to create a summary table of the pieces of information we want to display in our tooltip. We can do so by extracting the following columns from our `data` dataset: `Entity`, `Year`, `Deaths`. It is advised to use the `{kableExtra}` package to do so.
 
 ```{r eval=FALSE}
 library(kableExtra) 
 
-#This code chunk is not run, it shows the process followed to build the function that creates these tables for all rows of the dataset.
+# This code chunk is not run, it shows the process followed to build the function
+# that creates these tables for all rows of the dataset.
 
 tooltip_table <-    
   data |>  
@@ -1402,7 +1384,7 @@ tooltip_table <-
 
 ```
 
-### Creating a table for each observation
+#### Creating a table for each observation
 
 If we pass the newly created table to our `tooltip` aesthetic in the line graph, each tooltip will show the whole table. To only show the table part that correspond to the `Year` we are hovering with the mouse, the author of the tutorial suggests to create a new column in `data` that will contain a sub-table for each Year. To do so, he creates a function that loops trough each row and create the corresponding table.
 
@@ -1436,7 +1418,7 @@ tooltip_table <-
 
 ```
 
-### Customizing the table shown by the tooltip
+#### Customizing the table shown by the tooltip
 
 To do so, the author advises to modify the style of the table directly in the function that created them, the `make_table()` function. Also, it seems that a good appearance can be achieved by using the `{gt}` and `{gtExtras}` packages. We will start from the styling of the author and try to customize it.
 
@@ -1511,7 +1493,7 @@ make_table <- function(year){
 
 ```
 
-```{r eval=TRUE}
+```{r eval=FALSE}
 
 tooltip_table <-    
   data |>
@@ -1636,7 +1618,7 @@ girafe(ggobj = p_line_girafe,
 
 I know that these elements might not be the core of the Data Viz projects, but I am still super proud of having explored the `{ggiraph}` package that much, and to have replicated a feature that I thought it would be impossible to make.
 
-# Alternative Graphs
+## Alternative graphs
 
 To be honest, I find that the original Our World In Data graph is very complete, especially because it consists of two graphs that enables us to compare very easily countries between each other thanks to the map, but also take a look at the evolution through the years, and even compare evolutions thanks to the line graph.
 
@@ -1644,7 +1626,7 @@ However, all the data that is displayed by these graphs are absolute numbers. We
 
 Therefore, the alternative graphs proposed are replicates of the original, but showing the data as percentages of the population that died from low physical activity.
 
-## The Data
+### The data
 
 Thanks to the `Population` column that we added during the first process of the data to replicate the original graph, we just need to add a `Percentage` column to the 'data' dataset (for sake of clarity, we'll create a second dataset for the alternative graphs, called `data_alt` and to discretize the Percentage variable for the alternative map.
 
@@ -1663,9 +1645,9 @@ data_alt <-
     )
 ```
 
-## Alternative Map
+### Alternative map
 
-### Static version
+#### Static version
 
 The only change is therefore that we are using the `data_alt` dataset. We also have to modify the subtitle to precise that the numbers are not actual percentages, but thousandths of percentage.
 
@@ -1674,7 +1656,7 @@ The only change is therefore that we are using the `data_alt` dataset. We also h
 plot_subtitle_alt <- "Estimated annual thousandth of percentage of the populations with deaths attributed to low physical activity." 
 ```
 
-```{r eval=TRUE}
+```{r eval=FALSE}
 p_map_alt <-    
   # Using data_alt instead of data   
   data_alt |>   
@@ -1741,9 +1723,9 @@ p_map_alt
 
 ```
 
-### Interactive version
+#### Interactive version
 
-```{r eval=TRUE}
+```{r eval=FALSE}
 
 # Still a ' symbol for the country "Cote d'Ivoire" causing errors in ggiraph 
 data_alt <-
@@ -1834,9 +1816,9 @@ girafe(ggobj = p_map_alt_girafe,
 
 ```
 
-## Alternative Line Graph
+### Alternative line graph
 
-### Static version
+#### Static version
 
 In order to stay consistent with the first graph, I decided to plot the same countries as on the first replicate to have a comparison between the absolute numbers and percentage trends.
 
@@ -1958,7 +1940,7 @@ p_line_alt
 
 The line graph is now a bit messier since the values for mortality due to low physical activity are actually quite close between countries. It seems to me that putting all these lines into a Slope chart might be clearer.
 
-### Slope charts
+#### Slope charts
 
 I still had the problem of having to choose which countries to plot. As I can't replicate the filter function of the OWID graph, I made compromises. To me, the evolution is what we seek and the reason why we have the data available from 1990. Therefore, I chose to answer both following questions:
 
@@ -2271,7 +2253,7 @@ p_slope_1990
 p_slope_2019  
 ```
 
-# Project takeaways and what I learned
+## Project takeaways and what I learned
 
 This project was the best of the semester to be honest. It was the best because of how far it required us to push our newly acquired skills in {`ggplot}`. Actually, I really did not expect it to be that exciting. This excitment of exploring and failing then testing and finally succeeding can be seen with capital "IT WORKS" that I could have included a loooot more often in this article.
 
