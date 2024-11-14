@@ -12,6 +12,94 @@ output:
     toc: true
 ---
 
+```{r}
+library(tidyverse)
+library(readr)
+library(grid)
+```
+```{r}
+replicate_values <- function(x) {
+  j <- 0 # We initialize this variable here to verify the first
+  # condition in the beginning of the for loop
+  for (i in 1:length(x)) {
+    if (!is.na(x[i]) & i >= j) {  # We check if there is a
+      # NA and we put i >= j to continue in the point in which
+      # the while loop ended
+      j <- i + 1 # We change the value of j to start the while
+      # loop in the following
+      count <- 0 # To count the next 5 positions
+      while (j <= length(x) && count < 5 && is.na(x[j])) { # To change
+        #possible NA
+
+        if (!is.na(x[j])) break # If there is not a NA break
+
+        x[j] <- x[i] # Change the NA with the previous value
+
+        j <- j + 1
+
+        count <- count + 1
+      }
+    }
+  }
+
+  j <- length(x) + 1 # We do the same but bakwards
+  for (i in length(x):1) {
+    if (!is.na(x[i]) & i <= j) {
+      j <- i - 1
+      count <- 0
+      while (j >= 1 && count < 5 && is.na(x[j])) {
+        if (!is.na(x[j])) break
+        x[j] <- x[i]
+        j <- j - 1
+        count <- count + 1
+      }
+    }
+  }
+  return(x)
+}
+```
+
+```{r}
+gini <- read_csv(file = "data/gini_data.csv")
+
+gini
+
+## Cleaning of names
+gini <- gini |>
+  rename(
+    "pre_tax_gini" = paste("10.4.2 - Redistributive impact of",
+    "fiscal policy, Gini index (%) - SI_DST_FISP - Prefiscal income"),
+    "post_tax_gini" = paste("10.4.2 - Redistributive impact of",
+     "fiscal policy, Gini index (%) - SI_DST_FISP - Postfiscal",
+     "disposable income")
+  ) |>
+  janitor::clean_names()
+
+gini
+
+## Replication of data to simulate the original distribution of the data
+gini_w_replicate <- gini |>
+  group_by(entity) |>
+  mutate(
+    pre_tax_gini = replicate_values(pre_tax_gini),
+    post_tax_gini = replicate_values(post_tax_gini)
+  ) |>
+  ungroup()  # We replicate onward and backwards the gini index
+# as in the original graph
+
+## Replicate the continent and drop NA
+
+gini_tidy <- gini_w_replicate |>
+  group_by(entity) |>
+  fill(continent, .direction = "downup") |>
+  ungroup() |>
+  drop_na(post_tax_gini, pre_tax_gini)
+
+# Gini 2020
+
+gini_tidy_2020 <- gini_tidy |>
+  filter(year == 2020)
+```
 
 
 
