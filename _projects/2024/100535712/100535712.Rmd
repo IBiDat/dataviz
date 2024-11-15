@@ -15,6 +15,7 @@ output:
 ```{r}
 library(tidyverse)
 library(readr)
+library(geomtextpath)
 library(grid)
 ```
 ```{r}
@@ -113,35 +114,105 @@ p <- p +
   scale_x_continuous(limits = c(0.2,0.749),
                             minor_breaks = NULL,
                             expand = expansion(0)) +
-  scale_y_continuous(limits = c(0.2, 0.650),
+  scale_y_continuous(limits = c(0.2, 0.660),
                      minor_breaks = NULL,
                      expand = expansion(0))
 p
 
-p + theme_minimal() +
+sysfonts::font_add_google("Playfair Display", family="playfair")
+sysfonts::font_add_google("Lato", family="lato")
+showtext::showtext_auto() # Since Lato is the second one it is applied
+# in all texts.
+
+
+p <- p + theme_minimal() +
   labs(title = paste("Income inequality: Gini coefficient",
-                     "before and after tax"),
-       subtitle = paste("Inequality is measured in terms of",
-                        "the Gini coefficient of income before taxes on the",
-                        "horizontal axis and after\ntaxes on the vertical axis."),
+                     "before and after tax, 2020"),
+       subtitle = "Inequality is measured in terms of the
+       Gini coefficient of income before taxes on the horizontal
+       axis and<br>after taxes on the vertical axis",
        caption = "**Data source**: World Bank",
+       tag = "OurWorldinData.org/economic-inequality  | CC BY",
        x = "Before tax",
        y = "After tax",
-       size = "**Population**") +
-  theme(legend.title = ggtext::element_markdown(),
-        plot.caption = ggtext::element_markdown(
-          hjust = -0.025),
-        panel.grid.major = element_line(color = "grey50",
-                                        linetype = "dashed"),
-        plot.margin = unit(c(1, 1, 2, 1), "lines")) +
-  annotation_custom(
-    grob = textGrob(
-      "OurWorldinData/economic-inequality|CC BY",
-      x = 1, y = -0.25, just = "right", gp = gpar(col = "black", fontsize = 10)
-    ) # The problem with this solution is that in the console does not appear correctly
-    # but it does in the zoom
-  ) +
-  coord_cartesian(clip = "off")
+       size = "**Population**",
+       color = NULL) +
+  theme(plot.title = element_text(face = "bold",
+                                  family = "playfair",
+                                  size = 18,
+                                  color = "#636363"),
+        plot.subtitle = ggtext::element_markdown(size = 12,
+                                                 color = "#636363"),
+        # Markdown is used in the case of the subtitle for separating correctly
+        # into two lines the subtitle
+        legend.title = ggtext::element_markdown(), # For putting
+        #bold and centering the text
+        axis.title = element_text(size = 12,
+                                  color = "#636363"),
+        axis.text = element_text(size = 12,
+                                 color = "#636363"),
+        plot.caption = ggtext::element_markdown(size = 11,
+          hjust = -0.075,
+          color = "#636363"),
+        plot.tag = ggtext::element_markdown(size = 11,
+                                            color = "#636363"),
+        plot.tag.position = c(0.79, 0.012),
+        panel.grid.major = element_line(color = "#dddddd",
+                                        linetype = "dashed"
+                                        )
+        )
+
+p
+
+p <- p + # Using normal abline and annotate without changing the type of
+  # coordinates was very hard and the result was not as godd as using
+  # this package
+  geom_textabline(slope = 1, intercept = 0,
+                  label = "No reduction",
+                  linetype = "dashed",
+                  size = 2.8,
+                  hjust = 0.83,
+                  color = "#a8a8a8") +
+  geom_textabline(slope = 1 / 2, intercept = 0,
+                  label = "Reduce by a half",
+                  linetype = "dashed",
+                  size = 2.8,
+                  hjust = 0.75,
+                  color = "#a8a8a8") +
+  geom_textabline(slope = 2 / 3, intercept = 0,
+              label = "Reduce by a third",
+              linetype = "dashed",
+              size = 2.8,
+              hjust = 0.81,
+              color = "#a8a8a8")
+
+p
+
+p <- p + geom_point(aes(size = population, color = continent),
+                    alpha = 0.85, shape = 19) +
+  # scale_size_area(max_size=10) +
+  scale_color_manual(values = c("#a2559c", "#00847e", "#4c6a9c",
+                                "#e56e5a", "#9a5129", "#883039")) +
+  scale_size(range = c(1, 7.6)) # Beyond 7.7 the coloring gets worse
+
+p
+
+# To put the labels
+gini_labels <- gini_tidy_2020 |>
+  slice_sample(prop = -0.5, by = continent) # Removes randomly
+# 50% of the data of each continent
+
+p <- p +
+  ggrepel::geom_text_repel(aes(label = entity,
+                               color = continent),
+                           segment.color = NA, # To erase the
+                           # segment that links the points with the
+                           # label,
+                           max.overlaps = 9,
+                           show.legend = FALSE,
+                           data = gini_labels)
+p
+
 
 ```
 
