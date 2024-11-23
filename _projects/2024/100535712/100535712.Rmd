@@ -17,7 +17,10 @@ library(tidyverse)
 library(readr)
 library(geomtextpath)
 library(grid)
+library(ggalt)
+library(scales)
 ```
+
 ```{r}
 replicate_values <- function(x) {
   j <- 0 # We initialize this variable here to verify the first
@@ -123,16 +126,15 @@ p
 ```
 
 
+
 ```{r}
+
 sysfonts::font_add_google("Playfair Display", family="playfair")
 sysfonts::font_add_google("Lato", family="lato")
 sysfonts::font_add_google("Open Sans", family="osans")
 showtext::showtext_auto() # Since Lato is the second one it is applied
 # in all texts.
-```
 
-
-```{r}
 p <- p + theme_minimal() +
   labs(title = paste("Income inequality: Gini coefficient",
                      "before and after tax, 2020"),
@@ -140,11 +142,9 @@ p <- p + theme_minimal() +
        Gini coefficient of income before taxes on the horizontal
        axis and after<br>taxes on the vertical axis",
        caption = "**Data source** : World Bank",
-       tag = "OurWorldinData.org/economic-inequality    | CC BY",
+       tag = "OurWorldinData.org/economic-inequality | CC BY",
        x = "Before tax",
-       y = "After tax",
-       size = "**Population**",
-       color = NULL) +
+       y = "After tax") +
   theme(plot.title = element_text(face = "bold",
                                   family = "playfair",
                                   size = 26,
@@ -155,31 +155,32 @@ p <- p + theme_minimal() +
                                                  family = "lato"),
         # Markdown is used in the case of the subtitle for separating correctly
         # into two lines the subtitle
-        legend.title = ggtext::element_markdown(), # For putting
-        #bold and centering the text
-        axis.title = element_text(size = 14,
+        axis.title = element_text(size = 15,
                                   color = "#636363",
                                   family = "lato"),
-        axis.text = element_text(size = 14,
+        axis.text = element_text(size = 15,
                                  color = "#636363",
                                  family = "lato"),
-        plot.caption = ggtext::element_markdown(size = 14,
+        plot.caption = ggtext::element_markdown(size = 15,
                                                 color = "#636363",
                                                 hjust = 0,
                                                 family = "lato"),
         plot.caption.position = "plot",
-        plot.tag = ggtext::element_markdown(size = 14,
+        plot.tag = ggtext::element_markdown(size = 15,
                                             color = "#636363",
                                             hjust = 1,
                                             family = "lato"
                                              ),
         plot.tag.position = c(1,0.012),
         panel.grid.major = element_line(color = "#dddddd",
-                                        linetype = "dashed"
-                                        )
+                                        linetype = "dashed",
+                                        linewidth = 0.3
+                                        ),
+        plot.margin = margin(5,2,5,2)
         )
 
 p
+
 ```
 
 
@@ -187,24 +188,37 @@ p
 p <- p + # Using normal abline and annotate without changing the type of
   # coordinates was very hard and the result was not as godd as using
   # this package
+  geom_abline(slope = 1, intercept = 0, 
+              color = "#dddddd", 
+              linetype = "dashed",
+              linewidth = 0.3) +
+  geom_abline(slope = 2/3, intercept = 0, 
+              color = "#dddddd", 
+              linetype = "dashed", 
+              linewidth = 0.3) +
+  geom_abline(slope = 1/2, intercept = 0, 
+              color = "#dddddd",
+              linetype = "dashed", 
+              linewidth = 0.3) +
   geom_textabline(slope = 1, intercept = 0,
                   label = "No reduction",
-                  linetype = "dashed",
-                  size = 3.5,
+                  linetype = "blank",
+                  size = 4,
                   hjust = 0.83,
-                  color = "#a8a8a8") +
+                  color = "#a2a2a2") +
   geom_textabline(slope = 1 / 2, intercept = 0,
                   label = "Reduce by a half",
-                  linetype = "dashed",
-                  size = 3.5,
+                  linetype = "blank",
+                  size = 4,
                   hjust = 0.75,
-                  color = "#a8a8a8") +
+                  color = "#a2a2a2") +
   geom_textabline(slope = 2 / 3, intercept = 0,
               label = "Reduce by a third",
-              linetype = "dashed",
-              size = 3.5,
+              linetype = "blank",
+              size = 4,
               hjust = 0.81,
-              color = "#a8a8a8")
+              color = "#a2a2a2") # Explain why I used the two of them.
+# Differences with annotate and color
 
 p
 
@@ -212,16 +226,51 @@ p
 ```
 
 ```{r}
-p <- p + geom_point(aes(size = population, color = continent),
-                    alpha = 0.85, shape = 19) +
-  # scale_size_area(max_size=10) +
-  scale_color_manual(values = c("#a2559c", "#00847e", "#4c6a9c",
-                                "#e56e5a", "#9a5129", "#883039")) +
-  scale_size(range = c(1, 7.6)) # Beyond 7.7 the coloring gets worse
 
+con_colors <- c("#a2559c", "#00847e",
+            "#4c6a9c", "#e56e5a",
+            "#9a5129", "#883039")
+p <- p + geom_point(aes(size = population,
+                        fill = continent),
+                        alpha = 0.85,
+                        shape = 21)  +
+  scale_fill_manual(values = con_colors) 
+# Beyond 7.7 the coloring gets worse
+p
+
+``` 
+
+```{r}
+p <- p + guides(fill = guide_legend(order = 1, 
+                                    theme = theme(
+        legend.title = element_blank(),
+        legend.key.height = unit(0.4, "cm"),
+        legend.text = element_text(family = "lato",
+                                   size = 14)),
+        override.aes = list(shape = 15, 
+                            size = 2,
+                            color = con_colors
+                            )),
+        size = guide_legend(title = 
+        "Circles sized by<br> **Population**", 
+                          reverse = TRUE, # Reverse change the order of the legemds notonly of the labels
+                          order = 2, # That is why we used order to correct it
+                            theme = theme(
+        legend.title = ggtext::element_markdown(family = "lato",
+                                                size = 14,
+                                                hjust = 0.5),
+        legend.text = element_text(family = "lato",
+                                   size = 14),
+        legend.title.position = "bottom"))) + 
+  theme(legend.justification = c("right", "top"),
+        legend.box = "vertical",
+        legend.spacing.y = unit(0.1, "cm")) +
+  scale_size(breaks = c(1e08, 3e08), 
+             labels = label_number(scale = 1e-6, suffix = "M"), 
+             range = c(1.5, 7.6))
+        
 p
 ```
-
 
 ```{r}
 # To put the labels
@@ -234,14 +283,22 @@ gini_labels <- gini_tidy_2020 |>
 p <- p +
   ggrepel::geom_text_repel(aes(label = entity,
                                color = continent),
-                           segment.color = NA, # To erase the
+                           size = 5,
+                           segment.color = NA,
+                           # To erase the
                            # segment that links the points with the
                            # label,
-                           max.overlaps = 9,
+                           max.overlaps = 7,
                            show.legend = FALSE,
-                           data = gini_labels)
-p
+                           data = gini_labels) +
+  scale_color_manual(values = con_colors)
+p +
+  annotation_custom(
+    grob = linesGrob(),
+    xmin = -Inf, xmax = Inf, ymin = 0.75, ymax = 0.75
+  )
 ```
+
 
 
 
