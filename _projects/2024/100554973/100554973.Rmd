@@ -227,8 +227,7 @@ title_grob <- grid::textGrob(
   gp = gpar(col = "#242424",
             fontsize = 21, 
             fontface = "bold", 
-            fontfamily = "noto_serif",
-            fill = "transparent"))
+            fontfamily = "noto_serif"))
 
 subtitle_grob <- gridtext::richtext_grob(
   text = "The last 10 years have seen 32 countries 
@@ -298,130 +297,86 @@ general +
 ```
 
 
+
 ![Original](original.png){.external width="100%"}
 
 
 
+```{r, dpi=500, fig.width=7, fig.height=9}
+
+# Prepare the data
+df_lollipop <- df23 |> 
+  pivot_wider(names_from = year, 
+              values_from = v2x_libdem, 
+              names_prefix = "v2x_libdem") |> 
+  arrange(desc(v2x_libdem2022))
+
+# Plot the horizontal lollipop chart
+improvements <- ggplot(df_lollipop) +
+  geom_segment(aes(x = reorder(country_name, v2x_libdem2022),
+                   xend = reorder(country_name, v2x_libdem2022),
+                   y = v2x_libdem2012, 
+                   yend = v2x_libdem2022,
+                   colour = ifelse(difference <=0, "#db051d", "#04046e")),
+               arrow = arrow(length = unit(0.01, "npc"))) +
+  #Other adjustments (TO BE MODIFIED)
+  scale_color_identity() +
+  labs(caption = "Source: V-Dem Dataset") +
+  scale_y_continuous(breaks = c(0,0.25,0.5,0.75,1), 
+                     limits = c(0,1),
+                     expand = expansion(add = 0),
+                     name = "more democratic \u2192") +
+  # Flip the chart horizontally
+  coord_flip() +
+  # Theme adjustments (TO BE MODIFIED)
+  theme_minimal() +
+  theme(legend.position = "none",
+        axis.text.y = element_text(size = 8),
+        axis.title.y = element_blank(),
+        axis.text.x = element_text(size = 8),
+        axis.title.x = element_text(size = 12),
+        plot.margin = unit(c(3, 0, 0, 0), "cm"))
 
 
+title_grob_plot2 <- grid::textGrob(
+  label = "Change in Liberal Democracy Scores (2012 \u2192 2022)",
+  x = 0, y = 1, 
+  just = c("left","top"),
+  gp = gpar(col = "#242424",
+            fontsize = 19, 
+            fontface = "bold", 
+            fontfamily = "noto_serif"))
 
+subtitle_grob_plot2 <- gridtext::richtext_grob(
+  text = "Is there a democratic backsliding in Europe?<br>
+  Most of the countries are now 
+  **<span style='color:#db051d;'>less democratic</span>** 
+  than they were 10 years ago.<br>
+  Only a few countries are 
+  **<span style='color:#04046e;'>more democratic</span>** 
+  now than 10 years ago.",
+  x = 0, y = 1,
+  hjust = 0, vjust = 1,
+  gp = gpar(col = "#444444",
+            fontsize = 12, 
+            fontfamily = "poppins",
+            lineheight = 1.5))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-```{r, fig.height=6.3, fig.width=6.7, fig.align='center', dpi=300}
-# # Add a category column to each data frame
-# df_backsliding$category <- "Backsliding"
-# df_improving$category <- "Improving"
-# 
-# # Combine the data frames
-# df_combined <- rbind(df_backsliding, df_improving)
-# 
-# general_faceted <- ggplot(df_combined) +
-#   aes(x = year, y = v2x_libdem) +
-#   geom_line(aes(group = country_name, colour = category), 
-#             linewidth = 0.5, alpha = 0.5) +
-#   geom_line(data = df_combined %>% 
-#               filter(category == "Backsliding" & 
-#                        country_text_id %in% c("POL", "HUN", "SRB", "TUR") |
-#                      category == "Improving" & country_text_id == "ARM"),
-#             aes(group = country_name), linewidth = 1.5) +
-#   geom_point(data = df_combined %>% 
-#                filter(category == "Backsliding" & 
-#                         country_text_id %in% c("POL", "HUN", "SRB", "TUR") & year == 2022 |
-#                       category == "Improving" & 
-#                         country_text_id == "ARM" & year == 2022),
-#              shape = 21, size = 4, colour = "white", 
-#              aes(fill = category), stroke = 2) +
-#   geom_text(data = df_combined %>% 
-#               filter(category == "Backsliding" & 
-#                        country_text_id %in% c("POL", "HUN", "SRB", "TUR") & year == 2022 |
-#                      category == "Improving" & 
-#                        country_text_id == "ARM" & year == 2022),
-#             aes(label = country_name), hjust = -0.3) +
-#   scale_y_continuous(breaks = NULL, 
-#                      limits = c(NA, 0.95), 
-#                      name = NULL) +
-#   scale_x_discrete(limits = c("2012", "2022"),
-#                    expand = expansion(mult = c(0.05, 0.65)),
-#                    name = NULL) +
-#   scale_fill_manual(values = c("Backsliding" = "red", "Improving" = "blue")) +
-#   scale_colour_manual(values = c("Backsliding" = "red", "Improving" = "blue")) +
-#   theme_minimal() +
-#   theme(panel.background = element_rect(fill = "white", colour = NA),
-#         plot.background = element_rect(fill = "transparent", colour = NA),
-#         panel.grid.major.x = element_line(colour = "grey"), 
-#         axis.text.x = element_text(vjust = 0, size = 12, colour = "black"),
-#         strip.text = element_text(size = 14, face = "bold")) +
-#   coord_fixed(ratio = 7/3, clip = "off") +
-#   facet_wrap(~category) +
-#   labs(title = "Europe's Democratic Trends",
-#        subtitle = "The last 10 years have seen both backsliding and improvements",
-#        caption = "Source: V-Dem")
-# general_faceted
-
-
-```
-
-
-```{r, eval=FALSE}
-#ggsave(filename = "back.png", plot = general, dpi = 300)
-
-#Creating annotation df
-annotations <- tibble(
-  x = c(1.25),
-  y = c(0.95),
-  label = c("Poland lost 62 places in global \ndemocracy rankings"))
-
-# highlighted <- general +
-#   #gghighlight(country_text_id %in% c("POL", "HUN", "SRB", "TUR"), unhighlighted_params = list(colour = "red", linewidth = 0.5, alpha=0.5))+
-#   geom_line(data = df_backsliding %>% filter(country_text_id %in% c("POL", "HUN", "SRB", "TUR")),
-#             aes(group = country_name), color = "red", linewidth = 1.5)+
-#   geom_point(data = df_backsliding %>% filter(country_text_id %in% c("POL", "HUN", "SRB", "TUR")),
-#              shape = 21, size = 4, colour = "white", fill="red", stroke=2)+
-#   geom_text(data = df_backsliding %>% filter(country_text_id %in% c("POL", "HUN", "SRB", "TUR") & year == 2022),
-#             aes(label = country_name), hjust = -0.3) #fix positioning and make them capital letters
-# highlighted
-
-
-
-
-
-
-# filtered_ordered_2022 <- df_improving |> 
-#   filter(year==2022) |> 
-#   arrange(v2x_libdem)
-# filtered_ordered_2012 <- df_improving |> 
-#   filter(year==2012) |> 
-#   arrange(v2x_libdem)
-# possible_22 <- df23 |> 
-#   select(c("country_name", "country_text_id", "e_regiongeo", "year", "v2x_libdem")) |>
-#   filter(year==2022) |> 
-#   arrange(v2x_libdem)
-# possible_12 <- df23 |> 
-#   select(c("country_name", "country_text_id", "e_regiongeo", "year", "v2x_libdem")) |>
-#   filter(year==2012) |> 
-#     arrange(v2x_libdem)
-
-# ggtext to format axis name?
-# gghighlight to highlight lines 
-# geom text for poland etc
-# library patchwork to put the two graphs together
-# annotating composition for general title
+improvements +
+  inset_element(title_grob_plot2, 
+                left = 0, 
+                right = 1, 
+                bottom = 0.95, 
+                top = 1, 
+                align_to = "full", 
+                on_top= FALSE) +
+  inset_element(subtitle_grob_plot2, 
+                left = 0, 
+                right = 1, 
+                bottom = 0.85, 
+                top = 0.95, 
+                align_to = "full", 
+                on_top = FALSE)
+  
 
 ```
