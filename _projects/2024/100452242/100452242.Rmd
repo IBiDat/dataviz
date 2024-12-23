@@ -1,7 +1,7 @@
 ---
-title: "The Title of my Article"
+title: "ODA: the catalyst for progress"
 description: |
-  A short description of the post.
+  Using The World Bank's ODA data to reproduce its original graph and other visualizations.
 catagories: "2024"
 author: Yijia Lin
 date: "`r Sys.Date()`"
@@ -9,12 +9,533 @@ output:
   distill::distill_article:
     self_contained: false
     toc: true
+runtime: shiny
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.showtext=TRUE,
+                      fig.align="center",
+                      out.width="100%")
+```
+
+The SDG Target appeals to the revitalization of the global partnership for development, where the official development assistance (ODA) plays a crucial role. The target 17.2 expects "the commitment by many developed countries to achieve the target of 0.7 per cent of gross national income for official development assistance (ODA/GNI) to developing countries and 0.15 to 0.20 per cent of ODA/GNI to least developed countries" ([The World Bank](https://datatopics.worldbank.org/sdgatlas/goal-17-partnerships-for-the-goals/?lang=en#), 2024). This graph from The World Bank visualizes the performance of the first 20 countries which contribute most on ODA.
+
+![](images/Captura%20de%20pantalla%202024-12-21%20a%20las%204.04.11.png)
+
+<font size=2 color="grey">The World Bank's Absolute Spending for ODA chart. Source: [The World Bank.](https://datatopics.worldbank.org/sdgatlas/goal-17-partnerships-for-the-goals/?lang=en#c15s5) </font>
+
+The aim of this tutorial is to reproduce the chart and propose some alternative visualizations using the same dataset.
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(grid)
+library(countrycode)
+library(showtext)
+library(ggforce) 
+library(patchwork)
+
+font_add("Riga DEMO Regular", "RigaDEMO-Regular.otf")
+font_add("Riga DEMO Bold", "RigaDEMO-Bold.otf")
+showtext_auto()
+```
+
+## **Getting and cleaning data**
+
+All the data needed for this map can be downloaded directly from The World Bank by this [link](https://datatopics.worldbank.org/sdgatlas/data/goal17/goal17.oda.csv). They provide a complete data set with the spending on ODA of every country from 1960 to 2021, and especially, since 1970, they have the data of total ODA and ODA to LDCs (Least Developed Countries) separately. Let’s take a glimpse of the data:
+
+```{r}
+oda_data <- read.csv("goal17.oda.csv")
+glimpse(oda_data)
+summary(oda_data)
+```
+
+Since the chart only shows the first 20 countries with the highest proportion ODA/GNI to LDCs (Least Developed Countries) and I take the year 2021 as an example of static map, I select this specific subset of the data to compute the chart. Moreover, I have to eliminate the data of "DAC", as it is not a specific country, but an organization called "Development Assistance Committee", including 32 members. I also renamed some columns, whose names were not easy to understand. Finally, as the countries are coded in "iso3c" format, I use the package `countrycode` to decode them into complete country names.
+
+```{r}
+selected_year <- 2021
+oda_filtered <- oda_data  |> 
+  filter(year == selected_year & iso3 != "DAC")  |> 
+  mutate(
+    country_label = countrycode(iso3, "iso3c", "country.name") 
+  ) |> 
+  select(country = country_label, oda_total = viz_oda_usdmn, 
+         oda_pct_gni = viz_odagni_pct, 
+         oda_ldc_total = viz_oda_ldc_usdmn, 
+         oda_ldc_pct_gni = viz_oda_ldc_pctgni)  |> 
+  drop_na()  |> 
+  arrange(desc(oda_ldc_pct_gni))  |> 
+  slice(1:20)
+
+oda_filtered$country <- factor(oda_filtered$country,
+                               levels = oda_filtered$country[order(oda_filtered$oda_ldc_pct_gni)])
+
+summary(oda_filtered)
+```
+
+## **Building the chart**
+
+The chart could be seen as a composition of two graphs, the timeline for selecting years and the barplots below.
+
+### Titles and the timeline
+
+First of all, I need to create a timeline from 1960 to 2021, with the breaks for each 5 years.
+
+```{r}
+year_axis_plot <- ggplot() +
+  geom_hline(yintercept = 0, color = "gray", size = 2) +
+  scale_x_continuous(limits = c(1960, 2021), breaks = seq(1960, 2020, by = 5))
+year_axis_plot
+```
+
+Then, I will change the theme into minimal to remove the grey background, I need to remove the labels on the y-axis, and make the year numbers close to the x-axis by flattening the graph with the function `coord_fixed()`.
+
+```{r}
+year_axis_plot <- year_axis_plot +
+  coord_cartesian(clip = "off") +
+  geom_hline(yintercept = 0, color = "gray50", size = 0.5, inherit.aes = FALSE) +
+  scale_x_continuous(limits = c(1960, 2023), breaks = seq(1960, 2020, by = 5)) +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    plot.margin = margin(10, 5, 5, 5) 
+  ) +
+  coord_fixed(ratio = 0.1) 
+
+year_axis_plot
+```
+
+Next step would be add the label of the selected year, 2021, with a blue background of a special figure similar to an rectangle or ellipse. I will draw an rectangle and two circles on each side to replicate that figure. There is also a vertical line connecting the label of 2021 and the timeline.
+
+```{r}
+year_axis_plot1 <- ggplot() +
+  coord_cartesian(clip = "off") +
+  geom_hline(yintercept = 0, color = "gray50", size = 0.4, inherit.aes = FALSE) +
+  scale_x_continuous(limits = c(1960, 2023), breaks = seq(1960, 2020, by = 5)) +
+
+  geom_rect(aes(xmin = 2019, xmax = 2023, ymin = 9, ymax = 25), 
+            fill = "#0171bc", inherit.aes = FALSE ) +
+  annotate("point", x = 2019.3, y = 17, size = 3, color = "#0171bc", fill = "#0171bc", shape = 21)+
+  annotate("point", x = 2022.7, y = 17, size = 3, color = "#0171bc", fill = "#0171bc", shape = 21)+
+  geom_segment(aes(x = 2021, xend = 2021, y = -5, yend = 10), 
+               color = "black", size = 0.3, inherit.aes = FALSE) +
+  annotate("text", x = 2021, y = 17, label = "<2021>", color = "white", 
+           size = 2.5, fontface = "bold", hjust = 0.5) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    plot.margin = margin(5, 5, 0, 5) 
+  ) +
+  coord_fixed(ratio = 0.08) 
+
+year_axis_plot1
+```
+
+Finally, I will add the title and subtitle with the free font closest to the original font with the function `annotate()`.
+
+```{r}
+sysfonts::font_add_google("Quicksand", family="Quicksand")
+showtext::showtext_auto()
 
 
-Distill is a publication format for scientific and technical writing, native to the web.
+p1 <- year_axis_plot1 +
+  labs(
+    title = "Absolute spending for ODA (2021)", 
+    subtitle = "ODA in billion dollars (percentage of GNI)"
+  ) +
+    theme(
+    plot.title = element_text(size = 12, face = "bold", hjust = 0.5, margin = margin(b = 5)),
+    plot.subtitle = element_text(size = 9, color = "#b1b0b7", hjust = 0.5, margin = margin(b = 10))
+  ) 
 
-Learn more about using Distill at <https://rstudio.github.io/distill>.
+p1
+```
+
+### Bar plots
+
+Next, let's build the bar plots step by step. First of all, the first level should be the thin black and red bar plots, which represents the proportion Total ODA/GNI and ODA to LDCs / GNI. Besides, the red bar plot should be hollow, that is, with red outlines and white filler color, while the proportion ODA to LDCs / GNI falls short of the 0.15% target. The countries' names should be in bold in the same situation. To achieve this, we need to create a few columns in the data set to specify the color, the fill and the font for each country. Finally, I need to scale up these percentages by a thousand times to be visible after adding the absolute ODA values later.
+
+```{r}
+oda_filtered <- oda_filtered %>%
+  mutate(
+    value_label = sprintf("%.1f", oda_total / 1000), 
+    pct_label = paste0("(", sprintf("%.2f", oda_pct_gni), "%)"), 
+    font_weight = ifelse(oda_ldc_pct_gni >= 0.15, "bold", "plain"),
+    fill = ifelse(oda_ldc_pct_gni >= 0.15, "#e56766", "white"),
+    color = ifelse(oda_ldc_pct_gni >= 0.15, "white", "#e56766"),
+  )
+oda_filtered$country <- factor(oda_filtered$country, 
+                               levels = oda_filtered$country[order(oda_filtered$oda_ldc_pct_gni)])
+```
+
+```{r}
+font_add("Riga DEMO Regular", "RigaDEMO-Regular.otf")
+font_add("Riga DEMO Bold", "RigaDEMO-Bold.otf")
+showtext_auto()
+
+barplot<- ggplot(oda_filtered) +
+  geom_col(aes(x = oda_pct_gni * 100000, y = country), 
+               fill = "black", color="white", width = 0.2) +
+  geom_col(aes(x = oda_ldc_pct_gni * 100000, y = country), 
+               fill = oda_filtered$fill, color = oda_filtered$color,  width = 0.2, size=0.2)+
+  geom_text(aes(x = -35000, y = country, label = value_label), 
+            hjust = 0, size = 3.2, family = "sans") +
+  geom_text(aes(x = -3500, y = country, label = pct_label), 
+            hjust = 1, size = 3.2, family = "sans") +
+  geom_text(
+    data = subset(oda_filtered, font_weight == "plain"),
+    aes(x = -70000, y = country, label = country),
+    fontface = "plain", hjust = 0, size = 3, family = "Riga DEMO Regular"
+  ) +
+  geom_text(
+    data = subset(oda_filtered, font_weight == "bold"),
+    aes(x = -70000, y = country, label = country),
+    hjust = 0, size = 3, family = "Riga DEMO Bold"
+  ) +
+  labs(
+    title = NULL,
+    subtitle = NULL,
+    x = NULL,
+    y = NULL
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0.01, 0.2))) + 
+  theme_minimal() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.text.x = element_blank(), 
+    plot.title = NULL,
+    plot.subtitle = NULL,
+    panel.grid.major.y = element_blank(), 
+  panel.grid.major.x = element_blank(), 
+  panel.grid.minor.x = element_blank(), 
+   plot.margin = margin(5, 10, 5, 5)
+  )
+barplot
+```
+
+Then, we will add these blue and red transparent thick bar plots, which represent the absolute amount of ODA, and ODA to LDCs of theses countries, and after that, a red vertical line to mark up the 0.15% target.
+
+```{r}
+p2<- barplot+
+  geom_bar(aes(x = oda_total, y = country), stat = "identity", fill = "#d2e3ea", alpha = 0.3) +
+  geom_bar(aes(x = oda_ldc_total, y = country), stat = "identity", fill = "#e56766", alpha = 0.3) +
+  geom_vline(xintercept = 0.15 * 100000,  color = "#e56766", size= 0.3) +
+  annotate("text", x = 0.15 * 100000, y = -0.02, label = "Target: .15% to LDCs", 
+         color = "gray40", size = 2.6, hjust = 0.5, family = "sans")+
+  coord_cartesian(clip = "off")
+p2
+
+```
+
+## Final Result
+
+Finally, we need to joint vertically these two plots in a proper proportion:
+
+```{r}
+final_plot <- p1 / p2 +
+  plot_layout(heights = c(0.8, 9.2))
+
+final_plot
+```
+
+## Alternative visualization
+
+The original graph is very difficult to interpret, because it includes a lot of information — combining the percentages with the total amounts, as well as total ODA with ODA to LDCs, and then the x-axis lost its purpose. When the percentages were scaled up, the x-axis could no longer show any specific numbers, and the length of the bars was just used for sorting.
+
+My alternative visualization was to separate the percentage and total amounts, so that the x-axis could once again show meaningful values, and the length of the bars would correspond to actual numbers, making the graph easier to read. I also added a legend to explain the different colors and their meanings. I hope this will help the readers understand the graph more easily.
+
+```{r}
+# Adjust the mapping in p_left and p_right
+p_left <- ggplot(oda_filtered) +
+  geom_col(aes(x = -oda_pct_gni, y = country), 
+           fill = "#0171bc", color="#0171bc", width = 0.6, alpha = 0.8, size=0.3) +
+  geom_col(aes(x = -oda_ldc_pct_gni, y = country), 
+           fill = oda_filtered$fill, color = oda_filtered$color, 
+           width = 0.6, alpha = 0.8, size=0.5) +
+  geom_vline(xintercept = -0.15 , color = "#e56766", size = 0.5) +
+  annotate("text", x = -0.15, y = 0.2, label = "Target: .15% to LDCs", 
+           color = "gray40", size = 2, hjust = 0.5, family = "sans") +
+  coord_cartesian(clip = "off")+
+  scale_x_continuous(
+    breaks = seq(-1, 0, by = 0.25),
+    labels = function(x) paste0(abs(x), "%")
+  ) +
+  labs(x = "Percentage of Gross National Income (%)", y = NULL) +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.margin = margin(5, 0, 5, 7),
+    axis.title.x = element_text(
+      family = "Quicksand",    # Font setting
+      size = 7,           # Font size
+      face = "bold",       # Bold font
+      color = "black"      # Font color
+    )
+  ) +
+  scale_y_discrete()
+
+# Legend: Total ODA and ODA to LDCs
+p_legend <- ggplot() +
+  annotation_custom(grob = rectGrob(gp = gpar(fill = "#0171bc", 
+                                              col = "white")), 
+                    xmin = -0.1, xmax = 0, ymin = 0.7, ymax = 0.9) +
+  annotation_custom(grob = textGrob("Total ODA", 
+                                    gp = gpar(fontsize = 5,
+                                              fontface = "bold", col = "black"),
+                                    hjust = 0), 
+                    xmin = 0.05, xmax = 0.1, ymin = 0.7, ymax = 0.9) +
+  annotation_custom(grob = rectGrob(gp = gpar(fill = "#e56766", 
+                                              col = "white")), 
+                    xmin = -0.1, xmax = 0, ymin = 0.2, ymax = 0.4) +
+  annotation_custom(grob = textGrob("ODA to LDCs", 
+                                    gp = gpar(fontsize = 5, 
+                                              fontface = "bold", 
+                                              col = "black"), 
+                                    hjust = 0), 
+                    xmin = 0.05, xmax = 0.1, ymin = 0.2, ymax = 0.4) +
+    coord_cartesian(clip = "off") +
+  theme_void() +  # Remove all background
+  theme(plot.margin = margin(0, 0, 0, 0)) +  # Adjust plot margins
+  coord_fixed(ratio = 0.5)
+
+# Adjust the right barplot
+p_right <- ggplot(oda_filtered) +
+  geom_col(aes(x = oda_total, y = country), 
+           fill = "#0171bc", color = "white", width = 0.6, alpha = 0.8) +
+  geom_col(aes(x = oda_ldc_total, y = country), 
+           fill = "#e56766", color = "white", width = 0.6, alpha = 0.8) +
+  scale_x_continuous(
+    expand = expansion(mult = c(0, 0.05)),
+    labels = function(x) x / 10000  # Convert to scaled units
+  ) +
+  labs(x = "Total Amount (10k Billion USD)", y = NULL) +  # Adjusted title
+  theme_minimal() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.title.x = element_text(
+      family = "Quicksand",    # Font setting
+      size = 7,           # Font size
+      face = "bold",       # Bold font
+      color = "black"      # Font color
+    ),
+    plot.margin = margin(5, 7, 5, 0)
+  ) +
+  scale_y_discrete() +
+  inset_element(p_legend, left = 0.7, bottom = 0.7, right = 1, top = 1)
+
+# Centered labels: country, percentage, and total amount
+p_middle <- ggplot(oda_filtered) +
+  geom_text(aes(x = -0.1, y = country, label = paste0(sprintf("%.2f", oda_pct_gni), "%")), 
+            size = 3, hjust = 1, color = "#0171bc") +
+  geom_text(aes(x = 0.1, y = country, label = sprintf("%.1f", oda_total / 1000)), 
+            size = 3, hjust = 0, color = "#0171bc") +
+  # Plain font labels
+  geom_text(
+    data = subset(oda_filtered, font_weight == "plain"),
+    aes(x = 0, y = country, label = country),
+    fontface = "plain", hjust = 0.5, size = 2.8, family = "Riga DEMO Regular"
+  ) +
+  # Bold font labels
+  geom_text(
+    data = subset(oda_filtered, font_weight == "bold"),
+    aes(x = 0, y = country, label = country),
+    hjust = 0.5, size = 2.8, family = "Riga DEMO Bold"
+  ) +
+  coord_cartesian(clip = "off") +
+  theme_void() + # No background and grid
+  theme(
+    plot.margin = margin(0, 20, 0, 20)
+  )
+
+# Combine all plots
+p2_2 <- p_left + p_middle + p_right + 
+  plot_layout(widths = c(4, 2, 4))
+
+final_plot_v2 <- p1 / p2_2 +
+  plot_layout(heights = c(1, 9))
+
+final_plot_v2
+
+```
+
+## Alternative interactive visualization
+
+Finally, I used the `shiny` package to produce an interactive graph.
+
+```{r}
+library(shiny)
+library(ggplot2)
+library(tidyverse)
+library(countrycode)
+library(showtext)
+
+# Add custom fonts
+font_add("Riga DEMO Regular", "RigaDEMO-Regular.otf")
+font_add("Riga DEMO Bold", "RigaDEMO-Bold.otf")
+
+# Enable showtext
+showtext_auto()
+
+# Read data
+oda_data <- read.csv("goal17.oda.csv")
+
+ui <- fluidPage(
+  titlePanel("Abosolute Spending for ODA"),
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput("selected_year", "Select Year:",
+                  min = 1970, max = 2021,
+                  value = max(oda_data$year), step = 1, sep = "")
+    ),
+    mainPanel(
+      uiOutput("dynamicPlotUI") 
+    )
+  )
+)
+
+server <- function(input, output, session) {
+
+  output$dynamicPlotUI <- renderUI({
+    selected_year <- input$selected_year
+    oda_filtered <- oda_data |> 
+      filter(year == selected_year & iso3 != "DAC") |> 
+      drop_na() |> 
+      slice(1:20) # 假设你只需要前 20 个国家
 
 
+    height_per_row <- 30  
+    plot_height <- max(nrow(oda_filtered) * height_per_row, 800)
+
+    plotOutput("odaPlot", height = paste0(plot_height, "px"))
+  })
+
+
+  output$odaPlot <- renderPlot({
+    selected_year <- input$selected_year
+    oda_filtered <- oda_data  |> 
+      filter(year == selected_year & iso3 != "DAC")  |> 
+      mutate(
+        country_label = countrycode(iso3, "iso3c", "country.name") 
+      ) |> 
+      arrange(desc(viz_oda_ldc_pctgni))  |> 
+      select(country = country_label, oda_total = viz_oda_usdmn, 
+             oda_pct_gni = viz_odagni_pct, 
+             oda_ldc_total = viz_oda_ldc_usdmn, 
+             oda_ldc_pct_gni = viz_oda_ldc_pctgni)  |> 
+      drop_na()  |> 
+      slice(1:20)
+
+    oda_filtered <- oda_filtered %>%
+      mutate(
+        value_label = sprintf("%.1f", oda_total / 1000), 
+        pct_label = paste0("(", sprintf("%.2f", oda_pct_gni), "%)"), 
+        font_weight = ifelse(oda_ldc_pct_gni >= 0.15, "bold", "plain"),
+        fill = ifelse(oda_ldc_pct_gni >= 0.15, "#e56766", "white"),
+        color = ifelse(oda_ldc_pct_gni >= 0.15, "white", "#e56766")
+      )
+
+    oda_filtered$country <- factor(oda_filtered$country, levels = oda_filtered$country[order(oda_filtered$oda_ldc_pct_gni)])
+    
+
+    p_left <- ggplot(oda_filtered) +
+      geom_col(aes(x = -oda_pct_gni, y = country), 
+               fill = "#0171bc", color="#0171bc", width = 0.4, alpha = 0.8, size=0.3) +
+      geom_col(aes(x = -oda_ldc_pct_gni, y = country), 
+               fill = oda_filtered$fill, color = oda_filtered$color, 
+               width = 0.4, alpha = 0.8, size=0.5) +
+      geom_vline(xintercept = -0.15 , color = "#e56766", size = 0.5) +
+      annotate("text", x = -0.15, y = 0.2, label = "Target: .15% to LDCs", 
+               color = "gray40", size = 6, hjust = 0.5, family = "sans") +
+      coord_cartesian(clip = "off") +
+      scale_x_continuous(
+        breaks = seq(-1, 0, by = 0.25),
+        labels = function(x) paste0(abs(x), "%")
+      ) +
+      labs(x = "Percentage of Gross National Income (%)", y = NULL) +
+      theme_minimal() +
+      theme(
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.margin = margin(5, 0, 5, 7),
+        panel.spacing = unit(0.05, "lines"),  
+        axis.title.x = element_text(size = 22, face = "bold", color = "black"),
+        axis.text.x = element_text(size = 20, face = "bold", color = "black")
+      )
+    
+ 
+
+
+    
+   p_right <- ggplot(oda_filtered) +
+      geom_col(aes(x = oda_total, y = country), 
+               fill = "#0171bc", color = "white", width = 0.4, alpha = 0.8) +
+      geom_col(aes(x = oda_ldc_total, y = country), 
+               fill = "#e56766", color = "white", width = 0.4, alpha = 0.8) +
+      scale_x_continuous(
+        expand = expansion(mult = c(0, 0.05)),
+        labels = function(x) x / 10000  # Convert to scaled units
+      ) +
+      labs(x = "Total Amount (10k Billion USD)", y = NULL) +  # Adjusted title
+      theme_minimal() +
+      theme(
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.spacing = unit(0.05, "lines"),  
+        axis.title.x = element_text(
+          family = "Quicksand",    # Font setting
+          size = 22,           # Font size
+          face = "bold",       # Bold font
+          color = "black"      # Font color
+        ),
+        axis.text.x = element_text(size = 20, face = "bold", color = "black"),
+        plot.margin = margin(5, 7, 5, 0)
+      ) +
+      scale_y_discrete() 
+   
+    p_middle <- ggplot(oda_filtered) +
+      geom_text(aes(x = -0.1, y = country, label = paste0(sprintf("%.2f", oda_pct_gni), "%")), 
+                size = 8, hjust = 1, color = "#0171bc") +
+      geom_text(aes(x = 0.1, y = country, label = sprintf("%.1f", oda_total / 1000)), 
+                size = 8, hjust = 0, color = "#0171bc") +
+      geom_text(
+        data = subset(oda_filtered, font_weight == "plain"),
+        aes(x = 0, y = country, label = country),
+        fontface = "plain", hjust = 0.5, size = 8, family = "Riga DEMO Regular"
+      ) +
+      geom_text(
+        data = subset(oda_filtered, font_weight == "bold"),
+        aes(x = 0, y = country, label = country),
+        hjust = 0.5, size = 8, family = "Riga DEMO Bold"
+      ) +
+      coord_cartesian(clip = "off") +
+      theme_void() +
+      theme(plot.margin = margin(0, 20, 0, 20),
+            panel.spacing = unit(0.05, "lines"))
+
+    p_combined <- p_left + p_middle + p_right +
+      plot_layout(widths = c(4, 2, 4))
+
+    p_combined
+  })
+}
+
+shinyApp(ui, server)
+
+```
