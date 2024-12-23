@@ -1,0 +1,206 @@
+---
+title: "REPLICA AND IMPROVEMENT - MAP"
+description: "Replica and improvement of the map Where do 8 billion people live"
+author: "Alba García Vega"
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+# Replica
+
+```{r}
+load("population_data.RData")
+```
+
+```{r}
+head(population_data)
+```
+
+```{r}
+library(xfun)
+library(dplyr)
+library(forcats)
+population_by_continent <- population_data |> group_by(continent) |> 
+  summarize(total_population = sum(circle_size)) |> 
+  mutate(percentage = total_population / sum(total_population)*100,
+         continent = fct_reorder(continent, -percentage))
+```
+
+```{r}
+save(population_by_continent, file = "population_by_continent.RData")
+load("population_by_continent.RData")
+```
+
+```{r}
+head(population_by_continent)
+```
+
+```{r, fig.width = 30, fig.height = 35}
+library(ggplot2)
+library(dplyr)
+library(sf)
+library(ggrepel)
+library(cowplot)
+library(forcats)
+library(permute)
+library(plotly)
+library(patchwork)
+library(extrafont)
+
+population_data <- population_data |> 
+  mutate(continent = case_when(
+    continent == "Central America" ~ "South America",
+    TRUE ~ continent
+  ))
+
+population_data <- population_data |> mutate(continent = case_when(continent == "South Amrica" ~ "South America", TRUE ~ continent))
+
+population_by_continent <- population_by_continent |> mutate(continent = case_when(continent == "Central America" ~ "South America", TRUE ~ continent))
+
+population_data <- population_data |> mutate(circle_size = as.numeric(circle_size))
+
+population_data <- population_data |> 
+  mutate(circle_size_adjusted = case_when(
+    country %in% c("China", "India", "USA", "Brazil", "Nigeria") ~ circle_size * 150,
+    TRUE ~ circle_size * 60
+  ))
+
+countries_labelled <- c( "Canada", "United States", "Mexico", "Cuba", "Guatemala", "Haiti", "Dominican Republic", 
+  "Colombia", "Venezuela", "Ecuador", "Peru", "Bolivia", "Brazil", "Uruguay", 
+  "Paraguay", "Argentina", "Chile", "United Kingdom", "Greenland", "Spain", 
+  "Portugal", "France", "Italy", "Germany", "Poland", "Ukraine", "Turkey", 
+  "Iraq", "Syria", "Pakistan", "Iran", "Russia", "China", "India", "Bangladesh", 
+  "Vietnam", "Indonesia", "Philippines", "Japan", "Australia", "Nigeria", 
+  "Morocco", "Algeria", "Congo, Dem. Rep.", "Ethiopia", "Egypt", 
+  "Tanzania", "Kenya", "South Africa", "Russian Federation")
+
+population_data <- population_data |> mutate(circle_size_adjusted = as.numeric(circle_size_adjusted))
+population_data <- population_data |> mutate(continent = ifelse(country == "Kenya", "Africa", continent))
+
+
+
+population_by_continent <- population_data |> group_by(continent) |> summarize(percentage = sum(percentage)) |> mutate(percentage_scaled = percentage * 1.5)
+
+
+population_by_continent_summarized <- population_by_continent |> arrange(percentage_scaled) |> mutate(
+  cumulative = cumsum(percentage_scaled),
+  label_position = cumulative - percentage_scaled / 2
+) |> mutate(continent = factor(continent, levels = continent))
+
+legend_bar <- ggplot(population_by_continent_summarized, aes(x = 1, y = percentage_scaled, fill = reorder(continent, -percentage_scaled))) +
+  geom_bar(stat = "identity", width = 2, color = "black") +
+  geom_text(
+    aes(
+      label = ifelse(continent == "Oceania", "", paste0(continent, ":", round(percentage_scaled, 1), "%")),
+      size = percentage_scaled
+    ),
+    color = "white",
+    fontface = "bold",
+    family = "Arial",
+    position = position_stack(vjust = 0.5)  # Asegura que las etiquetas se apilen correctamente
+  ) +
+  scale_size_continuous(range = c(0.5, 20)) +
+  coord_flip() +
+  scale_fill_manual(
+    values = c( 
+      "Asia" = "#00a3e0", "Africa" = "#009639", "Europe" = "#FF9E1B",
+      "North America" = "#aa0061", "South America" = "#F7EA48", 
+      "Oceania" = "pink"
+    ),
+    name = "Continent"
+  ) +
+  labs(x = NULL, y = NULL) +
+  theme_minimal() +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = "none",
+    plot.margin = margin(0, 0, 0, 0),
+    legend.title = element_text(family = "Arial", face = "bold", size = 16),
+    legend.text = element_text(family = "Arial", size = 12)
+  )
+
+
+map <- ggplot() +
+  borders("world", colour = "gray95", fill = "gray95") +
+  geom_sf(fill = "white", color = "gray80") +
+      coord_sf(crs = "+proj=robin") +
+  geom_point(
+    data = population_data,
+    aes(
+      x = adjusted_long, y = adjusted_lat, size = circle_size_adjusted, fill = continent
+    ),
+    alpha = 1,
+    shape = 21,
+    color = "black",
+    stroke = 1.2
+  ) +
+  geom_label(
+    data = population_data |> filter(country %in% countries_labelled),
+    aes(
+      x = adjusted_long, y = adjusted_lat, label = paste0(country, "\n", round(percentage, 1), "%"),
+    size = ifelse(country %in% c("India", "China"), 20, 6)),  fontface = "bold", family = "Arial", color = "black", fill = NA, label.size = 0
+  ) +
+  scale_size_identity() +
+  scale_size_continuous(range = c(5, 95), name = "Population(%)") +
+  scale_fill_manual(
+    values = c( "Asia" = "#00a3e0", "Africa" = "#009639", "Europe" = "#FF9E1B",
+      "North America" = "#aa0061", "South America" = "#F7EA48", "Oceania" = "pink"),
+    name = "Continent"
+  ) +
+  labs(
+    title = "Where do 8 billion people live?",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 80, face = "bold", hjust = 0.5),
+    legend.position = "none",
+    legend.title = element_text(size = 50, face = "bold", family = "Arial"),
+    legend.text = element_text(size = 15, family = "Arial")
+  )
+
+final_plot <- map / legend_bar + plot_layout(heights = c(0.85, 0.15))
+
+final_plot
+```
+
+# Improvement
+
+```{r, fig.width = 30, fig.height = 2}
+library(ggplot2)
+library(treemapify)
+library(treemapify)
+library(extrafont)
+
+population_data$continent[population_data$continent == "Central America"] <- "South America"
+
+treemap <- ggplot(data = population_data,
+       aes(area = population, fill = continent,
+           label = paste0(country, "\n", round(percentage, 2), "%"))) +
+  geom_treemap(color = "black", size = 1) +
+  geom_treemap_text(fontface = "bold", color = "white", place = "center", grow = TRUE) +
+  scale_fill_manual(values = c(
+    "Africa" = "#FF5733",
+    "Asia" = "#3498DB",
+    "Europe" = "#2ECC71",
+    "North America" = "#9B59B6",
+    "South America" = "#F1C40F",
+    "Oceania" = "pink"
+  )) +
+  theme_minimal() +
+  labs(title = "Where do 8 billion people live?",
+       subtitle = "Population distribution by country and continent",
+       fill = "Continent") +
+  theme(plot.title = element_text(size = 50, face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(size = 30, hjust = 0.5))
+
+treemap
+```
+
+
