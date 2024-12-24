@@ -11,6 +11,382 @@ output:
     toc: true
 ---
 
+The graph I chose is the third one in the following link: <https://distributionofthings.com/more-sports-more-women/>
 
+It's called "Gender Participation Across Sports in the Summer Olympic Games (1896 – 2024)" and it shows how different Olympic sports across the years have allowed or not the participation of men, women or both in each discipline.
+
+I chose this graph because the topic of the evolution of inclusivity in the Olympics looked interesting to me and it offered room for improvement. Also, I think it's a pretty graph.
+
+The data is from the platform Kaggle, from three different databases: the athlete's databases from "120 years of Olympic history: athletes and results", "Paris 2024 Olympic Summer Games" and "Tokyo 2020 Olympic Summer Games".
+
+Because the data was in different sites, I had to make one unique table that combined the data from all the years into one. There was also a lot of information that was unnecessary, like the athletes' physical characteristics or their medals. The only information I needed was the sport and the gender. Therefore, I selected the variables year and sport and created a new one called gender status to say if the sport was "Male only", "Female only" or "Male and female". After doing that, I had to change the name of the sport Equestrianism in the first data base, delete some of the years in that one, and also order the sports in the order of the original graph. I fixed the databases of Tokyo and Paris in the same way.
+
+## Data Base
+
+Data base 1:
+
+```{r}
+library(tidyverse)
+
+data1 <- read_csv("athlete_events.csv")
+data1.df <- data.frame(data1[1:271116,1:15])
+
+data1 <- data1.df |> 
+  group_by(Year, Sport) |>
+  summarise(status = paste0(unique(Sex), collapse=""))
+
+data1 <- data1 |> 
+  mutate(Gender_Status = case_when(
+      status == "M" ~ "Male only",
+      status == "F" ~ "Female only",
+      status %in% c("MF", "FM") ~ "Male_and_Female",
+      TRUE ~ "Unknown"))
+
+data1 <- data1 |> 
+  mutate(Sport = factor(Sport, levels = names(sort(table(Sport), decreasing = TRUE)))) |> 
+  mutate(Sport = case_when(
+    Sport == "Equestrianism" ~ "Equestrian",
+    TRUE ~ Sport)) |> 
+  filter(!Year %in% c(1994, 1998, 2002, 2006, 2010, 2014))
+
+
+#order sports
+data1 <- data1 |> 
+  mutate(Sport = factor(Sport, levels = c("Swimming", "Athletics", "Rowing", "Fencing", "Wrestling", "Water Polo", "Football", "Diving", "Cycling", "Shooting", "Sailing", "Gymnastics", "Weightlifting", "Equestrian", "Boxing", "Modern Pentathlon", "Hockey", "Basketball", "Canoeing", "Archery", "Tennis", "Volleyball", "Judo", "Handball", "Rhythmic Gymnastics", "Table Tennis", "Synchronized Swimming", "Badminton", "Beach Volleyball", "Art Competitions", "Taekwondo", "Triathlon", "Tug-Of-War", "Baseball", "Polo", "Trampolining", "Golf", "Rugby", "Softball", "Rugby Sevens", "Alpinism", "Lacrosse", "Cricket", "Croquet", "Roque", "Racquets", "Basque Pelota", "Aeronautics", "Jeu De Paume", "Motorboating"))) |> 
+  filter(!is.na(Sport))
+
+```
+
+Tokyo database:
+
+```{r}
+
+data_tokyo <- read_csv("athletes_Tokyo.csv")
+tokyodf <- data.frame(data_tokyo[1:11656,1:14])
+
+tokyo <- tokyodf |> 
+  mutate(Year = "2020") |> 
+  rename(Sex = gender, Sport = discipline) |> 
+  mutate(Sex = ifelse(Sex == "Male", "M", ifelse(Sex == "Female", "F", Sex))) |> 
+  group_by(Year, Sport) |>
+  summarise(status = paste0(unique(Sex), collapse="")) |> 
+  mutate(Gender_Status = case_when(
+      status == "M" ~ "Male only",
+      status == "F" ~ "Female only",
+      status %in% c("MF", "FM") ~ "Male_and_Female",
+      TRUE ~ "Unknown"))
+
+```
+
+Paris database:
+
+```{r}
+data_paris <- read_csv("athletes_Paris.csv")
+parisdf <- data.frame(data_paris[1:11110,1:35])
+
+paris <- parisdf |> 
+  mutate(Year = "2024") |> 
+  rename(Sex = gender, Sport = disciplines) |> 
+  mutate(Sex = ifelse(Sex == "Male", "M",
+                      ifelse(Sex == "Female", "F", Sex))) |> 
+  mutate(Sport = str_remove_all(Sport, "\\['|']")) |> 
+  group_by(Year, Sport) |>
+  summarise(status = paste0(unique(Sex), collapse="")) |> 
+  mutate(Gender_Status = case_when(
+      status == "M" ~ "Male only",
+      status == "F" ~ "Female only",
+      status %in% c("MF", "FM") ~ "Male_and_Female",
+      TRUE ~ "Unknown"))
+```
+
+Join databases:
+
+```{r}
+data1$Year <- as.factor(data1$Year)
+tokyo$Year <- as.factor(tokyo$Year)
+paris$Year <- as.factor(paris$Year)
+
+data_final <- bind_rows(data1, tokyo, paris)
+```
+
+Final database, with sports ordered:
+
+```{r}
+data_final <- data_final |> 
+  mutate(Sport = factor(Sport, levels = c("Swimming", "Athletics", "Rowing", "Fencing", "Wrestling", "Water Polo", "Football", "Diving", "Cycling", "Shooting", "Sailing", "Gymnastics", "Weightlifting", "Equestrian", "Boxing", "Modern Pentathlon", "Hockey", "Basketball", "Canoeing", "Archery", "Tennis", "Volleyball", "Judo", "Handball", "Rhythmic Gymnastics", "Table Tennis", "Synchronized Swimming", "Badminton", "Beach Volleyball", "Art Competitions", "Taekwondo", "Triathlon", "Tug-Of-War", "Baseball", "Polo", "Trampolining", "Golf", "Rugby", "Softball", "Rugby Sevens", "Surfing", "Skateboarding", "Artistic Gymnastics", "Trampoline Gymnastics", "Artistic Swimming", "Alpinism", "Sport Climbing", "Canoe Sprint", "3x3 Basketball", "Cycling Track", "Marathon Swimming", "Lacrosse", "Canoe Slalom", "Cycling BMX Freestyle", "Cycling BMX Racing", "Cycling Mountain Bike", "Cycling Road", "Cricket", "Croquet", "Roque", "Racquets", "Basque Pelota", "Baseball/Softball", "Aeronautics", "Jeu De Paume", "Karate", "Motorboating", "Breaking"))) |> 
+  filter(!is.na(Sport))
+```
+
+This fixing of the data base was one of my first issues when it came to replicating the graph. As it can be seen, the variables didn't have the same names across the different databases, some sports like Equestrianism had different names, and so I had to process the data to change all of that. In order to have a correct replica, I couldn’t change some names, for example, Artistic vs Rythmic gymnastics changed name in Tokyo Olympics, and the people that made the plot didn’t account for that, so some of the sports that only have data for Tokyo and Paris is because of that (or because they separated some sports into their different events).
+
+## Replica Plot
+
+I did the plot using geom_tile. This creates a rectangular grid of tiles, where each tile represents, for a sport and year, whether just men, women or both were allowed to compete. I had to carefully adjust the sizes to make it as close as possible to the original one, which took a few tries and was one of my main challenges.
+
+```{r}
+#| fig.asp: 1.6
+
+a <- ggplot(data_final, aes(x = factor(Year), y = reorder(Sport, desc(Sport)))) +
+  geom_tile(aes(fill = Gender_Status), color = "white", width = 0.65, height = 0.65) +
+  scale_fill_manual(
+    values = c(
+      "Male_and_Female" = "#ed8280",
+      "Male only" = "#82cfed",
+      "Female only" = "#870304"),
+    breaks = c("Male_and_Female", "Male only", "Female only"),
+    labels = c(
+      "Male_and_Female" = "Male and Female",
+      "Male only" = "Male Only",
+      "Female only" = "Female Only")) +
+  labs(
+    title = "Gender Participation Across Sports in the Summer Olympic Games (1896 – 2024)",
+    x = NULL,
+    y = NULL,
+    fill = ""
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 10, face = "bold", angle = 0, hjust = 1, vjust = 0.5),
+    axis.text.x = element_text(angle = 90, face = "bold", hjust = 1, vjust = 0.5),
+    legend.position = "bottom",
+    panel.grid.major = element_line(color = "gray90", size = 0.5),
+    panel.grid.minor = element_line(color = "gray95", size = 0.25),
+    plot.title = element_text(hjust = 1, face = "bold", size = 12.5),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+a
+```
+
+## My version
+
+Now it is time to create my version of this graph. I've decided to, on one hand, improve the original plot, by making it more readable, and on the other hand, to create an alternative visualization, as I think this one has some problems which I'll address soon.
+
+One of the issues I find with it is that it’s hard to read as there are a lot of sports and it’s difficult to see which years correspond to each sport to see at what point in history it actually changed participation.
+
+To improve readability, first of all, I rearranged the data base. To do this, I did two things: first, I combined events that belonged to one sport into said sport, as well as sports that had their name changed in the Tokyo Olympics. We can see this in sports like cycling or synchronized swimming respectively:
+
+```{r}
+data_newversion <- data_final |> 
+  mutate(Sport_Grouped = case_when(
+    Sport %in% c("Artistic Gymnastics", "Trampoline Gymnastics", "Gymnastics") ~ "Gymnastics",
+    Sport %in% c("Cycling Track", "Cycling Road", "Cycling Mountain Biking", "Cycling BMX Freestyle", "Cycling BMX Racing") ~ "Cycling",
+    Sport %in% c("Artistic Swimming", "Synchronized Swimming") ~ "Synchronized Swimming",
+    Sport %in% c("Canoeing", "Canoe Sprint", "Canoe Slalom") ~ "Canoeing",
+    Sport %in% c("Baseball", "Softball", "Baseball/Softball") ~ "Baseball",
+    Sport %in% c("Basketball", "3x3 Basketball") ~ "Basketball",
+    Sport %in% c("Volleyball", "Beach Volleyball") ~ "Volleyball",
+    Sport %in% c("Swimming", "Marathon Swimming") ~ "Swimming",
+    Sport %in% c("Sport Climbing", "Alpinism") ~ "Sport Climbing",
+    TRUE ~ Sport
+  )) |> 
+  mutate(Sport_Grouped = factor(Sport_Grouped, levels = c("Swimming", "Athletics", "Rowing", "Fencing", "Wrestling", "Water Polo", "Football", "Diving", "Cycling", "Shooting", "Sailing", "Gymnastics", "Weightlifting", "Equestrian", "Boxing", "Modern Pentathlon", "Hockey", "Basketball", "Canoeing", "Archery", "Tennis", "Volleyball", "Judo", "Handball", "Rhythmic Gymnastics", "Table Tennis", "Synchronized Swimming", "Badminton", "Art Competitions", "Taekwondo", "Triathlon", "Tug-Of-War"))) |> 
+  filter(!is.na(Sport_Grouped))
+```
+
+I also eliminated some of the sports, mainly the ones that have barely had presence in the Olympics history, like basque pelota, aeronautics, or the recent incorporation of break dance (breaking).
+
+Once we've rearranged the database, we have a more concise and more readable plot:
+
+```{r}
+#| fig.asp: 1
+
+p <- ggplot(data_newversion, aes(x = factor(Year), y = reorder(Sport_Grouped, desc(Sport_Grouped)))) +
+  geom_tile(aes(fill = Gender_Status), color = "white", width = 0.7, height = 0.7) +
+  scale_fill_manual(
+    values = c(
+      "Male_and_Female" = "#ed8280",
+      "Male only" = "#82cfed",
+      "Female only" = "#870304"),
+    breaks = c("Male_and_Female", "Male only", "Female only"),
+    labels = c(
+      "Male_and_Female" = "Male and Female",
+      "Male only" = "Male Only",
+      "Female only" = "Female Only")) +
+  labs(
+    title = "Gender Participation Across Sports in the Summer Olympic Games (1896 – 2024)",
+    x = NULL,
+    y = NULL,
+    fill = ""
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 10, face = "bold", angle = 0, hjust = 1, vjust = 0.5),
+    axis.text.x = element_text(angle = 90, face = "bold", hjust = 1, vjust = 0.5),
+    legend.position = "bottom",
+    panel.grid.major = element_line(color = "gray90", size = 0.5),
+    panel.grid.minor = element_line(color = "gray95", size = 0.25),
+    plot.title = element_text(hjust = 1, face = "bold", size = 12.5),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+p
+```
+
+This version is shorter, which makes it easier for the eyes to read. It is true, though, that we lose some information, especially for those minoritarian sports. Still, I think that information we lose is more anecdotal, it doesn't really allow us to see tendencies like the evolution of inclusivity in sports (as they're sports that have only appeared once or twice in the Olympics).
+
+### Interactive plot
+
+Once we have the plot with the new database, we can make it interactive with plotly:
+
+```{r}
+#| fig-height: 1
+library(plotly)
+
+# Convert to interactive plot with plotly
+interactive_plot <- ggplotly(p, tooltip = c("x", "y", "fill"))
+
+# Display the interactive plot
+interactive_plot
+```
+
+I find the interactive version of the plot an improvement on the original one, as it allows us to select genders to see only that information in order to have a more clear vision on how inclusivity across sports has changed. We can also use the cursor to select a specific period of time or specific sports.
+
+Another way we can do this interactive plot is using shiny, which grants us easier customization:
+
+```{r}
+library(shiny)
+
+#Define UI
+ui <- fluidPage(
+  titlePanel("Interactive Olympics Gender Participation"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("sport", "Select Sport Group:", choices = unique(data_newversion$Sport_Grouped), selected = "Swimming", multiple = TRUE),
+      sliderInput("year", "Select Year Range:", min = 1896, max = 2024, value = c(1896, 2024)),
+      checkboxGroupInput("gender", "Gender Status:", choices = c("Male only", "Female only", "Male_and_Female"), selected = c("Male only", "Female only", "Male_and_Female"))
+    ),
+    mainPanel(
+      plotlyOutput("heatmapPlot")
+    )))
+
+#Define Server
+server <- function(input, output) {
+  output$heatmapPlot <- renderPlotly({
+    filtered_data <- data_newversion |> 
+      filter(
+        as.numeric(as.character(Year)) >= input$year[1] &
+          as.numeric(as.character(Year)) <= input$year[2],
+        Sport_Grouped %in% input$sport,
+        Gender_Status %in% input$gender)
+    
+    p <- ggplot(filtered_data, aes(x = factor(Year), y = reorder(Sport_Grouped, desc(Sport_Grouped)))) +
+  geom_tile(aes(fill = Gender_Status), color = "white", width = 0.7, height = 0.7) +
+  scale_fill_manual(
+    values = c(
+      "Male_and_Female" = "#ed8280",
+      "Male only" = "#82cfed",
+      "Female only" = "#870304"),
+    breaks = c("Male_and_Female", "Male only", "Female only"),
+    labels = c(
+      "Male_and_Female" = "Male and Female",
+      "Male only" = "Male Only",
+      "Female only" = "Female Only")) +
+  labs(
+    title = "Gender Participation Across Sports in the Summer Olympic Games (1896 – 2024)",
+    x = NULL,
+    y = NULL,
+    fill = ""
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 10, face = "bold", angle = 0, hjust = 1, vjust = 0.5),
+    axis.text.x = element_text(angle = 90, face = "bold", hjust = 1, vjust = 0.5),
+    legend.position = "bottom",
+    panel.grid.major = element_line(color = "gray90", size = 0.5),
+    panel.grid.minor = element_line(color = "gray95", size = 0.25),
+    plot.title = element_text(hjust = 1, face = "bold", size = 12.5),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+    
+    ggplotly(p, tooltip = c("x", "y", "fill"))
+  })
+}
+
+#Run the App
+shinyApp(ui, server)
+```
+
+### Alternative visualizations
+
+I've already improved the original plot by making it more readable, shorter and interactive, but I also wanted to try some alternative visualizations to see if there is a better way to present the plot's information.
+
+One of the difficulties I found doing this, is that the plot's data is actually very scarce, it doesn't tell you a lot about the topic at hands. It could be interesting to have the proportion of men and women participating.
+
+In the end, I opted to do two barcharts. I chose the barcharts because, with the scarce data the original plot has, what's interesting about it is that it wants to tell us about the evolution of inclusivity in the sports. I think a barchart is a great way to see this evolution and the changing tendencies, because the data won't be so stacked as in the original (making it difficult to see which years correspond to each sport to see at what point in history it actually changed participation). For example, we'll be able to see more clearly how male-only dominated sports become more uncommon and inclusive sports become more common.
+
+The first option for a bar chart was a classical one (note that I'm again using the final database I used in the replica instead of the database from the improvement version, as I don't have the need here to shorten the list of sports in order to make it more readable. The only difference is that we have a higher total count of sports):
+
+```{r}
+yearly_gender_counts <- data_final |> 
+  group_by(Year, Gender_Status) |> 
+  summarise(Count = n(), .groups = 'drop')
+
+#Barchart
+ggplot(yearly_gender_counts, aes(x = factor(Year), y = Count, fill = Gender_Status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    title = "Gender Participation by Year in the Summer Olympic Games (1896 – 2024)",
+    x = "Year",
+    y = "Sports Count",
+    fill = "Gender Status"
+  ) +
+  scale_fill_manual(
+    values = c("Male_and_Female" = "#ed8280", "Male only" = "#82cfed", "Female only" = "#870304"),
+    breaks = c("Male_and_Female", "Male only", "Female only"),
+    labels = c("Male and Female", "Male Only", "Female Only")
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1),
+    legend.position = "bottom"
+  )
+```
+
+We can see with much more clarity the evolution in tendencies, as we see the male only blue bar getting smaller and smaller until it disappears after 2008. We also see how inclusive sports become more popular by the years, with a special rise starting in 1976.
+
+In my opinion, this is a better albeit simpler way to see what the original plot wanted us to see: how gender becomes less of a barrier when it comes to participating in Olympic sports.
+
+Another way we can see this evolution by paying special attention to changes in specific years, is doing a barchart with proportionally stacked bars:
+
+```{r}
+library(forcats)
+
+yearly_gender_proportions <- data_final |> 
+  group_by(Year, Gender_Status) |> 
+  summarise(Count = n(), .groups = 'drop') |> 
+  group_by(Year) |> 
+  mutate(Proportion = Count / sum(Count))
+
+
+yearly_gender_proportions <- yearly_gender_proportions |> 
+  mutate(Gender_Status = fct_relevel(Gender_Status, "Female only", after = Inf))
+
+#Stacked barchart
+ggplot(yearly_gender_proportions, aes(x = factor(Year), y = Proportion, fill = Gender_Status)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(
+    title = "Proportional Gender Participation by Year in the Summer Olympic Games (1896 – 2024)",
+    x = "Year",
+    y = "Proportion",
+    fill = "Gender Status"
+  ) +
+  scale_fill_manual(
+    values = c("Male_and_Female" = "#ed8280", "Male only" = "#82cfed", "Female only" = "#870304"),
+    breaks = c("Male_and_Female", "Male only", "Female only"),
+    labels = c("Male and Female", "Male Only", "Female Only")
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1),
+    legend.position = "bottom"
+  )
+```
+
+Although the previous plot allows us to see the evolution more clearly, this one lets us see tendencies in specific years more clearly. For example, how there was more inclusivity in the period 1920-1928, which allows to ask ourselves questions related to the topic to further a possible investigation, like if it has to do with the aftermath of WWI, and why that changed after, as we see a decrease after 1928. We also see an important increase in inclusivity from 1976 onwards, which again can bring us to ask more questions about that period of time.
+
+Overall, these improvements entail a better understanding of the evolution of inclusivity in Olympic sports, something that was more difficult in the original plot. Nevertheless, it must also be stated that these improvements also have limitations not previously found in the original plot. For example, since they consider the total number of sports and their proportions, we can't see which specific sports had more barriers for females inclusion. In the original, we see how sports like swimming, fencing or diving allowed women's participation quite early on, but others like wrestling, water polo or football took more years to allow women to participate.
+
+In conclusion, I think the most important thing to create a plot is to have a clear question to answer. I was interested in the evolution of inclusivity in Olympic sports, for which my improvements may be a better option than the original one, but I'm also losing some information by not taking into consideration the specificities of each particular sport.
 
 
