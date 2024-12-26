@@ -1,0 +1,534 @@
+---
+title: "Income inequality: Gini coefficient before and after
+tax"
+description: |
+  This project explains how to replicate and create an alternative version of a chart from Our World in Data about the difference in the Gini coefficient before and after the redistribution of taxes.
+categories: "2024"
+author: David Pereiro-Pol
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.showtext = TRUE, 
+                      fig.dpi = 150)
+```
+
+## Original chart
+
+Each year Our World in Data updates [the graph](https://ourworldindata.org/grapher/gini-coefficient-after-vs-before-tax-wb-scatter?time=2020) that is being used as the principal inspiration for this project. This visualization shows the difference caused by the redistribution of taxes in the Gini coefficient which is a measure of statistical dispersion that represents the income inequality within a nation. After applying taxes and transfers, the Gini coefficient tends to be reduced since redistribution is usually progressive, resources flow from rich to poor people.
+
+In this graph, the Gini coefficient before taxes is represented in the x-axis and after taxes in the y-axis. Each country is shown as a point that changes its size depending on the population and its color depending on its continent. Those countries that are closer to the coordinates (0, 0) are in a better situation in terms of income inequality. Moreover, the reduction caused by taxes can be seen in this chart thanks to the inclusion of different lines that indicate how much the Gini coefficient have been reduced due to the redistribution system.
+
+![Gini graph. Source: [Our World in Data](https://ourworldindata.org/).](gini.png){.external width="100%"}
+
+## Getting started
+
+### Packages and fonts
+
+Firstly, we have to upload all the packages needed to replicate this graph and also the fonts that will be used. For the font part we will be using `sysfonts` package to retrieve them from Google Fonts and `showtext` to activate them.
+
+```{r}
+library(tidyverse)
+library(readr)
+library(ggtext)
+library(geomtextpath)
+library(scales)
+library(ggrepel)
+library(ggnewscale)
+library(ggthemes)
+library(ggiraph)
+
+```
+
+```{r}
+sysfonts::font_add_google("Playfair Display", family="playfair")
+sysfonts::font_add_google("Lato", family="lato")
+sysfonts::font_add_google("Roboto", family="roboto")
+showtext::showtext_auto() 
+```
+
+### Getting the data
+
+The data needed to replicate the graph can be downloaded from the [graph page](https://ourworldindata.org/grapher/gini-coefficient-after-vs-before-tax-wb-scatter?time=2020). By analyzing its structure we can see that the data set is conformed by 78936 observations and 7 variables. This huge amount of observations, taken into account that we are working with country data, is due to the fact that for each country the year variable takes values from -10000 to 2100. Besides the variable year, we have a variable for the name of the country and other for the code of each country, two variables for the Gini coefficient, one for the population and another for the continent.
+
+```{r}
+gini <- read_csv(file = "data/gini_data.csv")
+
+# Cleaning the names
+
+gini <- gini |>
+  rename(
+    "pre_tax_gini" = paste("10.4.2 - Redistributive impact of",
+    "fiscal policy, Gini index (%) - SI_DST_FISP - Prefiscal income"),
+    "post_tax_gini" = paste("10.4.2 - Redistributive impact of",
+     "fiscal policy, Gini index (%) - SI_DST_FISP - Postfiscal",
+     "disposable income")
+  ) |>
+  janitor::clean_names()
+
+gini
+```
+
+### Cleaning the data
+
+During the data cleaning process, we have encountered two significant challenges. The first issue was the limited availability of Gini coefficient data for many countries, with data often being provided for only one or a few years. To address this, the creators of the graph chose to include countries with sparse Gini data in charts spanning five years before and five years after the available data point. For example, a country with data available only for 2013 would be represented in the graphs from 2008 to 2018. The "solution" that they did was not included in the data set, so to address this problem and imitate the distribution of the graphs we created a function that replicate the Gini values five years in the past and five years in the future.
+
+```{r}
+replicate_values <- function(x) {
+  j <- 0 # We initialize this variable here to verify the first
+  # condition in the beginning of the for loop
+  for (i in 1:length(x)) {
+    if (!is.na(x[i]) & i >= j) {  # We check if there is a
+      # NA and we put i >= j to continue in the point in which
+      # the while loop ended
+      j <- i + 1 # We change the value of j to start the while
+      # loop in the following iteration
+      count <- 0 # To count the next 5 positions
+      while (j <= length(x) && count < 5 && is.na(x[j])) { # To change
+        #possible NA
+
+        if (!is.na(x[j])) break # If there is not a NA break
+
+        x[j] <- x[i] # Change the NA with the previous value
+
+        j <- j + 1
+
+        count <- count + 1
+      }
+    }
+  }
+
+  j <- length(x) + 1 # We do the same but backwards
+  for (i in length(x):1) {
+    if (!is.na(x[i]) & i <= j) {
+      j <- i - 1
+      count <- 0
+      while (j >= 1 && count < 5 && is.na(x[j])) {
+        if (!is.na(x[j])) break
+        x[j] <- x[i]
+        j <- j - 1
+        count <- count + 1
+      }
+    }
+  }
+  return(x)
+}
+
+## Replication of data to simulate the original distribution of the data
+gini_w_replicate <- gini |>
+  group_by(entity) |>
+  mutate(
+    pre_tax_gini = replicate_values(pre_tax_gini),
+    post_tax_gini = replicate_values(post_tax_gini)
+  ) |>
+  ungroup()  
+
+```
+
+The second one was that the name of the continent of each country only was in the year 2015 observation, so we had to expand that variable for each country. We also deleted the observations that did not have any Gini data.
+
+```{r}
+## Replicate the continent and drop NA
+
+gini_tidy <- gini_w_replicate |>
+  group_by(entity) |>
+  fill(continent, .direction = "downup") |>
+  ungroup() |>
+  drop_na(post_tax_gini, pre_tax_gini)
+```
+
+Since the graph that we are replicating is the one from the 2020, we filtered the data for that year.
+
+```{r}
+# Gini 2020
+
+gini_tidy_2020 <- gini_tidy |>
+  filter(year == 2020)
+
+gini_tidy_2020
+```
+
+## Replicating the chart
+
+### Coordinates and axes
+
+Once that we have cleaned the data, the first step is to set the axis and the skeleton of our graph. For this we have to set the x-axis for the pre tax Gini and the y-axis for the post tax Gini.
+
+```{r, fig.width=7, fig.asp= 0.65}
+## Structure
+
+p <- ggplot(gini_tidy_2020) +
+  aes(x = pre_tax_gini, y = post_tax_gini)
+
+p
+```
+
+Now we have to adjust the coordinates. Note that in the original graph the origin of the chart was set in (0.2, 0.2) and without any expansion, so we have to set the limits correctly and we have to delete the default expansion that `ggplot` sets. Besides, we have to eliminate the minor grid since it is not displayed in the original chart.
+
+```{r, fig.width=7, fig.asp= 0.65}
+p <- p +
+  scale_x_continuous(limits = c(0.2,0.749),
+                            minor_breaks = NULL,
+                            expand = expansion(0)) +
+  scale_y_continuous(limits = c(0.2, 0.660),
+                     minor_breaks = NULL,
+                     expand = expansion(0))
+p
+```
+
+Now we have to change the appearance of the axis to simulate the original one. For that, we will set `theme_minimal` because it provides us a similar background and we will change the type and color of the major grid.
+
+```{r, fig.width=7, fig.asp= 0.65}
+p <- p + theme_minimal() +
+  theme(
+        panel.grid.major = element_line(color = "#dddddd",
+                                        linetype = "dashed",
+                                        linewidth = 0.3
+                                        ),
+        plot.margin = margin(7,7,7,7),
+        plot.background = element_rect(fill = "white", color = NA)
+        )
+
+p
+
+```
+
+### Diagonal lines
+
+The next step will be to add the diagonal lines that indicate the level of reduction of the Gini coefficient. This one was a problem during the replication process. Initially, the lines were added with `geom_abline` and to include the text we were going to use `annotate` changing the angle argument, but the text did not correctly match the line. After some research, we found a package called `geom_textpath` that include the function `geom_textabline`, this function include both the text and the line, but because of the different colors between the text and the line we have to include both functions, `geom_abline` and `geom_textabline` to obtain a better result.
+
+```{r, fig.width= 7, fig.asp= 0.65}
+p <- p + 
+  geom_abline(slope = 1, intercept = 0, 
+              color = "#dddddd", 
+              linetype = "dashed",
+              linewidth = 0.3) +
+  geom_abline(slope = 2/3, intercept = 0, 
+              color = "#dddddd", 
+              linetype = "dashed", 
+              linewidth = 0.3) +
+  geom_abline(slope = 1/2, intercept = 0, 
+              color = "#dddddd",
+              linetype = "dashed", 
+              linewidth = 0.3) +
+  geom_textabline(slope = 1, intercept = 0,
+                  label = "No reduction",
+                  linetype = "blank",
+                  size = 2.5, 
+                  family = "sans",
+                  hjust = 0.83,
+                  color = "grey70") +
+  geom_textabline(slope = 1 / 2, intercept = 0,
+                  label = "Reduce by a half",
+                  linetype = "blank",
+                  size = 2.5, 
+                  family = "sans",
+                  hjust = 0.75,
+                  color = "grey70") +
+  geom_textabline(slope = 2 / 3, intercept = 0,
+                  label = "Reduce by a third",
+                  linetype = "blank",
+                  size = 2.5, 
+                  family = "sans",
+                  hjust = 0.81,
+                  color = "grey70") 
+
+p
+
+
+```
+
+### Points and legends
+
+Since we have already set the background of the chart, now we can add the points, we have to put the variables population and continent to the size and fill aesthetics, respectively. The colors were obtained by using the [ImageColor Picker site](https://imagecolorpicker.com/).
+
+```{r, fig.width= 7, fig.asp= 0.65}
+
+con_colors <- c("#a2559c", "#00847e",
+                "#4c6a9c", "#e56e5a",
+                "#9a5129", "#883039")
+
+p <- p + geom_point(aes(size = population,
+                        fill = continent),
+                        alpha = 0.85,
+                        shape = 21)  +
+  scale_fill_manual(values = con_colors) 
+
+p
+
+```
+
+To change the format of the two legends we have to use the function `guides` in combination with the argument override.aes, by doing so we are able to change both legends independently. In this step, besides changing the legends, we are also adjusting the size of the points to better fit the original one.
+
+```{r, fig.width= 7, fig.asp= 0.65}
+p <- p + guides(fill = guide_legend(order = 1, 
+                                    theme = theme(
+        legend.title = element_blank(),
+        legend.key.height = unit(0.3, "cm"),
+        legend.text = element_text(family = "lato",
+                                   size = 8)),
+        override.aes = list(shape = 15, 
+                            size = 2,
+                            color = con_colors
+                            )),
+        size = guide_legend(title = 
+        "Circles sized by<br> **Population**", 
+                          reverse = TRUE, # Reverse change the 
+        #order of the legends notonly of the labels
+                          order = 2, # That is why we used order to correct it
+                          theme = theme(
+        legend.title = ggtext::element_markdown(family = "lato",
+                                                size = 8,
+                                                hjust = 0.5,
+                                                color = "#636363" ),
+        legend.text = element_text(family = "lato",
+                                   size = 8),
+        legend.title.position = "bottom"))) + 
+  theme(legend.justification = c("right", "top"),
+        legend.box = "vertical",
+        legend.spacing.y = unit(0.1, "cm")) +
+  scale_size(breaks = c(1e08, 3e08), 
+             labels = label_number(scale = 1e-6, suffix = "M"), 
+             range = c(1, 9))
+        
+p
+```
+
+### Labels
+
+TO add the country labels, we are going to create an additional table in which we will reduce the number of countries per continent to minimize the overlaps. If we do not add this step, we will not see any names in the middle part of the graph since there are a lot of European countries and because of the huge amount of overlaps those labels will not appear.
+
+```{r}
+gini_labels <- gini_tidy_2020 |>
+  slice_sample(prop = -0.5, by = continent) 
+```
+
+In the original chart the labels also vary their size depending on the population, so, since we have already set an scale for the size before, we will be using the function `new_scale` from the package `ggnewscale` that allow us to introduce new values for the labels' scale. In addition, to better control the overlapping we have to use `geom_text_repel`, the segment.color argument let us erase the segment between the label and the point.
+
+```{r,fig.width=7, fig.asp= 0.65}
+p <- p + 
+  new_scale("size") + 
+  geom_text_repel(aes(label = entity,
+                              color = continent,
+                              size = population),
+                          segment.color = NA,
+                          max.overlaps = 7,
+                          show.legend = FALSE,
+                          data = gini_labels) +
+  scale_size(range = c(3, 4)) +
+  scale_color_manual(values = con_colors)
+
+p
+
+```
+
+### Title and annotations
+
+Lastly, we have to put the title, the subtitle and the caption using the proper fonts and size. We have obtained the family font by using the [MyFonts site](https://www.myfonts.com/es/pages/whatthefont).
+
+```{r, fig.width= 7, fig.asp= 0.65}
+
+title_rep <- "Income inequality: Gini coefficient before and after tax, 2020"
+
+subtitle_rep <- 
+  paste("Inequality is measured in terms of the Gini coefficient of",
+        "income before taxes on the horizontal axis and after<br>taxes on the",
+        "vertical axis")
+
+caption_rep <- "**Data source** : World Bank"
+
+tag_rep <- "OurWorldinData.org/economic-inequality | CC BY"
+
+p <- p + labs(title = title_rep,
+              subtitle = subtitle_rep,
+              caption = caption_rep,
+              tag = tag_rep,
+              x = "Before tax",
+              y = "After tax") +
+  theme(plot.title = element_text(face = "bold",
+                                  family = "playfair",
+                                  size = 14.5,
+                                  color = "#636363"),
+        plot.title.position = "plot",
+        plot.subtitle = element_markdown(size = 9,
+                                                 color = "#636363",
+                                                 family = "lato"),
+        axis.title = element_text(size = 7.5,
+                                  color = "#636363",
+                                  family = "lato"),
+        axis.text = element_text(size = 7.5,
+                                 color = "#636363",
+                                 family = "lato"),
+        plot.caption = element_markdown(size = 7.5,
+                                        color = "#636363",
+                                        hjust = 0,
+                                        family = "lato"),
+        plot.caption.position = "plot",
+        plot.tag = element_markdown(size = 7.5,
+                                    color = "#636363",
+                                    hjust = 1,
+                                    family = "lato"),
+        plot.tag.position = c(1,0.012))
+```
+
+### Final result
+
+Here we can observe the final result of the replication.
+
+```{r, fig.width= 7, fig.asp= 0.65, echo=FALSE}
+p
+```
+
+### Missing features
+
+Although this tutorial helps us accurately reconstruct the main features of the original graph, we were unable to replicate two elements using `ggplot2`:
+
+-   Adding the overlapped circles in the population legend.
+-   Placing white padding around the letters of the country labels.
+
+## Alternative version
+
+### Original chart problems
+
+The original graph provides a good visualization of the differences in the Gini coefficient. However, if we want to compare one country to others or examine the extent of the reduction in the Gini coefficient, the original representation is not the most effective choice.
+
+For these reasons, a lollipop chart offers a clearer way to visualize differences across countries. It also allows us to observe each country’s position after tax redistribution.
+
+In this alternative version, we have labeled the thirty countries with the most significant reductions in their Gini coefficients to emphasize that tax redistribution has a substantial impact on reducing inequality in Europe. Additionally, by leveraging the `ggiraph` package, we have added an interactive feature to this graph. This allows users to explore and identify the names of other countries displayed.
+
+```{r}
+gini_lollipop <- gini_tidy_2020 |> 
+  mutate(entity = fct_reorder(entity, desc(post_tax_gini))) |> 
+  mutate(difference = pre_tax_gini - post_tax_gini)
+
+high_difference <- gini_lollipop |> 
+  slice_max(difference, n = 30)
+
+global_mean_pre <- mean(gini_lollipop$pre_tax_gini)
+global_mean_post <- mean(gini_lollipop$post_tax_gini)
+
+title_alt <- "Tax redistribution notably <b>reduces</b> income inequality"
+subtitle_alt <- 
+  paste("Country data available from  <span","style='color:#E69F00'>",
+        "Asia</span>, <span style='color:#000000'>Africa</span>,",
+        "<span style='color:#56B4E9'>Europe</span>,",
+        "<span style='color:#009E73'>North America</span>,",
+        "<span style='color:#F0E442'>Oceania</span>,",
+        "and <span style='color:#0072B2'>South America</span>", 
+        "<br>shows that taxes reduce the Gini coefficient in all of them.")
+y_alt <- paste("Gini coefficient <span style='color:#7570B3'>",
+              "post taxes</span> and <span style='color", 
+              ":#aeb370'> pre taxes</span>")
+caption_alt <- "**Data source** : World Bank"
+label_alt <- paste("Labeled points show <br>the 30 countries", 
+                   "<br>with bigger reductions <br>of their", 
+                   "Gini coefficients. <br>Note the the majority",
+                   "of <br>them are from <span",
+                   "style='color:#56B4E9;'>Europe</span>")
+
+```
+
+```{r, fig.height= 9, fig.asp= 1.5}
+lolli <- gini_lollipop |> 
+  ggplot() + 
+  geom_segment_interactive( aes(x = entity, xend = entity,y = post_tax_gini,
+                      yend = pre_tax_gini, color = continent, tooltip = entity), 
+                linewidth  = 1.5,
+                alpha = 0.6) +
+  geom_point_interactive(aes(x=entity, y=pre_tax_gini, tooltip = entity), 
+             size=2, 
+             color="#aeb370") +
+  geom_point_interactive(aes(x=entity, y=post_tax_gini, tooltip = entity), 
+             size=2, 
+             color="#7570B3") +
+  coord_flip() +
+  theme_minimal() +
+  scale_y_continuous(sec.axis = dup_axis()) +
+  theme(axis.text.y  = element_blank(),
+        panel.grid = element_blank(),
+        legend.position = "none") +
+  geom_hline(yintercept = global_mean_pre,
+             linetype = "dotted",
+             alpha = 0.6,
+             color = "#aeb370") +
+  geom_hline(yintercept = global_mean_post,
+             linetype = "dotted",
+             alpha = 0.6,
+             color = "#7570B3") + 
+  geom_hline(yintercept = 0,
+             linetype = "dotted",
+             alpha = 0.6) +
+  scale_color_colorblind() + 
+  annotate("text",  
+           x = 8, y = global_mean_post - 0.01, angle = 90, 
+           size = 3, family = "sans",
+           label="Global mean post taxes") + 
+  annotate("text",  
+           x = 8, y=global_mean_pre - 0.01, angle = 90,
+           size = 3, family = "sans",
+           label="Global mean pre taxes") + 
+  annotate("text",  
+           x = 43, y = -0.01, angle = 90, size = 3,
+           family = "sans",
+           label="Perfect income equality") + 
+  geom_text(aes(x = entity, 
+                      y = post_tax_gini, 
+                      label = entity,
+                      color = continent), 
+                  size = 2,
+                  family = "sans",
+                  hjust = 0.75,
+                  nudge_y = -0.025,
+                  data = high_difference) +
+  annotate("segment", 
+           x = 43, xend = 43, 
+           y = 0.2 , yend = 0.1, 
+           linewidth=0.3, 
+           arrow = arrow(length = unit(0.3, "cm"), type = "open")) +
+  annotate("segment", 
+           x = 43, xend = 43, 
+           y = 0.6 , yend = 0.7,  
+           linewidth=0.3, 
+           arrow = arrow(length = unit(0.3, "cm"), type = "open")) +
+  annotate("text",  
+           x = 41, y = 0.65,  
+           size = 3, family = "sans",
+           label="More \ninequality") +
+  annotate("text",  
+           x = 41, y = 0.15,  
+           size = 3, family = "sans",
+           label="Less \ninequality") +
+  annotate("richtext",
+           x = 75, y = 0.65, 
+           label = label_alt,
+           hjust = 0.5, 
+           vjust = 1, 
+           family = "sans",
+           size = 3, 
+           fill = NA, 
+           label.color = NA ) + 
+  labs(title = title_alt,
+       subtitle = subtitle_alt,
+       y = y_alt,
+       caption = caption_alt) +
+  theme(plot.title = element_markdown(,
+                                  family = "sans",
+                                  size = 15),
+        plot.subtitle = element_markdown(size = 10,
+                                                 family = "sans"),
+        axis.title = element_markdown(size = 8,
+                                                 family = "sans"),
+        axis.title.y = element_blank(),
+        plot.caption = element_markdown(size = 7.5,
+                                                hjust = 0,
+                                                family = "sans"),
+        plot.title.position = "plot",
+        plot.caption.position = "plot",
+        legend.position = "none")
+
+girafe(ggobj = lolli, height_svg = 10)
+```
