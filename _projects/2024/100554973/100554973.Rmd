@@ -11,7 +11,7 @@ output:
     toc: true
 ---
 
-```{r setup, include=FALSE}
+```{r, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, fig.align="center", fig.showtext=TRUE) 
 ```
 
@@ -36,7 +36,7 @@ apparatus).
 The graph I chose for my project does a great job in visualizing this trend in a
 clear way by using the liberal democracy index calculated by 
 [V-Dem Institute](https://v-dem.net/). In particular, as democracy is a complex 
-concept that can be defined in many ways the V-Dem liberal democracy index 
+concept that can be defined in many ways, V-Dem's liberal democracy index 
 "emphasizes the importance of protecting individual and minority rights against 
 the tyranny of the state and the tyranny of the majority [...] thus judging the 
 quality of democracy by the limits placed on government via constitutionally 
@@ -45,100 +45,168 @@ and effective checks and balances that, together, limit the exercise of executiv
 power." ^[Definition from the V-Dem Dataset codebook available at
 https://v-dem.net/data/reference-documents/]
 
-After replicating the original graph by I propose an alternative visualization 
-using the same data.
+In this article, after replicating the original graph, I propose an alternative 
+visualization of the graph using the same data.
+<br>
+<br>
 
 ## Original graph
 
+The original graph chosen for this project was created by [explained.media](https://explained.media/),
+a Swedish data visualization studio and it can be found in one of their article titled:
+["Democratic erosion and rising authoritarianism in Europe"](https://explained.media/democratic-erosion-and-rising-authoritarianism-in-europe/).
+
+It is made up of 2 line graphs, one for the countries whose democracy has worsened
+and another for the countries whose democracy has improve. On the x-axis are depicted
+the years of the analysis (2012 and 2022) and on the y-axis the liberal democracy 
+score for those years. In addition to that, some countries are highlighted and 
+2 of them also have special text annotations.
+
+![Original graph. Figure from [explained.media](https://explained.media/)](original.png){.external width="100%"}
+
+The data I used to replicate this graph is the 13th version of the V-Dem Dataset
+available for download in the [V-Dem's Dataset Archive](https://www.v-dem.net/data/dataset-archive/).
+<br>
+<br>
+
+## Replication
+### Loading libraries, fonts and data
+
 ```{r}
 library(tidyverse)
-library(ggplot2)
 library(grid)
 library(gridtext)
 library(patchwork)
 library(ggforce)
 library(ggrepel)
 
+sysfonts::font_add_google("Noto Serif", family="noto_serif",
+                          regular.wt = 700, bold.wt = 900)
+sysfonts::font_add_google("Noto Sans Display", family="noto_sans",
+                          regular.wt = 500, bold.wt = 700)
+sysfonts::font_add_google("Poppins", family="poppins",
+                          regular.wt = 500, bold.wt = 700)
 
 full_df23 <- read_rds(file="V-Dem-CY-Full+Others-v13.rds")
 #retrieved from https://www.v-dem.net/data/dataset-archive/
+dim(full_df23)
+```
 
+The full dataset contains thousands of variables observed for different countries
+and several years, making it necessary to filter only the relevant data for the 
+intended purpose.
+<br>
+<br>
 
-#Selecting only relevant data
+### Pre-processing the data
+
+I first select only the variables that are needed for the project and filter only 
+the observations of the two years depicted. I then make use of the variable 
+`e_regiongeo` to filter only those countries located in Europe.
+
+```{r}
+#Selecting only relevant variables
 df23 <- full_df23 |> 
   select(c("country_name", "country_text_id", "e_regiongeo", "year", "v2x_libdem")) |> 
-  filter(year==2012 | year==2022) |> 
-  filter(e_regiongeo %in% 1:4) #For more info: vdemdata::var_info("e_regiongeo") ==> 1=Western Europe, 2=Northern Europe, 3=Souther Europe, 4=Eastern Europe
+  filter(year == 2012 | year == 2022) |> 
+  filter(e_regiongeo %in% 1:4) 
+  # 1=Western Europe, 2=Northern Europe, 3=Southern Europe, 4=Eastern Europe
+```
 
+<br>
+At this point, however, I still have only 40 countries compared to the 43 present
+in the original graph. The missing countries are Turkey, Armenia and Georgia 
+which are not coded in any of the geographical regions for which we have filtered 
+before, because they are located at the boundaries between Europe and Asia. 
+Therefore in the second pipeline I add them to the previously selected countries 
+and transform the countries' names to uppercase.
+
+```{r}
+#Adding Turkey, Georgia and Armenia
 df23 <- full_df23 |> 
   select(c("country_name", "country_text_id", "e_regiongeo", "year", "v2x_libdem")) |> 
-  filter(year==2012 | year==2022) |> 
+  filter(year == 2012 | year == 2022) |> 
   filter(country_text_id %in% c("TUR", "ARM", "GEO")) |> 
   bind_rows(df23) |>
   arrange(country_name) |> 
-  mutate(country_name=toupper(country_name))
+  mutate(country_name = toupper(country_name))
+str(df23)
+```
 
+<br>
+Since I will need to create two separate graphs based on whether a country's 
+democracy has been faring better or worse, I need to split this initial dataframe 
+in two by that criteria. I do this by creating another variable called 
+`difference` which stores the difference between the 2022 and the 2012 values 
+of the democracy index and then split the data based on positive or negative 
+values of that variable.
 
-#Creating column difference
+```{r}
+#Creating the column difference
 df23 <- df23 |> 
-  pivot_wider(names_from = "year", values_from = "v2x_libdem", names_prefix = "year_") |>
+  pivot_wider(names_from = "year", 
+              values_from = "v2x_libdem", 
+              names_prefix = "year_") |>
   mutate(difference = year_2022 - year_2012) |> 
-  pivot_longer(cols=c("year_2012","year_2022"), names_to = "year", values_to = "v2x_libdem", names_prefix = "year_") 
-
+  pivot_longer(cols=c("year_2012","year_2022"), 
+               names_to = "year", 
+               values_to = "v2x_libdem", 
+               names_prefix = "year_") 
 
 #Creating two separate df
 df_backsliding <- df23 |> 
-  filter(difference<0)
+  filter(difference < 0)
 df_improving <- df23 |> 
-  filter(difference>0)
-
+  filter(difference > 0)
 ```
 
+<br>
+The dataframes are now ready to be used for creating the graph.
+<br>
+<br>
 
-```{r, preview=TRUE, fig.height=6.9, fig.width=6.9, dpi=500}
-sysfonts::font_add_google("Noto Serif", family="noto_serif",
-                          regular.wt = 700, bold.wt = 900)
-#Title is in noto serif
+### Backsliding line graph
 
-sysfonts::font_add_google("Noto Sans Display", family="noto_sans",
-                          regular.wt = 500, bold.wt = 700)
-#Annotation and years as well
+I start from the basic aesthetics of the line graph, plotting the 2 years on 
+the x-axis and the democracy score on the y-axis. Using various arguments of 
+`geom_line` I set the width of the lines, their color and their opacity.
 
-sysfonts::font_add_google("Poppins", family="poppins",
-                          regular.wt = 500, bold.wt = 700)
-#For subtitle and geom_text and axis title
-
-
-bezier_data_impr <- data.frame(
-  x = c(1.5, 1.70, 1.70, 1.5),
-  y = c(0.15, 0.23, 0.24, 0.32))
-
-# bezier_data_bcks <- data.frame(
-#   x = c(1.68, 1.75, 1.75, 1.5),
-#   y = c(0.97, 0.81, 0.83, 0.63))
-
-
-general_back <- ggplot(df_backsliding) +
+```{r, dpi=300, out.width="80%"}
+basic_bcks <- ggplot(df_backsliding) +
   aes(x=year, y=v2x_libdem) +
   #Plotting all the lines
   geom_line(aes(group = country_name), 
             linewidth = 0.5, 
             colour = "#db051d", 
-            alpha = 0.4) +
-  #Highlighting relevant countries
+            alpha = 0.4)
+basic_bcks
+```
+
+<br>
+From the basic graph I highlight selected countries by drawing a bigger line for
+those countries and adding their start and end point and their names. In 
+particular, when drawing the points I carefully add an outline to them using 
+the `stroke` argument of `geom_point`, while for the countries' names I slightly 
+tweak their position for consistency with the original graph and set the closest 
+possible font, font-size and color.
+
+```{r, dpi=300, out.width="80%"}
+highlighted_bcks <- basic_bcks +
+  #Highlighting relevant countries by drawing bigger lines
   geom_line(data = df_backsliding %>% 
               filter(country_text_id %in% c("POL", "HUN", "SRB", "TUR")),
             aes(group = country_name), 
             color = "#db051d", 
             linewidth = 1.3) +
+  #Adding start and end point
   geom_point(data = df_backsliding %>% 
                filter(country_text_id %in% c("POL", "HUN", "SRB", "TUR")),
              shape = 21, 
              size = 3.5, 
              colour = "white", 
              fill = "#db051d", 
-             stroke= 2) +
-  #Showing countries' names for filtered countries
+             stroke = 2) +
+  #Showing countries' names
   geom_text(data = df_backsliding %>% 
               filter(country_text_id %in% c("POL", "HUN", "SRB", "TUR") 
                      & year == 2022),
@@ -148,30 +216,44 @@ general_back <- ggplot(df_backsliding) +
             size = 10,
             size.unit = "pt",
             colour = "#242424",
-            family = "poppins") +
-  #Annotating for Poland
-  annotation_custom(grob = textGrob(
-    label = "Poland lost 62 places in global\ndemocracy rankings",
-    x = unit(0.1, "npc"),
-    y = unit(1, "npc"),
-    just = c("left", "bottom"),
-    gp = gpar(colour = "#242424",
-              fontsize = 9.5, 
-              fontfamily = "noto_sans",
-              lineheight = 1))) +
-  # geom_bezier2(data = bezier_data_bcks, aes(x = x, y = y),
-  #              colour = "#242424", linewidth = 0.5) +
-  geom_curve(x = 1.68, y = 1, xend = 1.5, yend = 0.63,
-             curvature = -0.4,
-             colour = "#242424",
-             linewidth = 0.5) +
+            family = "poppins")
+highlighted_bcks
+```
+
+<br>
+I then proceed to modify the aspect of the x and the y axis by setting their names,
+their length etc. Finally I fix the ratio of the y-axis's length to the x-axis's
+length.
+
+```{r, fig.height=5, dpi=300, out.width="80%"}
+axed_bcks <- highlighted_bcks +
   #Setting appropriate axis
-  scale_y_continuous(breaks = NULL,
-                     limits = c(0.03,0.97), 
-                     name= "\u2190 less democratic") + 
+  scale_y_continuous(limits = c(0.03, 0.97), 
+                     name = "\u2190 less democratic",
+                     breaks = NULL) + 
   scale_x_discrete(limits = c("2012", "2022"),
-                   expand = expansion(mult = c(0.05,0.65)), 
-                   name=NULL) +
+                   name = NULL,
+                   expand = expansion(mult = c(0.05, 0.65))) +
+  #Fixing ratio of y-axis length to x-axis length
+  coord_fixed(ratio = 7/3, clip="off")
+axed_bcks
+```
+
+<br>
+After I have modified the aspect of the axis I modify the whole theme of the
+plot. I set a transparent background consistent with the original graph. I add a 
+margin above, below and on the left of my backsliding line graph so as to 
+reflect the proportions of the original graph. I then set the font, the fontsize, 
+color and position of the y-axis name and of the labels on the x-axis. Finally,
+I set the color of the x-axis grid lines. 
+
+<div style="font-size: 60%; line-height: 1.5;">
+Note that I cannot set the desired font for the y-axis title because the 
+title contains a special character that the font does not support.
+</div>
+
+```{r, fig.height=6.9, dpi=300, out.width="80%"}
+themed_bcks <- axed_bcks +
   #Modifying theme
   theme_minimal() +
   theme(panel.background = element_rect(fill = "transparent", 
@@ -191,11 +273,68 @@ general_back <- ggplot(df_backsliding) +
                                    family = "noto_sans",
                                    margin = margin(t = 2, r = 0, b = 0, l = 0, 
                                                    unit="pt")),
-        panel.grid.major.x = element_line(colour = "grey")) +
-  coord_fixed(ratio = 7/3, clip="off")
+        panel.grid.major.x = element_line(colour = "grey"))
+themed_bcks
+```
 
+<br>
+As the last step for the first line graph, I add the annotation for Poland. I 
+create a text annotation placing it in the correct position and adjusting, as
+always, its font, fontsize and color. I then add a curve to link this annotation
+to Poland's line in the main graph.
 
-general_improv <- ggplot(df_improving)+
+<div style="font-size: 60%; line-height: 1.5;">
+Note that here it would be better to use geom_bezier, instead of geom_curve to 
+have a more similar curvature to the original graph. However, when attempting 
+to use bezier, I am unable to extend the curve correctly until the top of the 
+graph, as the function seems to confuse normal coordinates and npc units.
+</div>
+
+```{r, fig.height=6.9, dpi=300, out.width="80%"}
+# bezier_data_bcks <- data.frame(
+#   x = c(1.68, 1.75, 1.75, 1.5),
+#   y = c(1, 0.81, 0.83, 0.63))
+
+final_bcks <- themed_bcks +
+  #Annotating for Poland
+  annotation_custom(grob = textGrob(
+    label = "Poland lost 62 places in global\ndemocracy rankings",
+    x = unit(0.1, "npc"),
+    y = unit(1, "npc"),
+    just = c("left", "bottom"),
+    gp = gpar(colour = "#242424",
+              fontsize = 9.5, 
+              fontfamily = "noto_sans",
+              lineheight = 1))) +
+  # geom_bezier2(data = bezier_data_bcks, aes(x = x, y = y),
+  #              colour = "#242424", linewidth = 0.5) +
+  geom_curve(x = 1.68, y = 1, xend = 1.5, yend = 0.63,
+             curvature = -0.4,
+             colour = "#242424",
+             linewidth = 0.5)
+final_bcks
+```
+
+<br>
+The first part of the graph is now completed. I can now create the other line graph
+and then finally put them together and annotate the general graph with its title, 
+subtitle and captions.
+<br>
+<br>
+
+### Improving line graph
+
+To construct the second line graph I use the same elements of the backsliding
+graph adjusted accordingly. The main difference is that here I am able to use 
+`geom_bezier` for the curve from the text annotation to Armenia's line, 
+creating a curve that resembles much more that of the original graph.
+
+```{r, fig.height=6.9, dpi=300, out.width="80%"}
+bezier_data_impr <- data.frame(
+  x = c(1.5, 1.70, 1.70, 1.5),
+  y = c(0.15, 0.23, 0.24, 0.32))
+
+final_imprv <- ggplot(df_improving)+
   aes(x=year, y=v2x_libdem) +
   geom_line(aes(group = country_name), 
             linewidth = 0.5, 
@@ -220,17 +359,6 @@ general_improv <- ggplot(df_improving)+
             size.unit = "pt",
             colour = "#242424",
             family = "poppins") + 
-  annotation_custom(grob = textGrob(
-    label = "Armenia is one of the\nworld's top ten\ndemocratizers",
-    x = unit(0.1, "npc"), 
-    y = unit(0.1, "npc"),
-    just = c("left", "center"),
-    gp = gpar(colour = "#242424",
-              fontsize = 9.5, 
-              fontfamily = "noto_sans",
-              lineheight = 1))) +
-  geom_bezier2(data = bezier_data_impr, aes(x = x, y = y),
-               colour = "#242424", linewidth = 0.5) +
   scale_y_continuous(breaks = NULL, 
                      limits = c(0.03,0.97), 
                      name= "more democratic \u2192") + 
@@ -254,13 +382,47 @@ general_improv <- ggplot(df_improving)+
                                    margin = margin(t = 2, r = 0, b = 0, l = 0, 
                                                    unit="pt")),
         panel.grid.major.x = element_line(colour="grey")) +
-  coord_fixed(ratio = 7/3, clip="off")
+  coord_fixed(ratio = 7/3, clip="off") +
+  annotation_custom(grob = textGrob(
+    label = "Armenia is one of the\nworld's top ten\ndemocratizers",
+    x = unit(0.1, "npc"), 
+    y = unit(0.1, "npc"),
+    just = c("left", "center"),
+    gp = gpar(colour = "#242424",
+              fontsize = 9.5, 
+              fontfamily = "noto_sans",
+              lineheight = 1))) +
+  geom_bezier2(data = bezier_data_impr, aes(x = x, y = y),
+               colour = "#242424", linewidth = 0.5)
+final_imprv
+```
 
+<br>
+Even for the improving graph I set appropriate margins so as to be able to 
+keep the proportions of the original graph when I join it, in the next step,
+with the backsliding graph.
+<br>
+<br>
 
-#To put together graphs and add titles
-general <- general_back + general_improv
+### Putting the graphs together
 
+```{r, fig.height=6.9, fig.width=6.9, dpi=300}
+general <- final_bcks + final_imprv
+general
+```
 
+<br>
+Using `patchwork` I put the two graphs together side by side and I will now 
+annotate this general graph with its title, subtitle and the 2 captions. 
+<br>
+<br>
+
+### Adding title, subtitle and captions
+
+I first create the `textGrob` for the title, subtitle and captions, making sure 
+I accurately try to replicate their font, dimension and color.
+
+```{r}
 # Create text grobs for the title, subtitle and caption
 title_grob <- grid::textGrob(
   label = "Europe's democratic backsliding",
@@ -300,8 +462,13 @@ caption2_grob <- grid::textGrob(
             fontsize = 11,
             fontface = "italic",
             fontfamily = "poppins"))
+```
 
+<br>
+I then use `inset_element` to to position and insert the text objects in the 
+desired locations.
 
+```{r, preview=TRUE, fig.height=6.9, fig.width=6.9, dpi=500}
 # Add them with inset elements
 general + 
   inset_element(title_grob, 
@@ -331,24 +498,20 @@ general +
                 bottom = 0.04,
                 top = 0.09,
                 align_to = "full", 
-                on_top = FALSE) +
-  plot_annotation(theme = 
-                    theme(plot.background = element_rect(fill="transparent",
-                                                         colour = NA)))
-
+                on_top = FALSE)
 ```
 
+<br>
+This is the final version of my replica which I think comes quite close to the 
+original graph.
+<br>
+<br>
+
+## Alternative Visualization
 
 
-![Original](original.png){.external width="100%"}
 
-
-
-```{r, dpi=500, layout="l-body-outset", fig.width=15, fig.height=11.5}
-
-#Things to do 
-  #Adjust fonts and sizes of text
-  #Chamge title, subtitile accordingly (add caption?)
+```{r, dpi=500, layout="l-body-outset", fig.width=15, fig.height=12}
 
 # Prepare the data
 df_lollipop <- df23 |> 
@@ -374,8 +537,8 @@ improvements <- ggplot(df_lollipop) +
                    colour = ifelse(difference <=0, "#db051d", "#04046e")),
                arrow = arrow(length = unit(0.01, "npc"))) +
   #Other adjustments (TO BE MODIFIED)
-  labs(caption = paste("Author's reinterpretation of a graph by explained.media", 
-                       strrep(" ", 350),
+  labs(caption = paste("Paroli (2025)'s reinterpretation of a graph by explained.media", 
+                       strrep(" ", 325),
                        "Source: V-Dem Dataset")) +
   scale_color_identity() +
   scale_y_continuous(
@@ -400,7 +563,7 @@ improvements <- ggplot(df_lollipop) +
                                    family = "noto_sans"),
         axis.title.x = element_text(size = 15),
         panel.grid.minor = element_blank(),
-        plot.margin = unit(c(4.3, 0.1, 0, 0), "cm"),
+        plot.margin = unit(c(4.5, 0.1, 0, 0), "cm"),
         plot.caption = element_text(color = "#707070", 
                                     size = 8,
                                     family = "poppins",
@@ -409,7 +572,7 @@ improvements <- ggplot(df_lollipop) +
 
 title_grob_plot2 <- gridtext::richtext_grob(
   text = "Changes in Liberal Democracy Scores (2012 
-  <span style='font-size:40px;'>&#8594;</span> 2022)",
+  <span style='font-size:50px;'>&#8594;</span>2022)",
   x = 0, y = 1,
   hjust = 0, vjust = 1,
   gp = gpar(col = "#242424",
