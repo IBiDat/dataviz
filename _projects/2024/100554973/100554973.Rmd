@@ -23,19 +23,18 @@ judicial independence, restrictions on press freedom and civil liberties and
 the concentration of power in the executive branch. 
 
 Democratic backsliding has been, and continues to be a global trend, affecting 
-even European countries and key EU member states. 
-Orbán's Hungary, Erdoğan's Turkey and Morawiecki's Poland are perfect examples 
-of what have often been called "illiberal democracies". However, during the 2010s
-democracy has deteriorated significantly also in Greece and Serbia and has been 
-worsening across most European countries. 
-Notable exceptions to this trend of the last decade include potential EU 
-candidates Armenia and Kosovo and EU candidate Georgia (although as this article 
-is being written Georgia is experiencing serious threats to its democratic 
-apparatus).
+even European countries and key EU member states. Orbán's Hungary, Erdoğan's 
+Turkey and Morawiecki's Poland are perfect examples of what have often been 
+called "illiberal democracies". However, during the 2010s democracy has 
+deteriorated significantly also in Greece and Serbia and has been worsening 
+across most European countries. Notable exceptions to this trend of the last 
+decade include potential EU candidates Armenia and Kosovo and EU candidate 
+Georgia (although as this article is being written Georgia is experiencing 
+serious threats to its democratic apparatus).
 
 The graph I chose for my project does a great job in visualizing this trend in a
 clear way by using the liberal democracy index calculated by 
-[V-Dem Institute](https://v-dem.net/). In particular, as democracy is a complex 
+[V-Dem Institute](https://v-dem.net/). Specifically, as democracy is a complex 
 concept that can be defined in many ways, V-Dem's liberal democracy index 
 "emphasizes the importance of protecting individual and minority rights against 
 the tyranny of the state and the tyranny of the majority [...] thus judging the 
@@ -65,7 +64,7 @@ score for those years. In addition to that, some countries are highlighted and
 ![Original graph. Figure from [explained.media](https://explained.media/)](original.png){.external width="100%"}
 
 The data I used to replicate this graph is the 13th version of the V-Dem Dataset
-available for download in the [V-Dem's Dataset Archive](https://www.v-dem.net/data/dataset-archive/).
+available for download in [V-Dem's Dataset Archive](https://www.v-dem.net/data/dataset-archive/).
 <br>
 <br>
 
@@ -119,7 +118,7 @@ in the original graph. The missing countries are Turkey, Armenia and Georgia
 which are not coded in any of the geographical regions for which we have filtered 
 before, because they are located at the boundaries between Europe and Asia. 
 Therefore in the second pipeline I add them to the previously selected countries 
-and transform the countries' names to uppercase.
+and transform every country name to uppercase.
 
 ```{r}
 #Adding Turkey, Georgia and Armenia
@@ -183,10 +182,10 @@ basic_bcks
 ```
 
 <br>
-From the basic graph I highlight selected countries by drawing a bigger line for
-those countries and adding their start and end point and their names. In 
-particular, when drawing the points I carefully add an outline to them using 
-the `stroke` argument of `geom_point`, while for the countries' names I slightly 
+From the basic graph I highlight selected countries by drawing bigger lines for
+them and adding their start and end point and their names. In particular, 
+when drawing the points I carefully add an outline to them using the 
+`stroke` argument of `geom_point`, while for the countries' names I slightly 
 tweak their position for consistency with the original graph and set the closest 
 possible font, font-size and color.
 
@@ -509,17 +508,28 @@ original graph.
 
 ## Alternative Visualization
 
+Using the same data as before, I try to propose an alternative visualization
+that adds some information to the previous graph. In particular I thought it
+would be helpful to add the labels for each country so as to allow readers to 
+easily identify the countries they are interested in. By doing this, I would also
+be able to show the ranking of the most to the least democratic country.
 
+To do this I'll produce a horizontal lollipop using arrows instead of points to 
+indicate the values for 2012 and 2022.
+<br>
+<br>
 
-```{r, dpi=500, layout="l-body-outset", fig.width=15, fig.height=12}
+### Preparing the data 
 
-# Prepare the data
+```{r}
+#Prepare the data
 df_lollipop <- df23 |> 
   pivot_wider(names_from = year, 
               values_from = v2x_libdem, 
               names_prefix = "v2x_libdem") |> 
   arrange(desc(v2x_libdem2022))
 
+#Reduce some countries' names
 df_lollipop <- df_lollipop |> 
   mutate(country_name = case_when(
     country_name == "BOSNIA AND HERZEGOVINA" ~ "BOSNIA H.",
@@ -527,19 +537,46 @@ df_lollipop <- df_lollipop |>
     country_name == "NORTH MACEDONIA" ~ "N. MACEDONIA",
     TRUE ~ country_name
   ))
+str(df_lollipop)
+```
 
-# Plot the horizontal lollipop chart
-improvements <- ggplot(df_lollipop) +
+<br>
+Starting from the dataframe with all the relevant filtered data, I re-arrange it 
+in order to be able to use it for my purpose and I abbreviate some countries' names
+so as not to have labels that are too long.
+<br>
+<br>
+
+### Base graph
+
+```{r, dpi=300, layout="l-body-outset", fig.width=15, fig.height=8}
+#Plot the vertical lollipop chart
+improvements_v1 <- ggplot(df_lollipop) +
   geom_segment(aes(x = reorder(country_name, v2x_libdem2022),
                    xend = reorder(country_name, v2x_libdem2022),
                    y = v2x_libdem2012, 
                    yend = v2x_libdem2022,
                    colour = ifelse(difference <=0, "#db051d", "#04046e")),
-               arrow = arrow(length = unit(0.01, "npc"))) +
-  #Other adjustments (TO BE MODIFIED)
-  labs(caption = paste("Paroli (2025)'s reinterpretation of a graph by explained.media", 
-                       strrep(" ", 325),
-                       "Source: V-Dem Dataset")) +
+               linewidth = 1.2,
+               arrow = arrow(length = unit(0.01, "npc"))) 
+improvements_v1
+```
+
+<br>
+I've decided to start from a basic vertical lollipop, drawing for each country
+an arrow connecting the 2012 value of the democracy score with the 2022 score. I 
+give to the arrows different colors depending on whether, over that period, 
+that country has experienced a democratic erosion or it has improved its democratic
+status. I also make sure to order the countries based on their 2022 democracy
+score.
+<br>
+<br>
+
+### Organizing the graph
+
+```{r, dpi=300, layout="l-body-outset", fig.width=15, fig.height=12}
+improvements_v2 <- improvements_v1 +
+  #Modifying scales
   scale_color_identity() +
   scale_y_continuous(
     breaks = c(0,0.2,0.4,0.6,0.8,1), 
@@ -548,10 +585,9 @@ improvements <- ggplot(df_lollipop) +
     name = paste("\u2190 less democratic", 
                  strrep(" ", 75), 
                  "more democratic \u2192")) +
-  #scale_x_discrete(position = "top") +
-  # Flip the chart horizontally
+  #Flip the chart horizontally
   coord_flip() +
-  # Theme adjustments (TO BE MODIFIED)
+  #Theme adjustments
   theme_minimal() +
   theme(legend.position = "none",
         axis.text.y = element_text(colour = "#242424",
@@ -563,13 +599,74 @@ improvements <- ggplot(df_lollipop) +
                                    family = "noto_sans"),
         axis.title.x = element_text(size = 15),
         panel.grid.minor = element_blank(),
-        plot.margin = unit(c(4.5, 0.1, 0, 0), "cm"),
-        plot.caption = element_text(color = "#707070", 
-                                    size = 8,
-                                    family = "poppins",
-                                    margin = margin(t = 5)))
+        plot.margin = unit(c(4.5, 0.1, 0, 0), "cm"))
+improvements_v2
+```
 
+<br>
+In this pipeline I flip the vertical lollipop to make it horizontal. I also 
+adjust the scales to make the colors appear as wanted, and to set an appropriate 
+number of breaks for the democracy index score. Additionally I label the 
+democracy index axis in a way that clearly shows its meaning. Finally, I 
+adjust the theme of the plot, getting rid of the automatic legend, the minor 
+grid lines, and setting appropriate margins. I try to keep the general style of 
+the plot, the fonts as similar as possible to the previous graph. 
+<br>
+<br>
 
+### Inserting arrow legend
+
+```{r, dpi=500, layout="l-body-outset", fig.width=15, fig.height=12}
+improvements_v3 <- improvements_v2 +
+  #Adding the custom legend
+  geom_rect(aes(xmin = 32.5, xmax = 41.5, ymin = 0.1, ymax = 0.5), 
+            fill = "white", color = "#242424") +
+  geom_segment(aes(x = 39.5, y = 0.2, xend = 39.5, yend = 0.4),
+               arrow = arrow(length = unit(0.01, "npc")),
+               linewidth = 1.2,
+               color = "#04046e") +
+  geom_point(aes(x = 39.5, y = 0.2), 
+             shape = 1, size = 9, stroke = 1.2, color = "#242424") +
+  geom_point(aes(x = 39.5, y = 0.3965), 
+             shape = 1, size = 9, stroke = 1.2, color = "#242424") +
+  geom_label_repel(aes(x = 39.5, y = 0.2),
+                   stat = "unique",
+                   label = "Arrow tail = 2012",
+                   color = "#242424",
+                   size = 6,
+                   direction = "x", 
+                   nudge_x = -4.5,
+                   point.padding = 1.8,
+                   label.padding = 0.5,
+                   label.r = 0.5,
+                   label.size = 0.7,
+                   segment.size = 0.7) +
+  geom_label_repel(aes(x = 39.5, y = 0.3965),
+                   stat = "unique",
+                   label = "Arrow head = 2022",
+                   color = "#242424",
+                   size = 6,
+                   direction = "x", 
+                   nudge_x = -4.5,
+                   point.padding = 1.8,
+                   label.padding = 0.5,
+                   label.r = 0.5,
+                   label.size = 0.7,
+                   segment.size = 0.7)
+improvements_v3
+```
+
+<br>
+I then add a custom legend to make sure to explain the functioning of the arrows 
+and place it an empty place of my panel. I use `geom_rect` to create a bordered,
+white space in which to place the legend in. Then I draw an arrow and annotate 
+this arrow by circling its tail and head and labeling their meaning.
+<br>
+<br>
+
+### Adding annotations
+
+```{r, dpi=300, layout="l-body-outset", fig.width=15, fig.height=12}
 title_grob_plot2 <- gridtext::richtext_grob(
   text = "Changes in Liberal Democracy Scores (2012 
   <span style='font-size:50px;'>&#8594;</span>2022)",
@@ -596,43 +693,8 @@ subtitle_grob_plot2 <- gridtext::richtext_grob(
             fontfamily = "poppins",
             lineheight = 1.5))
 
-
-# Adding annotations for Poland and Armenia
-improvements +
-  geom_rect(aes(xmin = 32.5, xmax = 41.5, ymin = 0.1, ymax = 0.5), 
-            fill = "white", color = "#242424") +
-  geom_segment(aes(x = 39.5, y = 0.2, xend = 39.5, yend = 0.4),
-               arrow = arrow(length = unit(0.01, "npc")),
-               linewidth = 0.5,
-               color = "#04046e") +
-  geom_point(aes(x = 39.5, y = 0.2), 
-             shape = 1, size = 8, stroke = 0.75, color = "#242424") +
-  geom_point(aes(x = 39.5, y = 0.395), 
-             shape = 1, size = 8, stroke = 0.75, color = "#242424") +
-  geom_label_repel(aes(x = 39.5, y = 0.2),
-                   stat = "unique",
-                   label = "Arrow tail = 2012",
-                   color = "#242424",
-                   size = 5,
-                   direction = "x", 
-                   nudge_x = -4.5,
-                   point.padding = 1.75,
-                   label.padding = 0.5,
-                   label.r = 0.5,
-                   label.size = 0.5,
-                   segment.size = 0.5) +
-  geom_label_repel(aes(x = 39.5, y = 0.395),
-                   stat = "unique",
-                   label = "Arrow head = 2022",
-                   color = "#242424",
-                   size = 5,
-                   direction = "x", 
-                   nudge_x = -4.5,
-                   point.padding = 1.75,
-                   label.padding = 0.5,
-                   label.r = 0.5,
-                   label.size = 0.5,
-                   segment.size = 0.5) +
+improvements_v3 +
+  #Adding annotations for Poland and Armenia
   annotation_custom(grob = textGrob(
     label = "Poland lost 62 places in global\ndemocracy rankings",
     x = unit(0.85, "npc"),
@@ -659,20 +721,73 @@ improvements +
              curvature = -0.2,
              colour = "#242424",
              linewidth = 0.5) +
-  inset_element(title_grob_plot2, 
-                left = 0, 
-                right = 1, 
-                bottom = 0.95, 
-                top = 1, 
-                align_to = "full", 
+  #Adding caption
+  labs(caption = paste("Paroli (2025)'s reinterpretation of a graph by explained.media",
+                       strrep(" ", 325),
+                       "Source: V-Dem Dataset")) +
+  theme(plot.caption = element_text(color = "#707070",
+                                    size = 8,
+                                    family = "poppins",
+                                    margin = margin(t = 5))) +
+  #Inserting title and subtitle
+  inset_element(title_grob_plot2,
+                left = 0,
+                right = 1,
+                bottom = 0.95,
+                top = 1,
+                align_to = "full",
                 on_top= FALSE) +
-  inset_element(subtitle_grob_plot2, 
-                left = 0, 
-                right = 1, 
-                bottom = 0.85, 
-                top = 0.95, 
-                align_to = "full", 
+  inset_element(subtitle_grob_plot2,
+                left = 0,
+                right = 1,
+                bottom = 0.85,
+                top = 0.95,
+                align_to = "full",
                 on_top = FALSE)
-  
-
 ```
+
+<br>
+For the final version of my alternative visualization graph, I add several 
+annotations. I add the same in-graph annotations for Poland and Armenia present 
+in the previous graph. I create and insert the title and subtitle as Grobs and 
+I add the captions. Again, I try to keep the style and formatting similar to the 
+previous graph.
+<br>
+<br>
+
+## Conclusions
+
+As mentioned before, the main advantage of the alternative visualization compared 
+to the replica is the fact that each European country is labelled, allowing the 
+readers to see the democracy score for each country. Ordering them by their 2022 
+score improves the visualization and adds another piece of information. Another 
+addition compared to the replica is the explicit scale that makes it clear that 
+the democracy score goes from 0 to 1, helping to understand how democratic a 
+country is. Including these additional pieces of information, however, reduces the 
+intuitiveness and simplicity of the graph, making it more complex to read. 
+
+I also think the alternative visualization lacks a bit of the visual impact 
+of the original. Since in the original graph, countries with worsening and 
+improving democracies are displayed on two separate graphs, it makes the 
+backsliding trend immediately apparent by comparing the number of lines in each 
+graph. In contrast, the alternative visualization requires more time to make 
+this comparison.
+
+The main drawback of the alternative visualization, though, is that some data 
+points appear "ugly". This occurs for those countries whose democracy index 
+changed little between 2012 and 2022, resulting in arrows that are barely visible.
+
+Overall, I believe the original graph does a better job of communicating the 
+general trend of weakening of democratic institutions in Europe in recent 
+years. The second graph, instead, offers a more nuanced perspective by 
+incorporating additional details. While the trend of democratic 
+backsliding is real and concerning—evident in the graph by the larger number of 
+countries experiencing significant declines in democratic conditions compared to 
+those showing meaningful improvements—the concentration of red lines in the 
+original graph can mislead readers into overestimating its severity. Although, some 
+countries (as the ones mentioned in the introduction) have experienced a 
+worrisome, sharp decline in the health of their democracies, other red lines 
+represent nations where the democracy index has only slightly worsened. This 
+distinction is harder to discern in the first graph, whereas in the 
+second, the fact that the length of each arrow reflects the magnitude of change 
+helps to improve the visual understanding of the nuances of this phenomenon.
