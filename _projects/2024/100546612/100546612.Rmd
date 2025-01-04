@@ -1,7 +1,7 @@
 ---
-title: "Tentilicious title for disastricious Project"
+title: "Behind the numbers: comparing extreme poverty and GDP per capita by world regions"
 description: |
-  A short description of the post. 
+  By recreating from group up a OurWorldinData chart about extreme poverty vs GDP per capita we look at the foundations of Data Visualisation techniques layer by layer. Further, this project also proposes X alternative representation for the original data to better understand the story behind the numbers. 
 categories: "2024"
 author: Mafalda González González
 date: "`r Sys.Date()`"
@@ -11,5 +11,1235 @@ output:
     toc: true
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## On Extreme poverty and GDP
+
+[When asked](https://www.gapminder.org/questions/gms1-3/) if the world's population living in extreme poverty has halved, stayed the same, or double in the last 20 years, about two thirds of respondents will say it has doubled – when, in fact, it has more than halved, which only one in in every ten person will guess. The misconception stems out our dichotomous perception of the social classes between rich and poor, all the while an overwhelming majority of people live in between those two extremes. The inaccurate negative understanding of this economic asymmetry brings us to two key points: firstly, we *believe that everything everywhere is becoming worse* which leads to, secondly, *diverting our attention away from the actual trends* at hand.
+
+[OurWorldinData](https://ourworldindata.org/extreme-poverty-in-brief#article-citation) takes a closer look at the current developments in poverty. Particularly, they are interested in highlighting the necessity to differentiate between people living in poverty, and people living in *extreme poverty*, i.e. living on less than 2.15\$ a day, as without this distinction we would not understand the crucial differences and trends in living standards within impoverished people. In the graph below we can observe how with this metric relates to the GDP of a country. Tackling out previously mentioned key points, we see the important share of wealth that has propelled many world regions out of extreme poverty in the last 200 years, and at the same time recognize which world regions have disproportionate percentages of extreme poverty in comparison to other regions. While it takes just a bit to understand the underlying relationship that OurWorldinData seeks to visualize, the point is that economic growth implies poverty decline, and stagnated economies imply higher poverty rates.
+
+![Original graph sourced from [Our World in Data](https://ourworldindata.org/extreme-poverty-in-brief#article-citation).](Growth-and-poverty-since-1820.png){.external width="100%"}
+
+Hence, to quote Max Roser, the author of this graph and corresponding article, "what needs explanation is not poverty, but prosperity." I find this point particularly intriguing, and will refer back to it in my proposal for the graph improvement. However, first let us take a look at the replication of the original
+
+### The original graph
+
+The original graph portrays the relationship between the share living in extreme poverty and the GDP per capita in 8 world regions and the global average between the years 1817 and 2017.
+
+<div style="overflow: hidden;">
+  <img src="Growth-and-poverty-since-1820.png" style="float: left; margin-right: 15px; margin-bottom: 10px; width: 350px;" alt="The graphs strengths include its clear comparison between the world regions wealth and poverty trends, which highlight the significant variation between regions, and its historical perspective, which provides some context for the global and regional progress. Visually, the regional facets and coloring contribute to their acute distinction and provide clarity and readability." />
+  <p>The graphs strengths include its clear comparison between the world regions wealth and poverty trends, which highlight the significant variation between regions, and its historical perspective, which provides some context for the global and regional progress. Visually, the regional facets and coloring contribute to their acute distinction and provide clarity and readability.</p>
+</div>
 
 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX WORK IN PROGRESS XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+## Before we start...
+
+### Library and fonts
+
+```{r}
+
+library(readxl) 
+library(tidyverse) 
+library(dplyr) 
+library(ggplot2)
+library(forcats)
+library(ggtext)
+library(grid)
+
+# fails: 
+# library(ggarrow) # geom_arrow instead of geom_path
+# library(arrowheadr) # arrow head
+# and many more
+
+# fonts
+sysfonts::font_add_google("Playfair Display", family = "playfair display")
+sysfonts::font_add_google("Lato", family = "lato")
+sysfonts::font_add(regular = "./Lato/Lato-Light.ttf", family = "lato_light")
+
+showtext::showtext_auto()
+
+```
+
+## Pre-Steps
+
+### Get data:
+
+-   email, data repository =\> incomplete
+
+Data handling
+
+-   Read data
+
+```{r}
+#| eval: true
+######################################## WORLD
+############### Read data 
+# gdp
+gdp_world <- read_xlsx(path = "GDP world.xlsx")
+# View(gdp_world) # 21 obs x 10 var
+
+# poverty
+pov_world <- read_xlsx(path = "poverty world.xlsx")
+# View(pov_world) # 13 obs x 9 var
+```
+
+-   Making it tidy
+
+```{r}
+#| eval: true
+############### Pivot
+# gdp
+gdp_world <- gdp_world |> 
+  pivot_longer(
+    cols = -YEAR,        
+    names_to = "region",  
+    values_to = "GDP"      
+  )
+
+# poverty
+pov_world <- pov_world |> 
+  pivot_longer(
+    cols = -YEAR,          
+    names_to = "region",  
+    values_to = "poverty"  
+  )
+
+############### Combine 
+world <- gdp_world |> 
+  full_join(pov_world, by = c("YEAR", "region")) |> 
+  mutate(source = "world_region") |> 
+  mutate(GDP = str_remove_all(GDP, pattern = "\\s")) |> 
+  mutate(GDP = as.numeric(GDP)) 
+# View(world) # 221 obs X 5 vars
+```
+
+-   Clean data
+
+```{r}
+#| eval: true
+######################################## Clean data
+# unique(world$region)
+# Here it was important to check that the data i was merging was not stepping on top of each other!
+
+############### Clean South and Southeast Asia
+
+# Create two dataset: in one i delete south and southeast asia, and in the other 
+# i clean south and southeast asia and then join it back into the first one 
+
+# check no stepping of data (manual lol)
+# View(world |> # 34 obs
+  #filter(region %in% c("South and Southeast Asia", 
+                       #"South and Southeast Asia)")))
+
+# create new data set 
+clean_southeast <- world |>
+  filter(region %in% c("South and Southeast Asia", "South and Southeast Asia)")) |>
+  mutate(region = "South and Southeast Asia") |>
+  group_by(YEAR, region = "South and Southeast Asia", source) |>
+  summarise(
+    GDP = first(na.omit(GDP)),
+    poverty = first(na.omit(poverty)),
+    .groups = "drop"
+  )
+
+# View(clean_southeast) # 22 obs (12 deleted)
+
+# remove south and southeast asia from original dataset 
+world <- world |> 
+  filter(!region %in% c("South and Southeast Asia", 
+                          "South and Southeast Asia)"))
+# View(world) # 187 obs 
+
+
+# combine data 
+clean_world <- bind_rows(world, clean_southeast)
+
+world <- clean_world
+
+# View(world) # 209 obs
+
+############### Clean Latin America and Caribbean
+# check no stepping of data (manual lol)
+#View(world |> # 34 obs
+       #filter(region %in% c("Latin America and Carribean",
+                            #"Latin America and Caribbean")))
+
+# create new data set 
+clean_latin <- world |>
+  filter(region %in% c("Latin America and Carribean", "Latin America and Caribbean")) |>
+  mutate(region = "Latin America and Caribbean") |>
+  group_by(YEAR, region = "Latin America and Caribbean", source) |>
+  summarise(
+    GDP = first(na.omit(GDP)),
+    poverty = first(na.omit(poverty)),
+    .groups = "drop"
+  )
+# View(clean_latin) # 22 obs (12 deleted)
+
+# remove south and southeast asia from original dataset 
+world <- world |> 
+  filter(!region %in% c("Latin America and Carribean", 
+                        "Latin America and Caribbean"))
+# View(world) # 175 obs 
+
+
+# combine data 
+clean_world <- bind_rows(world, clean_latin)
+
+# View(clean_world) # 197 obs
+
+world <- clean_world
+
+# unique(world$region) # 9 regions => 9 graphs 
+
+# View(world)
+
+
+############### Recode names 
+
+world <- world |> 
+  mutate(region = recode(region,
+                         "Western Offshoots" = 
+                           "Australia, New Zealand, USA and Canada"), 
+         region = recode(region, "World" = "Global Average"))
+
+
+# View(world)
+```
+
+### Supplementing data for World (Global Average)
+
+```{r}
+#| eval: true
+######################################## Supplement data: WORLD 
+####### World (Global Average) => add poverty & GDP averages 
+
+# calculate means for GDP and poverty by YEAR, excluding "World"
+world_mean <- world |> 
+  filter(region != "Global Average") |> 
+  group_by(YEAR) |> 
+  summarise(
+    avg_poverty = mean(poverty, na.rm = TRUE), 
+    avg_gdp = mean(GDP, na.rm = TRUE), 
+    .groups = "drop"
+  )
+
+# View(world_mean)
+
+# supplementing "world" dataset with these means (updating "World" region rows)
+world_supplemented <- world |> 
+  left_join(world_mean, by = "YEAR") |> 
+  mutate(
+    poverty = if_else(
+      region == "Global Average" & is.na(poverty), 
+      avg_poverty, 
+      poverty),
+    GDP = if_else(
+      region == "Global Average" & is.na(GDP), 
+      avg_gdp, 
+      GDP)
+  ) |> 
+  select(-avg_poverty, -avg_gdp)  # remove temporary average columns
+
+# View(world_supplemented) # 197 obs 
+
+world <- world_supplemented
+
+```
+
+## Replication process: Graph
+
+(no, they dont have logical order, i just did what i could and what bugged me at the moment)
+
+### Starting point: facet_wrap by region
+
+```{r}
+##################### simple line graph  
+ggplot(world) +
+  aes(x = GDP, y = poverty, color = region) + 
+  geom_path() +
+  scale_x_log10(labels = scales::comma) +  # Log scale for GDP
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +  # Percentage for poverty
+  facet_wrap(~ region) +
+  theme_minimal() 
+
+
+```
+
+### Removing stuff and adding stuff
+
+```{r}
+#-   Excluding NAs (because data a bitch, will give us finally the correct lines)
+#-   ordering the countries and giving them correct colors
+#-   taking away legend, labs and individual graph titles
+##################### order countries 
+library(forcats)
+
+data_fct <- world |>
+  mutate(region = fct_relevel(region,
+    "Global Average",
+    "Western Europe",
+    "Australia, New Zealand, USA and Canada",
+    "Middle East and North Africa",
+    "Eastern Europe",
+    "Sub-Saharan Africa",
+    "East Asia",
+    "South and Southeast Asia",
+    "Latin America and Caribbean"
+  ))
+
+##################### exclude NAs
+
+data_filtered <- data_fct |>
+  filter(!is.na(poverty) & !is.na(GDP)) 
+
+# View(data_filtered)
+
+##################### simple line graph with colours and no legend 
+
+ggplot(data_filtered) +
+  aes(x = GDP, y = poverty, color = region) + 
+  geom_path() +
+  scale_x_log10(labels = scales::comma) +  
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) + 
+  ##################### inserting colours
+  scale_color_manual(values = c( 
+                    "Global Average" = "#840037",
+                    "Western Europe" = "#203558",
+                    "Australia, New Zealand, USA and Canada" = "#3f3386",
+                    "Middle East and North Africa" = "#845100",
+                    "Eastern Europe" = "#057ea1",
+                    "Sub-Saharan Africa" = "#951c73",
+                    "East Asia" = "#30918d",
+                    "South and Southeast Asia" = "#e0902f",
+                    "Latin America and Caribbean" = "#d54c3f")) + 
+  facet_wrap(~ region) +
+  theme_minimal() + 
+  ##################### changes in theme: removing legend, x and y labs, titles 
+  theme(
+    legend.position = "none", 
+    strip.text = element_blank(),
+    axis.title = element_blank())
+
+```
+
+### Axis (3 different paths)
+
+-   **Automation vs Manually**
+
+=\> changing `scale_x`/`scale_y` and `theme` VS [`geom_segment`]{.underline} VS `annotate`
+
+```{r}
+#| eval: true
+# for readibility we give it a shorter name
+row_per_region <- data_filtered |> 
+  distinct(region, .keep_all = TRUE) |> 
+  mutate(region = fct_relevel(region,
+    "Global Average",
+    "Western Europe",
+    "Australia, New Zealand, USA and Canada",
+    "Middle East and North Africa",
+    "Eastern Europe",
+    "Sub-Saharan Africa",
+    "East Asia",
+    "South and Southeast Asia",
+    "Latin America and Caribbean"
+  ))
+
+```
+
+```{r}
+#| eval: false
+# graph
+ggplot(data_filtered) +
+  aes(x = GDP, y = poverty, color = region) + 
+
+  ##################### CUSTOM GRID
+  
+  # x axis grid lines (vertical lines)
+  
+  geom_segment(data = row_per_region, 
+               aes(x = 1000, xend = 1000, y = 0, yend = 100), 
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region, 
+               aes(x = 2000, xend = 2000, y = 0, yend = 100), 
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region, 
+               aes(x = 5000, xend = 5000, y = 0, yend = 100),
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region, 
+               aes(x = 10000, xend = 10000, y = 0, yend = 100), 
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region, 
+               aes(x = 20000, xend = 20000, y = 0, yend = 100), 
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region, 
+               aes(x = 50000, xend = 50000, y = 0, yend = 100), 
+               linetype = "11", color = "#d9d8d7") +
+
+  # y axis grid lines (horizontal lines): 800:57000 to come closer to original graph (range of GDP values + padding to the right)
+  
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 0, yend = 0), 
+               linetype = "solid", color = "#c6c6c6") + # custom thick
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 25, yend = 25), 
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region,
+               aes(x = 800, xend = 57000, y = 50, yend = 50), 
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 75, yend = 75), 
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 100, yend = 100), 
+               linetype = "solid", color = "#c6c6c6") + # custom thick
+  
+  ##################### adjust x axis breaks + guides/labels details' ($ and . )
+  scale_x_log10(breaks = c(1000, 2000, 5000, 10000, 20000, 50000),
+                minor_breaks = NULL,
+                labels = scales::label_number(
+                  big.mark = ".",prefix = "$", decimal.mark = "none")
+                ) + 
+  
+  ##################### adjust y axis breaks and guides/label details (percent_format)
+  scale_y_continuous(breaks = c(0, 25, 50, 75, 100),
+                     minor_breaks = NULL,
+                     labels = scales::percent_format(scale = 1)
+                     ) +
+
+  scale_color_manual(values = c(
+                    "Global Average" = "#840037",
+                    "Western Europe" = "#203558",
+                    "Australia, New Zealand, USA and Canada" = "#3f3386",
+                    "Middle East and North Africa" = "#845100",
+                    "Eastern Europe" = "#057ea1",
+                    "Sub-Saharan Africa" = "#951c73",
+                    "East Asia" = "#30918d",
+                    "South and Southeast Asia" = "#e0902f",
+                    "Latin America and Caribbean" = "#d54c3f")) + 
+  geom_path() +
+  facet_wrap(~ region) +
+  theme_minimal() + 
+  theme(
+    legend.position = "none", 
+    strip.text = element_blank(),
+    axis.title = element_blank(), 
+    
+    ##################### changing appearance of x and y axis guides/labels 
+    axis.text = element_text(family = "lato_light", colour = "#515151", size = 6),  # we rewrite this later on 
+    
+    
+    ##################### removing ggplot's default grid lines 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    )
+
+```
+
+```{r}
+# -   Insert x and y axis guides for all panels
+# we set the scales free and manually set the limits for all panels equal 
+#| eval: true
+ggplot(data_filtered) +
+  aes(x = GDP, y = poverty, color = region) + 
+  
+  # x axis
+  geom_segment(data = row_per_region, 
+               aes(x = 1000, xend = 1000, y = 0, yend = 100), 
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region, 
+               aes(x = 2000, xend = 2000, y = 0, yend = 100), 
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region, 
+               aes(x = 5000, xend = 5000, y = 0, yend = 100),
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region, 
+               aes(x = 10000, xend = 10000, y = 0, yend = 100), 
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region, 
+               aes(x = 20000, xend = 20000, y = 0, yend = 100), 
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region, 
+               aes(x = 50000, xend = 50000, y = 0, yend = 100), 
+               linetype = "11", color = "#d9d8d7") +
+
+  # y axis
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 0, yend = 0), 
+               linetype = "solid", color = "#c6c6c6") + 
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 25, yend = 25), 
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region,
+               aes(x = 800, xend = 57000, y = 50, yend = 50), 
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 75, yend = 75), 
+               linetype = "11", color = "#d9d8d7") +
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 100, yend = 100), 
+               linetype = "solid", color = "#c6c6c6") +
+
+  ##################### set scales free so that all panels show scales
+  facet_wrap(~ region, scales = "free") +
+  
+  scale_x_log10(breaks = c(1000, 2000, 5000, 10000, 20000, 50000),
+                minor_breaks = NULL,
+                labels = scales::label_number(
+                  big.mark = ".",prefix = "$", decimal.mark = "none"),
+                
+                ##################### set limits for x axis 
+                limits = c(800, 57000) 
+                ) + 
+  
+  scale_y_continuous(breaks = c(0, 25, 50, 75, 100),
+                     minor_breaks = NULL,
+                     labels = scales::percent_format(scale = 1), 
+                     
+                     ##################### set limits for y axis
+                     limits = c(0, 100)
+                     ) +
+
+  scale_color_manual(values = c(
+                    "Global Average" = "#840037",
+                    "Western Europe" = "#203558",
+                    "Australia, New Zealand, USA and Canada" = "#3f3386",
+                    "Middle East and North Africa" = "#845100",
+                    "Eastern Europe" = "#057ea1",
+                    "Sub-Saharan Africa" = "#951c73",
+                    "East Asia" = "#30918d",
+                    "South and Southeast Asia" = "#e0902f",
+                    "Latin America and Caribbean" = "#d54c3f")) + 
+  geom_path() +
+  theme_minimal() + 
+  theme(
+    legend.position = "none", 
+    strip.text = element_blank(),
+    axis.title = element_blank(), 
+    axis.text = element_text(family = "lato_light", colour = "#515151", size = 6),  # we rewrite this later on 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    )
+
+```
+
+Recurring problem: i have to change the order of the commands
+
+### Theme and Parameters: changing a lot of numbers
+
+{r, layout="l-body-outset", fig.width = 8, fig.height = 5.8, fig.dpi = 300}
+
+```{r, layout="l-body-outset",  fig.width = 8, fig.height = 5.8, fig.dpi = 300}
+
+# Changes:
+
+# -   Take into consideration final parameters of website: change sizes (lines and text!
+# -   Background of panels
+# -   x and y axis labels inside panel
+# -   Spacing between graphs
+
+
+#| eval: false
+ggplot(data_filtered) +
+  aes(x = GDP, y = poverty, color = region) + 
+  
+  # x axis
+  
+  ##################### changes for parameters
+  geom_segment(data = row_per_region, 
+               aes(x = 1000, xend = 1000, y = 0, yend = 100), 
+               linetype = "11", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region, 
+               aes(x = 2000, xend = 2000, y = 0, yend = 100), 
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region, 
+               aes(x = 5000, xend = 5000, y = 0, yend = 100),
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region, 
+               aes(x = 10000, xend = 10000, y = 0, yend = 100), 
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region, 
+               aes(x = 20000, xend = 20000, y = 0, yend = 100), 
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region, 
+               aes(x = 50000, xend = 50000, y = 0, yend = 100), 
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+
+  # y axis
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 0, yend = 0), 
+               linetype = "solid", linewidth = 0.22, color = "#aeaeae") +
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 25, yend = 25), 
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region,
+               aes(x = 800, xend = 57000, y = 50, yend = 50), 
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 75, yend = 75), 
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 100, yend = 100), 
+               linetype = "solid", linewidth = 0.22, color = "#aeaeae") +
+
+  facet_wrap(~ region, scales = "free") +
+  
+  scale_x_log10(breaks = c(1000, 2000, 5000, 10000, 20000, 50000),
+                minor_breaks = NULL,
+                labels = scales::label_number(
+                  big.mark = ".",prefix = "$", decimal.mark = "none"),
+                limits = c(800, 57000), 
+                
+                ##################### expanding panels: width
+                expand = expansion(add = c(0.17, 0.05))
+                ) + 
+  
+  scale_y_continuous(breaks = c(0, 25, 50, 75, 100),
+                     minor_breaks = NULL,
+                     labels = scales::percent_format(scale = 1), 
+                     limits = c(0, 100),
+                     
+                     ##################### expanding panels: height
+                     expand = expansion(mult = c(0.08, 0.04))
+                     ) +
+
+  scale_color_manual(values = c(
+                    "Global Average" = "#840037",
+                    "Western Europe" = "#203558",
+                    "Australia, New Zealand, USA and Canada" = "#3f3386",
+                    "Middle East and North Africa" = "#845100",
+                    "Eastern Europe" = "#057ea1",
+                    "Sub-Saharan Africa" = "#951c73",
+                    "East Asia" = "#30918d",
+                    "South and Southeast Asia" = "#e0902f",
+                    "Latin America and Caribbean" = "#d54c3f")
+                    ) + 
+  # geom_path(data = row_per_region, linewidth = c(0.40, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35)) + # global_average needs to be bigger 
+  geom_path(linewidth = 0.35) +
+  theme_minimal() + 
+  theme(
+    legend.position = "none", 
+    strip.text = element_blank(),
+    axis.title = element_blank(), 
+    
+    # Axis
+    ##################### move axis guides inside panel
+    
+    
+    axis.text.x = element_text(
+      family = "lato", colour = "#939292", size = 26.5, # lighter colour because when adjusting hjust manually for each label, the lbels become bold for some reason
+      hjust = c(0.4, 0.4, 0.4, 0.4, 0.4, 0.6), margin = margin(t = -10)), 
+    axis.text.y = element_text(
+      family = "lato", colour = "#676767", size = 26.5, 
+      vjust = 0.5, margin = margin(r = -16)),
+
+    # Panel
+    ##################### panels background and border
+    panel.background = element_rect(fill = "#faf9f9"), 
+    panel.border = element_rect(fill = NA, color = "#efefef"), # needs to be thiner tho and linewidth works super strange #HELP #ebebeb
+    
+    ##################### adjust between-panel spacing
+    panel.spacing.x = unit(0.45, "lines"), 
+    panel.spacing.y = unit(0.6, "lines"), 
+    
+    # old 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    ) 
+```
+
+### Background lines
+
+```{r, layout="l-body-outset",  fig.width = 8, fig.height = 5.8, fig.dpi = 300}
+#| eval: true
+
+
+data_filtered_2 <- data_filtered |> 
+  mutate(region2 = region, region = NULL) 
+
+plot <- ggplot(data_filtered) +
+  aes(x = GDP, y = poverty, color = region) + 
+  
+  # x axis
+  geom_segment(data = row_per_region, 
+               aes(x = 1000, xend = 1000, y = 0, yend = 100), 
+               linetype = "11", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region, 
+               aes(x = 2000, xend = 2000, y = 0, yend = 100), 
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region, 
+               aes(x = 5000, xend = 5000, y = 0, yend = 100),
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region, 
+               aes(x = 10000, xend = 10000, y = 0, yend = 100), 
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region, 
+               aes(x = 20000, xend = 20000, y = 0, yend = 100), 
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region, 
+               aes(x = 50000, xend = 50000, y = 0, yend = 100), 
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+
+  # y axis
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 0, yend = 0), 
+               linetype = "solid", linewidth = 0.22, color = "#aeaeae") +
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 25, yend = 25), 
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region,
+               aes(x = 800, xend = 57000, y = 50, yend = 50), 
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 75, yend = 75), 
+               linetype = "21", linewidth = 0.30, color = "#ebebeb") +
+  geom_segment(data = row_per_region, 
+               aes(x = 800, xend = 57000, y = 100, yend = 100), 
+               linetype = "solid", linewidth = 0.22, color = "#aeaeae") +
+
+  facet_wrap(~ region, scales = "free") +
+  
+  scale_x_log10(breaks = c(1000, 2000, 5000, 10000, 20000, 50000),
+                minor_breaks = NULL,
+                labels = scales::label_number(
+                  big.mark = ".",prefix = "$", decimal.mark = "none"),
+                limits = c(800, 57000), 
+                expand = expansion(add = c(0.17, 0.05))
+                ) + 
+  scale_y_continuous(breaks = c(0, 25, 50, 75, 100),
+                     minor_breaks = NULL,
+                     labels = scales::percent_format(scale = 1), 
+                     limits = c(0, 100),
+                     expand = expansion(mult = c(0.08, 0.04))
+                     ) +
+  scale_color_manual(values = c(
+                    "Global Average" = "#840037",
+                    "Western Europe" = "#203558",
+                    "Australia, New Zealand, USA and Canada" = "#3f3386",
+                    "Middle East and North Africa" = "#845100",
+                    "Eastern Europe" = "#057ea1",
+                    "Sub-Saharan Africa" = "#951c73",
+                    "East Asia" = "#30918d",
+                    "South and Southeast Asia" = "#e0902f",
+                    "Latin America and Caribbean" = "#d54c3f")
+                    ) + 
+    
+  ##################### BACKGROUND LINES
+  geom_path(data = data_filtered_2,
+            aes(x = GDP, y = poverty, 
+                group = region2, 
+                color = region2), 
+            alpha = 0.2, 
+            linewidth = 0.2) +
+  
+  geom_path(linewidth = 0.35) +
+  facet_wrap(~ region, scales = "free") +
+  geom_path(linewidth = 0.35) +
+  theme_minimal() + 
+  theme(
+    legend.position = "none", 
+    strip.text = element_blank(),
+    axis.title = element_blank(), 
+    axis.text.x = element_text(
+      family = "lato", colour = "#939292", size = 26.5, 
+      hjust = c(0.4, 0.4, 0.4, 0.4, 0.4, 0.6), margin = margin(t = -10)), 
+    axis.text.y = element_text(
+      family = "lato", colour = "#676767", size = 26.5, 
+      vjust = 0.5, margin = margin(r = -16)),
+    panel.background = element_rect(fill = "#faf9f9"), 
+    panel.border = element_rect(fill = NA, color = "#efefef"),
+    panel.spacing.x = unit(0.45, "lines"), 
+    panel.spacing.y = unit(0.6, "lines"), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    ) 
+
+plot
+```
+
+### Title, subtitle, data sources and licenses
+
+```{r, layout="l-body-outset",  fig.width = 8, fig.height = 5.8, fig.dpi = 300}
+# -   why now? cause afterwards annotations and we will need exact coordinates and it might be annoying to change everything later =\> i want the final figures width and height
+#| eval: true
+
+
+library(ggtext)
+
+plot <- plot + 
+  labs(title = "By world region: Share living in extreme poverty vs. GDP per capita (1820-2017)",
+              subtitle = "Poverty is measured by the 'cost of basic needs'-approach. It represents the share which was unable to obtain a bundle of very basic goods and services.\nPrice changes over time (inflation) and price differences between countries are taken into account in both measures.",
+              caption = "Data sources:  Michail Moatsos for data on extreme poverty and Jutta Bolt and Jan Luiten van Zanden for GDP data – both published in How was life? Volume II, OECD 2021.<br><span style = 'font-family:lato; color:#403c94;'>OurWorldinData.org</span> – Research and data to make progress against the world's largest problems.", # even if it doesnt look like it the — is not a normal one, its a larger one 
+              tag = "Licensed under <span style = 'color:#403c94;'>CC-BY</span> by the author Max Roser") +
+  theme(plot.title = element_text(family = "playfair display",
+                                  color = "#191612",
+                                  size = 91.5, 
+                                  hjust = 0, 
+                                  margin= margin(b = 2, l = -4)),
+        plot.title.position = "plot",
+        plot.subtitle = element_text(family = "lato_light",
+                                     color = "#515151",
+                                     size = 51, # 50.5 is too short but 51 is just a tad too large => i think better 51
+                                     hjust = 0, 
+                                     lineheight = 0.14,
+                                     margin= margin(b = 4, l = -1.8)),
+        plot.caption = element_markdown(family = "lato_light",
+                                        color = "#191612",
+                                        size = 48, 
+                                        hjust = 0, 
+                                        lineheight = 0.19,
+                                        margin= margin(t = 8, l = -1.8)
+                                        ),
+        plot.caption.position = "plot",
+        plot.tag = element_markdown(family = "lato_light",
+                                color = "#191612",
+                                size = 49,
+                                hjust = 1),
+        plot.tag.position = c(0.99,0.010)) + 
+  coord_cartesian(clip = "off")
+
+plot
+
+```
+
+### Annotations and Descriptions
+
+```{r, layout="l-body-outset",  fig.width = 8, fig.height = 5.8, fig.dpi = 300}
+#
+# -   insert numbers inside graph
+# -   region names annotations + descriptions
+#| eval: true
+
+
+plot <- plot +
+  ##################### years inside graph
+  geom_text(
+    aes(label = YEAR), 
+    color = "black", 
+    family = "lato",
+    size = 6.8, 
+    hjust = 0,
+    nudge_x = 0.03,
+    check_overlap = TRUE
+    ) +
+  
+  ##################### Annotations 3 upper plots 
+  
+  geom_text(
+    data = data_filtered |>  filter (region %in% c("Global Average", "Western Europe", "Australia, New Zealand, USA and Canada")), 
+    aes(x = 800, y = 94, 
+        label = "Share living in extreme poverty"), 
+    family = "lato", 
+    colour = "#939292", #676767 if i manage to make it less thick
+    size = 11, 
+    hjust = 0.18, # 0.17 a bit too far to the right  
+    vjust = 0
+  ) +
+  
+  ##################### Annotations and descriptions by region
+  geom_text(
+    data = data_filtered |> filter(region == "Global Average"),
+    aes(x = 5700, y = 53, label = region),
+    family = "lato",
+    colour = "#840037",
+    size = 18.5,  
+    hjust = 0, 
+    vjust = 0
+    ) +
+  
+  geom_text(
+    data = data_filtered |> filter(region == "Global Average"),
+    aes(x = 1300, y = 88, 
+        label = "1820: Three-quarters of the world lived in extreme poverty"
+        ),
+    family = "lato",
+    colour = "#840037",
+    size = 11,  
+    hjust = 0, 
+    vjust = 0
+    ) +
+  
+    geom_text(
+    data = data_filtered |> filter(region == "Global Average"),
+    aes(x = 1300, y = 78, 
+        label = "Three-quarters of the world \"could not affort a tiny space to live, some\nminimum heating capacity, and food that would not induce malnutrition.\""
+        ),
+    family = "lato",
+    colour = "#840037",
+    size = 10,  
+    hjust = 0, 
+    vjust = 0, 
+    lineheight = 0.14
+    ) +
+  
+      geom_text(
+    data = data_filtered |> filter(region == "Global Average"),
+    aes(x = 18000, y = 15, 
+        label = "9% of the world live\nin extreme poverty"
+        ),
+    family = "lato",
+    colour = "#840037",
+    size = 11,  
+    hjust = 0, 
+    vjust = 0, 
+    lineheight = 0.14
+    ) +
+  
+  geom_text(
+    data = data_filtered |> filter(region == "Western Europe"),
+    aes(x = 2900, y = 68, label = region),
+    family = "lato",
+    colour = "#203558", 
+    size = 14, 
+    hjust = 0, 
+    vjust = 0
+    ) +
+  
+  geom_text(
+    data = data_filtered |> filter(region == "Australia, New Zealand, USA and Canada"),
+    aes(x = 4000, y = 66, label = "Australia, New Zealand,\nUSA and Canada"),
+    family = "lato",
+    colour = "#3f3386", 
+    size = 14, 
+    hjust = 0, 
+    vjust = 0, 
+    lineheight = 0.14,
+    ) +
+  
+    geom_text(
+    data = data_filtered |> filter(region == "Australia, New Zealand, USA and Canada"),
+    aes(x = 4000, y = 52, 
+        label = "These four countries had already achieved\nenough economic growth to reduce extreme\npoverty to very low levels in the post-war years."
+        ),
+    family = "lato",
+    colour = "#3f3386", 
+    size = 10, 
+    hjust = 0, 
+    vjust = 0, 
+    lineheight = 0.14,
+    ) +
+geom_text(
+    data = data_filtered |> filter(region == "Middle East and North Africa"),
+    aes(x = 4000, y = 33, label = region),
+    family = "lato",
+    colour = "#845100", 
+    size = 14,
+    hjust = 0, 
+    vjust = 0
+    ) +
+  
+  geom_text(
+    data = data_filtered |> filter(region == "Eastern Europe"),
+    aes(x = 1230, y = 19, label = region),
+    family = "lato",
+    colour = "#057ea1", 
+    size = 14, 
+    hjust = 0, 
+    vjust = 0
+    ) +
+  
+  geom_text(
+    data = data_filtered |> filter(region == "Sub-Saharan Africa"),
+    aes(x = 3750, y = 66, label = region),
+    family = "lato",
+    colour = "#951c73", 
+    size = 14, 
+    hjust = 0, 
+    vjust = 0
+    ) +  
+  
+  geom_text(
+    data = data_filtered |> filter(region == "Sub-Saharan Africa"),
+    aes(x = 3800, y = 52, 
+        label = "According to the lastest data 37% of the\npopulation live in extreme poverty in\nthe world's poorest region."
+        ),
+    family = "lato",
+    colour = "#951c73", 
+    size = 10, 
+    hjust = 0, 
+    vjust = 0, 
+    lineheight = 0.14,
+    ) +
+  
+  geom_text(
+    data = data_filtered |> filter(region == "East Asia"),
+    aes(x = 3900, y = 55, label = region),
+    family = "lato",
+    colour = "#30918d", 
+    size = 14, 
+    hjust = 0, 
+    vjust = 0
+    ) +
+  
+  geom_text(
+    data = data_filtered |> filter(region == "South and Southeast Asia"),
+    aes(x = 1850, y = 54, label = region),
+    family = "lato",
+    colour = "#e0902f", 
+    size = 14,  
+    hjust = 0, 
+    vjust = 0
+    ) +
+
+  geom_text(
+    data = data_filtered |> filter(region == "Latin America and Caribbean"),
+    aes(x = 3600, y = 68, label = region),
+    family = "lato",
+    colour = "#d54c3f", 
+    size = 14, 
+    hjust = 0, 
+    vjust = 0
+    ) +
+  
+  geom_text(data = data_filtered |> filter(region == "Latin America and Caribbean"),
+    aes(x = 3600, y =54, 
+        label = "As a world region with very high inequality\nthe share in poverty was comparatively high\nat any given level of average income."
+        ),
+    family = "lato",
+    colour = "#d54c3f", 
+    size = 10, 
+    hjust = 0, 
+    vjust = 0, 
+    lineheight = 0.14,
+    ) 
+plot  
+
+```
+
+### Logo
+
+```{r, layout="l-body-outset",  fig.width = 8, fig.height = 5.8, fig.dpi = 300}
+#| eval: true
+
+
+library(grid)
+image_grob <- rasterGrob(png::readPNG("Our_World_in_Data_logo.png"),
+                         x = 0.997, y = 0.992,  
+                         hjust = 1, vjust = 1, 
+                         width = unit(0.082, "npc")) # relative to plotting area
+
+
+grid.newpage()      # new plotting canvas
+grid.draw(ggplotGrob(plot))  
+
+# Overlay the image manually
+grid.draw(image_grob)
+
+
+
+```
+
+## Comparison
+
+::: {style="display: flex; justify-content: space-between;margin-left: -50%; margin-right: -50%;"}
+::: {style="width: 50%;"}
+Original
+
+```{r, out.width='100%'}
+knitr::include_graphics("Growth-and-poverty-since-1820.png")
+```
+:::
+
+::: {style="width: 50%;"}
+Replication
+
+```{r, layout="l-body-outset",  fig.width = 8, fig.height = 5.8, fig.dpi = 300}
+grid.newpage()      # new plotting canvas
+grid.draw(ggplotGrob(plot))  
+
+# Overlay the image manually
+grid.draw(image_grob)
+```
+:::
+:::
+
+### Things im (not) doing
+
+-   fat annotations =\> idk anymore
+-   year annotations =\> :/
+-   arrows and dots =\> in the next days when i find the time =\> HAVE NOT FOUND TIME YET
+
+### Lessons
+
+My biggest enemy: me, and the grid lines (and the expansion and limits in geom_path), and the dimensions (what is dpi? dpi = 150, dpi = 300), also not knowing ⇒ once you knew it seemed so easy, but I spend hours just to find out that one thing = devastating
+
+## Improvement
+
+original graph strengths:
+
+The graphs strengths include its clear comparison between the world regions wealth and poverty trends, which highlight the significant variation between regions, and its historical perspective, which provides some context for the global and regional progress. Visually, the regional facets and coloring contribute to their acute distinction and provide clarity and readability.
+
+BAD
+
+**Content: what it tells us**
+
+-   Cons:
+    -   Some **regions can be hard to follow** without clear focus
+    -   **Oversimplification**: GDP as sole indicator of poverty reduction
+-   Cons:
+    -   **Too much info** in one graph?
+
+**What I tohught:**
+
+-   I liked the **topic and nice colors**
+-   I didn't like **potentially bias story**
+
+**What needs explanation is not poverty, but prosperity.** 
+
+Historian Michail Moatsos has recently produced a new global dataset that goes back two centuries. The chart shows his data. According to his research three-quarters of the world lived in extreme poverty in 1820. This means they "could not afford a tiny space to live, some minimum heating capacity, and food that would not induce malnutrition.”[9](https://ourworldindata.org/extreme-poverty-in-brief#note-9)
+
+Economic growth made it possible to leave the widespread extreme poverty of the past behind. It made the difference between a society in which the majority were lacking even the most basic goods and services – food, decent housing and clothes, healthcare, public infrastructure and transport – and a society in which these products are widely available.
+
+Growth [means](https://ourworldindata.org/what-is-economic-growth) that a society produces an increasing quantity and quality of economic goods and services. The key to economic growth is the development of technology that makes it possible to increase productivity by which these goods and services are produced.
+
+**Because the total production in an economy equals the total income in that country – as everyone’s spending is someone else’s income – incomes grow at the same rate as production increases.**
+
+The 9 charts show the data for different regions in the world. On the horizontal axis of each chart, you find the average income (GDP per capita) and on the vertical axis you see the share living in extreme poverty. The starting point of each trajectory shows the data for 1820 and it tells us that two centuries ago the majority of people lived in extreme poverty, no matter where in the world they were at home.^[11](https://ourworldindata.org/extreme-poverty-in-brief#note-11)^ Since then, all world regions achieved growth – the production of goods and services increased – and the share living in poverty declined.
+
+The previous chart showed that Sub-Saharan Africa is the poorest region. Almost 40% of the population lives in extreme poverty.
+
+Not all African countries are struggling. In fact, most African countries have achieved good growth after the end of the oppressive colonial regimes [that hindered the growth](https://voxeu.org/article/colonialism-and-development-africa) of African economies. But in a number of countries, the situation is bad. These countries remain as poor as they were in the past. Since the economy is stagnant, poverty is too.
+
+The majority of people in Madagascar still live in extreme poverty. Very similar to the global situation two centuries ago, three-quarters of Madagascar’s population are living in extreme poverty.
+
+Not just economic growth, but also the distribution of that growth matters. If the inequality of income increases, the poorest can be left behind.
+
+But without economic growth, there is no chance at all to leave poverty behind. The data from Madagascar makes clear that a reduction of inequality cannot end extreme poverty in a poor country. If inequality in Madagascar would be entirely eradicated, then everyone would live on the average income. In Madagascar, this is \$1.60 a day. For poor countries, the only way to end poverty is an increase in incomes – economic growth.
+
+Storytelling: ![](story%20image%201.png)
+
+![](story%20image%202.png)
+
+=\> Streamgraphs:
+
+-   highlight inverse relationship between poverty and GDP
+-   Visual clarity: The colourblind-friendly palette ensures inclusivity
+
+```{r, layout="l-body-outset"}
+library(streamgraph)
+packageVersion("streamgraph") # latest version 
+```
+
+-   Improved readability by visual order: Grouping by Global North and Global South with distinct colour schemes makes it easier to identify regional disparities =\> Sorting Global North regions at the top, Global Average in the middle, and Global South at the bottom improves narrative clarity.
+-   Storytelling: highlighting the separation between developed (North) and developing (South) regions allows for clearer comparisons =\> inqualities or trends between developed (top) and developing regions (bottom) while anchoring the global average in the middle for comparison.
+
+**Poverty**
+
+```{r, layout="l-body-outset",  fig.height = 3}
+
+# update levels to reflect desired visual order
+data_filtered_sg <- data_filtered
+
+# add new variable with desired order 
+data_filtered_sg$region_ordered <- 
+  factor(data_filtered_sg$region,
+  levels = rev(c("Australia, New Zealand, USA and Canada",  # Global North (top)
+             "Western Europe",                          # Global North
+             "Eastern Europe",                          # Global North
+             "Global Average",                          # Middle
+             "Middle East and North Africa",            # Global South (bottom)
+             "Latin America and Caribbean",             # Global South
+             "East Asia",                               # Global South
+             "South and Southeast Asia",                # Global South
+             "Sub-Saharan Africa")))                     # Global South
+
+# add prefixed for deterministic sorting 
+
+data_filtered_sg$region_prefix <- 
+  recode(data_filtered_sg$region_ordered,
+         "Australia, New Zealand, USA and Canada" = "1. Australia, New Zealand, USA and Canada",
+         "Western Europe" =                  "1. Western Europe",
+         "Eastern Europe" =                  "1. Eastern Europe",
+         "Global Average" =                  "2. Global Average",
+         "Middle East and North Africa" =    "3. Middle East and North Africa",
+         "Latin America and Caribbean" =     "3. Latin America and Caribbean",
+         "East Asia" =                       "3. East Asia",
+         "South and Southeast Asia" =        "3. South and Southeast Asia",
+         "Sub-Saharan Africa" =              "3. Sub-Saharan Africa"
+)
+
+# update color palette to align with prefixed names: colours to remain distinct but grouped appropriately
+
+
+cb_colors <- c("dodgerblue4", 
+               "#E69F00", 
+               "#56B4E9", 
+               "#009E73", 
+               "#F0E442", 
+               "red", 
+               "black", 
+               "#D55E00", 
+               "#B9E77C")
+cb_colors_ordered <- c(
+  "1. Australia, New Zealand, USA and Canada" = "#D55E00",
+  "1. Western Europe" = "red",
+  "1. Eastern Europe" = "#E69F00",
+  "2. Global Average" = "white",
+  "3. Middle East and North Africa" = "aquamarine2",
+  "3. Latin America and Caribbean" = "#B9E77C",
+  "3. East Asia" = "#56B4E9",
+  "3. South and Southeast Asia" = "#009E73",
+  "3. Sub-Saharan Africa" = "dodgerblue4"
+)
+
+
+sg2_poverty <- streamgraph(
+  data_filtered_sg, 
+  key="region_prefix", 
+  value="poverty", 
+  date="YEAR", 
+  interactive=TRUE) |> 
+  sg_axis_x(tick_interval = 50) |>                # simplifying x axis
+  sg_fill_manual(cb_colors_ordered) |>            # new color palette (still color blind safe) 
+  sg_legend(show = TRUE, label = "Regions") |>    # legend for regions
+  sg_colors(label_color = "red") |> 
+  sg_annotate(label = "Global Average", 
+              x = "", y = "460", 
+              color = "black", 
+              size = 16) |> 
+  sg_annotate(label = "\"Global North\"", 
+              x = "0.05", y = "600", 
+              color = "black", 
+              size = 20) |> 
+  sg_annotate(label = "\"Global South\"", 
+              x = "0.05", y = "100", 
+              color = "black", 
+              size = 20) 
+
+sg2_poverty
+```
+
+**GDP**
+
+```{r, layout="l-body-outset",  fig.height = 3}
+sg2_gdp <- streamgraph(
+  data_filtered_sg, 
+  key="region_prefix", 
+  value="GDP", 
+  date="YEAR", 
+  interactive = TRUE) |> 
+  sg_axis_x(tick_interval = 50) |>     
+  sg_fill_manual(cb_colors_ordered) |>
+  sg_legend(show = TRUE, label = "GDP") |>    
+  sg_colors(label_color = "red") |> 
+  sg_annotate(label = "Global Average", 
+              x = "1850", y = "62000", 
+              color = "black", 
+              size = 16) |> 
+  sg_annotate(label = "\"Global North\"", 
+              x = "1850", y = "160000", 
+              color = "black", 
+              size = 20) |> 
+  sg_annotate(label = "\"Global South\"", 
+              x = "1850", y = "100", 
+              color = "black", 
+              size = 20) 
+
+sg2_gdp
+```
