@@ -1,0 +1,861 @@
+---
+title: "An 8-Bit Look at the Evolution of BMI Values of Olympic Athletes"
+description: |
+  This study displays the evolution of BMI values of Olympic athletes who competed in the Summer Olympic Games of 1960 and 2016.
+categories: "2024"
+author: Gür Piren
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+
+# Packages and fonts
+
+```{r}
+
+# For replication graph
+
+library(tidyverse)
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(ggrepel)
+library(extrafont)
+library(showtext)
+library(sysfonts)
+
+# Fonts for the replication plot 
+
+font_add_google("Crimson Pro", "crimson-pro")
+font_add_google("Outfit", "outfit")
+font_add_google("Cormorant Garamond", "cormorant-garamond")
+font_add_google("Montserrat", "Montserrat")
+font_add_google("Archivo Black", "ArchivoBlack")
+font_add_google("Piazzolla", "PiazzollaExtraLight")
+
+# Fonts for the improved plot
+
+font_add_google("Press Start 2P", "press-start")
+font_add_google("VT323", "vt323") 
+font_add_google("DotGothic16", "dotgothic16")
+
+showtext_auto()
+
+# For alternative plot
+
+library(viridis)
+library(grid)
+library(ggtext)
+library(png)
+library(patchwork)
+library(ggimage)
+library(gridExtra)
+```
+
+The data set displays personal records of Olympic athletes.
+
+The original plot focuses on athletes who are at least 20 years old and competed in 1960 and 2016 Summer Olympic games. Taking into account their height and weight values, it then calculates BMI values of athletes and categorise them.
+
+In so doing, it creates four different facets and coloured tiles in each one of them. Obviously, each colour tile represents a BMI category.
+
+The four facets are designed to represent 1960 and 2016 Summer Olympic games, and male and female athletes.
+
+# REPLICATION OF THE ORIGINAL PLOT
+
+Reading the dataset
+
+```{r}
+#| eval: true
+
+data_main <- read_csv("athlete_events.csv")
+```
+
+As we will only need the sports branches, Olympic game's year information and the name, gender, and the BMI values of the athletes, I get rid of everything else.
+
+```{r}
+
+#| eval: true
+
+olympics_tidy <- data_main |> 
+  filter(Age >= 20, Year %in% c(2016, 1960), Season == "Summer") |> 
+  select(-c(Team, Games, NOC, City, Event, Medal)) |> 
+  distinct(Name, .keep_all = TRUE)
+```
+
+
+Some athletes have no height or weight (or either) info. This is just to have an idea of what's going on.
+
+```{r}
+
+#| eval: true
+
+missing_values <- olympics_tidy |> 
+  summarize(
+    missing_height = sum(is.na(Height)),
+    missing_weight = sum(is.na(Weight))
+  )
+
+missing_values
+
+```
+
+I want to create a BMI variable for future use, as BMIs will be the main concern of this study.
+
+
+```{r}
+#| eval: true
+
+olympics_tidy <-
+  olympics_tidy |> 
+  mutate(BMI = Weight / (Height / 100)^2)
+```
+
+
+Now let's acquire the means for height, weight, and BMI values for different branches, across genders and for the two Olympic games.
+
+```{r}
+#| eval: true
+
+olympics_tidy <- olympics_tidy |> 
+  summarise(
+    height_mean = mean(Height, na.rm = TRUE), 
+    weight_mean = mean(Weight, na.rm = TRUE),
+    BMI_mean = mean(BMI, na.rm = TRUE),
+    .by = c("Sport", "Sex", "Year"))
+```
+
+
+Recoding 'Sex' for better readability. 
+
+
+```{r}
+#| eval: true
+
+olympics_tidy <- olympics_tidy |> 
+  mutate(Sex = recode(Sex, `M` = "Men", `F` = "Women"))
+```
+
+
+### Some adjustments for acquiring the original plot
+
+Although the values range from 30 to 170 for weight and from 143 to 218 for height, the graph seems to omit some observations and use different ranges. 
+
+After a careful and (highly) manual measurement, I decided that for weight the range would be from 45 to 105, and for height it would be 155 and 205.
+
+This can be observed in the original graph.
+
+Since I'll be viusalising 'Gender' and changes in 'Height', 'Weight', I will be using facets.
+Let's organise the data taking into account the new value ranges indicated above, and then proceed to labeling BMI ranges.
+
+To do that, I first reframe my data set indicating new ranges for Height and Weight values.
+
+Following this, I create a new variable named 'BMI Label', which will store BMI categories and their values. Then, this variable will help create tiles for each BMI category.
+
+Using 'ordered = TRUE', I ensure the logical order between 'Underweight', 'Normal', 'Overweight', and 'Obese' categories.
+
+```{r}
+#| eval: true
+
+olympics_reframed <- crossing(
+  Height = 155:205,
+  Weight = 45:105,
+  Sex = c("Men", "Women"),
+  Year = c(1960, 2016)
+) |> 
+  mutate(
+    BMI = Weight / (Height / 100)^2,
+    `BMI Label` = factor(case_when(
+      BMI <= 18.5 ~ "Underweight",    
+      BMI > 18.5 & BMI <= 24.9 ~ "Normal",  
+      BMI > 24.9 & BMI <= 29.9 ~ "Overweight", 
+      BMI > 29.9 ~ "Obese"
+    ), 
+    levels = c("Underweight", "Normal", "Overweight", "Obese"), 
+    ordered = TRUE)
+  )
+```
+
+
+### Onto the plot
+
+Let's begin with stating x any y axes. I will use 'weight_mean' and 'height_mean' from 'olympics_tidy' data set. 
+
+Next, 'geom_tile' will enable me to create tiles based on BMI categories that I have indicated in 'BMI Label' column in 'olympics_reframed'. 
+
+I have used a separate data set called 'olympics_reframed' for my own ease. All these information could probably work out together in a single data set. 
+
+The filling of the tiles will be automatic. I will be changing it in the next step.
+
+```{r fig.height=14, fig.width=13}
+
+final_graph <- ggplot(olympics_tidy) +
+  aes(weight_mean, height_mean) +
+  geom_tile(data = olympics_reframed, aes(x = Weight, y = Height, fill = `BMI Label`))
+
+final_graph
+
+```
+
+Here, I enhance the appearance of my existing graph by customizing the fill colours for different BMI categories. I use scale_fill_manual() to manually set specific colours for each category, such as "Underweight," "Normal," "Overweight," and "Obese," assigning colours as close as possible to the original plot.
+
+I also adjust the legend with setting 'guides()' to NULL in order to remove the title.
+
+```{r fig.height=14, fig.width=13}
+final_graph <-
+  final_graph +
+  scale_fill_manual(values = c(
+    "Underweight" = "cadetblue2",
+    "Normal" = "darkolivegreen2",
+    "Overweight" = "lightgoldenrod1",
+    "Obese" = "lightcoral")) +
+  guides(fill = guide_legend(title = NULL))
+
+final_graph
+
+```
+
+It's time to set the title and subtitle for of the plot and add axes titles. Lastly, I add the caption at the bottom right of the original plot indicating the source of data.
+
+```{r fig.height=14, fig.width=13}
+final_graph <-
+  final_graph +
+  labs(
+    x = "WEIGHT (KG)",
+    y = "HEIGHT (CM)",
+    title = "OLYMPIC ATHLETES ARE GETTING BIGGER",
+    subtitle = "Mean weight and height by sport at the 1960 and 2016 Summer Olympics. Values calculated \nfor athletes 20 years or older, compared to the BMI classification for the general population.",
+    caption = "Source: Kaggle • Graphic: Georgios Karamanis"
+  ) 
+final_graph
+```
+
+No party without our good old friends: data points! Using geom_point, I invite them to the party.
+
+```{r fig.height=14, fig.width=13}
+final_graph <-
+  final_graph +
+  geom_point()
+
+final_graph
+```
+
+Since I will be comparing 1960 and 2016 Summer Olympics while displaying BMI values based on gender, I will need 4 different facets. 
+
+The 'Sex' variable has two values (Men and Women), and the 'Year' variable only has 1960 and 2016. Therefore, four facets. 
+
+```{r fig.height=14, fig.width=13}
+final_graph <-
+  final_graph +
+  facet_grid(Sex ~ Year) +
+  coord_cartesian(expand = FALSE) 
+
+final_graph
+```
+
+In the original plot, the legend is located at the top, right below the subtitle. First I relocate it on the top and ensure that it is centered. Then, I place it in a horizontal way. Lastly, I ensure that the legend key sizes somewhat match to that of original plot.
+
+```{r fig.height=14, fig.width=13}
+final_graph <-
+  final_graph +
+  theme(
+    legend.position = "top",           
+    legend.justification = "center",     
+    legend.direction = "horizontal",
+    legend.key.size = unit(0.7, "cm")
+    )
+
+final_graph
+```
+Using strip.text, I ensure the colour for texts in the strips and match their size to the original plot.
+
+Using plot.title and plot.subtitle, I set sizes, alignments, and margins of the title and subtitle. For the title, I use 'ArchivoBlack', and for the subtitle, I use 'Montserrat' (both from Google fonts). 
+
+After setting the margins of the plot and the caption that is at the bottom right, I move to indicating sizes for the legend, x and y axes (for both axis texts and axis titles). 
+
+For axis titles, I use 'cormorant-garamond' from Google fonts.
+
+
+```{r fig.height=14, fig.width=13}
+final_graph <-
+  final_graph +
+  theme(
+    strip.text = element_text(color = "black", size = 20),
+    plot.title = element_text(size = 36, hjust = 0.5, family = "ArchivoBlack",
+                              margin = margin(t = 10, b = 5, l = 15, r = 15)),
+    plot.subtitle = element_text(size = 18, hjust = 0.5, family = "Montserrat",
+                                 face = "plain", lineheight = 1, margin = margin(t = 5, b = 10, l = 15, r = 15), color = "grey15"),
+    plot.margin = margin(20, 10, 10, 10),
+    plot.caption = element_text(size = 16, hjust = 1, lineheight = 1.2),
+    legend.text = element_text(size = 14),  
+    axis.text.x = element_text(size = 14),  
+    axis.text.y = element_text(size = 14),
+    axis.title.x = element_text(size = 16, family = "cormorant-garamond"),
+    axis.title.y = element_text(size = 16, family = "cormorant-garamond")
+)
+
+final_graph
+```
+
+The only thing that is missing right now (pretty much) is labeling data points. 
+
+To make it look a bit more like the original plot, I begin with changing the colour, size, and the transparency level of my data points. (see geom_point(...)).
+
+Thanks to geom_text_repel, I will be able to put labels to the data points. Since each data point represents an Olympic sport, these texts will be name of Olympic sports.
+
+Firstly, I ensure all sports names are in capital letters, using 'label = toupper(Spor)'.
+
+Next, I set the font of data labels to 'Montserrat' and set their size to 4.
+
+To have a clean and readable plot, I had to ensure that text labels do not overlap. Using 'nudge_x' and 'nudge_y', I slightly moved text labels horizontally and vertically. 'box.padding', on the other hand, adds padding around each label’s box to create more space between the text and other elements, so it helps the cause dearly. Lastly, using 'max.overlaps', I ensured to limit the maximum number of overlapping labels to be shown; so that excess overlaps are suppressed. 
+
+'min.segment.length' helps me to somewhat restrict as to which connecting lines will be displayed, so I set it to 1.2 and disable the ones that would be longer than that value. With 'segment.size', I make those connecting lines extremely thin and through 'segment.color', their colour is indicated as 'grey30'.
+
+I use the same colour for my text labels using "color = 'grey30'". Lastly, I hide a possible legend for the data labels through 'show.legend = FALSE'.
+
+```{r fig.height=14, fig.width=13}
+#| eval: true
+final_graph <-
+  final_graph +
+  geom_point(color = "gray40", size = 1.5, alpha = 0.7) +
+  geom_text_repel(aes(label = toupper(Sport)),
+                  family = "Montserrat",  
+                  size = 4,              
+                  nudge_y = 3,          
+                  nudge_x = 1.5,          
+                  box.padding = 0.75,    
+                  max.overlaps = 15, 
+                  min.segment.length = 1.2,
+                  segment.size = 0.1,
+                  segment.color = "grey30",
+                  color = "grey30",
+                  show.legend = FALSE)  
+
+final_graph
+
+```
+
+### Downsides of the original plot
+
+The initial plot displays some Olympic events that did not exist in 1960 but took place in the 2016 Olympic Games (e.g., Tennis). I don't need to show them as they do not contribute to the study and add noise to the data, particularly in women’s sports. This is due to the fact that women's sports were not as diverse in 1960 as they were in 2016.
+
+There are extremely few or no 'Underweight' and 'Obese' athletes in the initial study. Using tiles for nonexistent categories seems redundant.
+
+Another issue with the plot is that the data point trends are not easy to follow. For any sport, it is quite difficult to determine whether it has experienced an increase or decrease over time.
+
+# Alternative Plot
+
+### Possible improvements for the replicated graph
+
+1. As the original plot's biggest weakness is the difficulty in tracking individual sports' trends over time, I try to address this issue by using a slope chart as my alternative plot. A slope chart is useful when comparing trends over time, using two data points for each observation and a line that connects those two data points. 
+
+2. Most sports branches have somewhat similar BMI values, which eventually leads to a plot that has many overlappings. A slope chart is likely to reduce those overlappings while still emphasising trends.
+
+3. I can change the title, coming up with a more striking one. Also I can use a fancy font. The font and colouring has actually been my favourite part for this study.
+
+4. Who does not love 8-bit stuff? Well, not me. The inspiration of my alternative plot will be 8-bit aesthetics. I had to do it, because for my whole childhood I played 'Track & Field'!
+
+### Challenges
+
+The closely clustered nature of the data points and the lack of direct connections between 1960 and 2016 data for each sport make trend analysis challenging. I will try to address these issues in my slope chart, but highly close numbers of BMI values pose threats to clarity of my plot.
+
+In my first attempt, I completely excluded women's sports that were present in both Olympic games (which amounted to 6 branches in total). 
+
+In the second attempt, I'll omit some of the men's sports branches and include women's sports into my plot. But for now, let's move onto the first one.
+
+
+
+Let's first read the data and start with the improvement.
+
+```{r}
+athletes <- read.csv("athlete_events.csv")
+```
+
+As the original study suggests, I filter 1960 and 2016 Summer Olympic Games, and athletes that were at least 20 years old.
+Then I move onto  create a BMI variable for the athletes in my dataset. 
+
+```{r}
+athletes <- athletes |> 
+  filter(Year %in% c(1960, 2016), Season == "Summer", Age >= 20) |> 
+  mutate(BMI = Weight / (Height / 100)^2)
+```
+
+In this chunk of code, I create two subsets of my dataset that will display sports branches that male athletes competed in 1960 and 2016 Summer Olmypics.
+
+Lastly, I want to see which sports are common in both Olympic games to prevent data noise in the future. Using 'pull', I acquire those sports for each year and then store their intersection in 'common_sports_men'.
+
+```{r}
+sports_1960_men <- athletes |> 
+  filter(Year == 1960, Sex == "M") |> 
+  pull(Sport)
+
+sports_2016_men <- athletes |> 
+  filter(Year == 2016, Sex == "M") |> 
+  pull(Sport)
+
+
+common_sports_men <- intersect(sports_1960_men, sports_2016_men)
+
+```
+
+To create a subset of data with only male athletes that competed in intersecting sports, I filter my dataset. Then, for a tidy table, I drop unnecessary columns.
+
+```{r}
+
+filtered_male_athletes <- athletes |> 
+  filter(Sex == "M" & Sport %in% common_sports_men) |> 
+  select(-Name, -Team, -NOC, -Games, -City, -Event, -Medal)
+```
+
+Now I am at the point where I need to create an average BMI value for each sports in my dataset. I group BMI values by 'Year' and 'Sports' as they will be displayed on the basis of competition year and event type.
+
+Then I sort them in alphabetical order for my own use.
+
+```{r}
+
+avg_bmi_men <- filtered_male_athletes |> 
+  group_by(Sport, Year) |> 
+  summarize(Avg_BMI = mean(BMI, na.rm = TRUE), .groups = 'drop')
+
+avg_bmi_men <- avg_bmi_men |> 
+  arrange(Sport)
+
+```
+
+
+This is where I manually group sports for each facet, considering their BMI values in 1960 and 2016. This way, I am planning to reduce overlappings as efficiently as possible.
+
+```{r}
+avg_bmi_men <- avg_bmi_men |> 
+  mutate(Facet_Group = case_when(
+    Sport %in% c("Water Polo", "Sailing", "Hockey", "Diving", "Football") ~ "1",
+    Sport %in% c("Shooting", "Modern Pentathlon", "Rowing", "Cycling", "Wrestling") ~ "2",
+    Sport %in% c("Weightlifting", "Swimming", "Athletics", "Boxing", "Canoeing") ~ "3",
+    TRUE ~ "4"
+  ))
+
+```
+
+This was one of my favourite parts doing my alternative plot. Retro work!! 
+
+The aesthetics of my plot will be providing a retro look. 
+
+So, I assign colours for each sports so that they will (try to) not confuse the reader. 
+
+```{r}
+
+retro_colours <- c(
+  "Athletics" = "#00a046",       
+  "Basketball" = "#FF6F20",     
+  "Boxing" = "#fcab98",         
+  "Canoeing" = "#7fcdbb",        
+  "Cycling" = "#bcbddc",        
+  "Diving" = "#000000",          
+  "Equestrianism" = "#a65628",   
+  "Fencing" = "#A3D900",         
+  "Football" = "#ec213e",        
+  "Gymnastics" = "#d8b365",      
+  "Hockey" = "#F1C40F",          
+  "Modern Pentathlon" = "#FF448C",
+  "Rowing" = "#10EA00",          
+  "Sailing" = "#636363",         
+  "Shooting" = "#D167BF",        
+  "Swimming" = "#4400AA",         
+  "Weightlifting" = "#7A9A01",   
+  "Wrestling" = "#80BFFF",       
+  "Water Polo" = "#0057A1"       
+)
+
+```
+
+## Onto the plot
+
+From the avg_bmi_men table, I extract BMI values for both years and genders. Next, I specify the x and y axes for my plot. Lastly, I ensure that the grouping is based on the type of sport.
+
+The geom_line function helps me create lines that connect values from two Olympic years. Using the 'linetype' parameter, I apply dotted lines to give an 8-bit feel to the plot. Similarly, by using 'geom_point', I employ square-shaped data points and adjust their size.
+
+With 'facet_wrap', I arrange the sports in facets that I matched earlier. By using 'ncol = 2', I display all my facets in two columns.
+
+
+```{r fig.height=5, fig.width = 8.5}
+
+improved_graph <- 
+  ggplot(avg_bmi_men, aes(x = factor(Year), y = Avg_BMI, group = Sport, color = Sport)) +
+  geom_line(linetype = "dotted", linewidth = 1.5) + 
+  geom_point(size = 2, shape = 15) +
+  facet_wrap(~ Facet_Group, ncol = 2) 
+
+improved_graph
+
+```
+
+It is about time I name the title, subtitle, and caption, as well as the x and y axes.
+
+I also change the randomly assigned colors of data points and lines to the colors I manually picked and stored in 'retro_colours' earlier.
+
+As the BMI values range between 20 and 29, I customize the y-axis, ensuring that the values increment by 1 unit (scale_y_continuous).
+
+```{r fig.height=5, fig.width = 8.5}
+improved_graph <-
+  improved_graph + 
+  labs(title = "Avg. BMI of Male Olympic Athletes \nby Sport (1960 vs 2016)",
+       subtitle = "Have they lowkey gotten fatter?",
+       caption = "My first ever original plot © ",
+       x = "Year",
+       y = "Average BMI",
+       color = "Olympic sports") +
+  scale_color_manual(values = retro_colours) +
+  scale_y_continuous(breaks = seq(20, 29, by = 1)) 
+
+improved_graph
+```
+
+
+Next, I enhance the visual appeal of my graph by customizing the theme. I set the overall plot background to a dark grey (grey15) and the panel background to a lighter grey (grey95) with defined borders for better visibility.
+
+I adjust the grid lines, opting for a major grid in grey90 and a slightly lighter minor grid in grey95. The axis text is styled at a smaller size (5) with a light blue colour, utilising the "press-start" font family. The axis titles are given a bold face and a yellow hue.
+
+The plot caption is positioned right, and coloured in yellow, with a slight margin for spacing. I place the legend on the right side, styling the title with a blue colour and the same font family. The legend text is also presented at size 5 with a blue colour to maintain consistency.
+
+To provide additional context, I remove the default facet text using 'strip.text = element_blank()'. The plot title and subtitle are styled for emphasis, with specified sizes and colours to match the overall theme. The margins of the plot are adjusted for better layout.
+
+I then create an annotation background using a light grey rectangle and add text to it, explaining the BMI categories: 'Underweight', 'Normal', 'Overweight', and 'Obese', all styled with a blue color.
+
+Finally, I arrange the main graph alongside the annotation so that the graph occupies 92% of the height and the annotation takes up 8%, ensuring a clear and informative presentation.
+
+```{r fig.height=5, fig.width = 8.5}
+improved_graph <-
+  improved_graph +
+  theme(
+    plot.background = element_rect(fill = "grey15"),  
+    panel.background = element_rect(fill = "grey95", color ="grey95", linewidth = 2),     
+    panel.grid.major = element_line(color = "grey90"),     
+    panel.grid.minor = element_line(color = "grey95"), 
+    axis.text = element_text(size = 5, color = "lightblue1", family = "press-start"), 
+    axis.title = element_text(size = 8, face = "bold", family = "press-start", "yellow2"),
+    plot.caption = element_text(size = 6, family = "press-start", color = "yellow2",
+                                hjust = 2.2, margin = margin(b = 14)),
+    legend.position = "right",
+    legend.title = element_text(family = "press-start",
+                                size = 10,
+                                color = "blue"),  
+    legend.key.size = unit(0.4, "cm"),  
+    legend.text = element_text(size = 5, family = "press-start", color = "blue"),  
+    legend.background = element_rect(fill = "grey95", color = "grey70", size = 2),  
+    strip.text = element_blank(),  
+    plot.title = element_text(family = "press-start", size = 10, face = "bold", 
+                              hjust = 0.2, color = "yellow2"),  
+    plot.subtitle = element_text(family = "vt323", size = 14, hjust = 0.5, color = "#abdbe3"),
+    plot.margin = margin(7, 12, 1, 5)  
+  ) + 
+  guides(color = guide_legend(ncol = 2))
+
+
+annotation_background <- rectGrob(
+  gp = gpar(fill = "grey90")  
+)
+
+# Creating the annotation text
+annotation_grob <- textGrob(
+  "BMI ≤ 18.5 'Underweight' 18.5 < BMI < 25 'Normal' 25 ≤ BMI < 30 'Overweight' BMI ≥ 30 'Obese'", 
+  gp = gpar(fontsize = 5, 
+            fontfamily = "press-start", 
+            col = "blue")
+)
+
+combined_annotation <- grobTree(annotation_background, annotation_grob)
+
+grid.arrange(improved_graph, 
+             combined_annotation,  
+             heights = c(0.92, 0.08),  
+             ncol = 1)
+
+improved_graph
+```
+
+
+# ALTERNATIVE PLOT 2 
+
+During my presentation for my initial improved plot, I received recommendations on several aspects of my work. At the end of this document, I will put an evaluation for those recommendations and what I have done to address the issues that were raised.
+
+Let's start with reading the data.
+
+```{r}
+
+data <- read.csv("athlete_events.csv")
+
+```
+
+I erase the columns that I will not be using.
+
+```{r}
+cleaned_data <- data %>%
+  select(-Team, -NOC, -Games, -City, -Event, -Medal)
+
+```
+
+
+Here, I filter 1960 and 2016 Summer Olympics and athletes >= 20 years old.
+
+```{r}
+
+filtered_data <- cleaned_data |> 
+  filter(Year %in% c(1960, 2016), 
+         Season == "Summer", 
+         Age >= 20)
+
+```
+
+ I want to detect those sports that are common in both Olympic game years for men.
+
+```{r}
+sports_1960_men <- filtered_data |> 
+  filter(Year == 1960, Sex == "M") |> 
+  pull(Sport)
+
+sports_2016_men <- filtered_data |> 
+  filter(Year == 2016, Sex == "M") |> 
+  pull(Sport)
+```
+
+
+I find the intersection for men, this is essential for ensuring meaningful data representation.
+
+```{r}
+common_sports_men <- intersect(sports_1960_men, sports_2016_men)
+
+common_sports_men
+```
+
+
+Then, I do the same for women, because there is a lot of data noise at women's sports. Vast majority of women's sports in 2016 did not exist in 1960 Summer Olympics.
+
+```{r}
+sports_1960_women <- filtered_data |> 
+  filter(Year == 1960, Sex == "F") |> 
+  pull(Sport)
+
+sports_2016_women <- filtered_data |> 
+  filter(Year == 2016, Sex == "F") |> 
+  pull(Sport)
+
+```
+
+
+Let's find the intersection for women as well.
+
+```{r}
+
+common_sports_women <- intersect(sports_1960_women, sports_2016_women)
+
+common_sports_women
+
+```
+
+
+Keeping only the intersecting sports will help me ensure there is no data noise.
+
+```{r}
+olympics <- filtered_data |> 
+  filter(Year %in% c(1960, 2016),
+         (Sport %in% common_sports_men & Sex == "M") | 
+         (Sport %in% common_sports_women & Sex == "F"))
+```
+
+Now I will work on BMI values and categories. So let's create a BMI variable first.
+
+```{r}
+filtered_data_BMI <- olympics |> 
+  mutate(BMI = Weight / (Height / 100)^2)
+```
+
+I calculate average BMI values for each sport.
+
+```{r}
+avg_BMI <- filtered_data_BMI |> 
+  group_by(Sport, Year, Sex) |> 
+  summarize(avg_BMI = mean(BMI, na.rm = TRUE), .groups = 'drop')
+```
+
+
+For the three facets that I will create in my plot, I specify sports.
+
+```{r}
+avg_BMI <- avg_BMI |> 
+  mutate(Facet_Group = case_when(
+    Sport %in% c("Water Polo", "Wrestling", "Swimming", "Shooting", 
+                 "Weightlifting", "Gymnastics", "Equestrianism", "Canoeing", "Sailing", "Hockey") ~ "1",
+    Sport %in% c("Gymnastics", "Athletics", "Fencing", "Canoeing", 
+                 "Swimming", "Diving", "Equestrianism", "Sailing") ~ "2",
+  ))
+```
+
+Picking colours again! 
+
+```{r}
+
+
+retro_colours_2 <- c(
+  "Athletics" = "#00a046",       
+  "Basketball" = "#FF6F20",      
+  "Boxing" = "#fcab98",          
+  "Canoeing" = "#7fcdbb",        
+  "Cycling" = "#bcbddc",         
+  "Diving" = "#FF448C",          
+  "Gymnastics" = "#d8b365",      
+  "Hockey" = "#F1C40F",          
+  "Rowing" = "#10EA00",          
+  "Sailing" = "#4400AA",         
+  "Shooting" = "#D167BF",        
+  "Swimming" = "#0057A1",         
+  "Weightlifting" = "#7A9A01",   
+  "Wrestling" = "#80BFFF",       
+  "Water Polo" = "#636363"  
+)
+
+```
+
+
+## Onto the plot
+
+In this section, I define two character vectors for male and female Olympic sports, categorizing them into two groups for men and one for women. These sports are chosen on the basis of their presence in both Olympic Games. In men's sports, I manually picked those that will display little or no overlap.
+
+```{r}
+men_sports <- c("Athletics", "Canoeing", "Swimming", "Shooting", "Weightlifting", "Gymnastics", "Basketball", "Boxing", "Sailing", "Hockey", "Wrestling")
+women_sports <- c("Gymnastics", "Athletics", "Fencing", "Canoeing", "Swimming", "Diving", "Sailing")
+```
+
+
+Next, I enhance the avg_BMI dataset by creating a new column named Facet_Group, which assigns a numeric identifier based on the athlete's sex and sport. Male athletes participating in sports from men_sports receive a "1," and female athletes are tagged with a "2" for sports from women_sports.
+
+Afterwards, I filter the data to keep only the rows with defined Facet_Group values, resulting in the filtered_avg_BMI dataset containing relevant entries.
+
+```{r}
+avg_BMI <- avg_BMI |> 
+  mutate(Facet_Group = case_when(
+    Sport %in% men_sports & Sex == "M" ~ "1", 
+    Sport %in% women_sports & Sex == "F" ~ "2"
+  ))
+
+filtered_avg_BMI <- avg_BMI |> 
+  filter(!is.na(Facet_Group))
+```
+
+
+The next step involves visualizing the data with ggplot, where I create improved_graph_2. Here, I specify the x and y axes, grouping by sport and color coding them accordingly. I utilize the geom_line function for connecting lines and geom_point for square-shaped data points. This time, I apply facet_grid to arrange the facets flexibly, with free y-axis scales and labeled to distinguish male and female groups.
+
+```{r fig.height=5, fig.width = 8.5}
+
+improved_graph_2 <- ggplot(filtered_avg_BMI, aes(x = factor(Year), y = avg_BMI, 
+                                                 group = Sport, color = Sport)) +
+  geom_line(linewidth = 1.5, linetype = "dotted") + 
+  geom_point(size = 2, shape = 15) +
+  facet_grid(~ Facet_Group, scales = "free", 
+             labeller = as_labeller(c("1" = "Male", "2" = "Female")))
+
+improved_graph_2
+```
+
+
+Once the basic structure is in place, I add the title, subtitle, caption, and axis labels. I also customize the colors for the lines and points using retro_colours_2 and ensure the y-axis is properly segmented with scale_y_continuous.
+
+```{r fig.height=5, fig.width = 8.5}
+improved_graph_2 <-
+  improved_graph_2 +
+  labs(title = "Avg. BMI of Olympic Athletes \nby Olympic Sports (1960 vs 2016)",
+       subtitle = "Have they lowkey gotten fatter?",
+       caption = "My first ever original plot © ",
+       x = "Year",
+       y = "Average BMI",
+       color = "Olympic Sports") +
+  scale_color_manual(values = retro_colours_2) + # Custom colors for the sports
+  scale_y_continuous(breaks = seq(20, 29, by = 1))
+
+improved_graph_2
+```
+
+In this section, I further customise my plot by adding specific styling elements using the theme function. This function allows me to modify various graphical parameters, giving my plot a distinct appearance.
+
+First, I adjust the spacing between panels with 'panel.spacing = unit(...)', ensuring a clear separation between the facets. The overall plot background is set to a darker shade using 'plot.background = element_rect(...)'. To enhance the visibility of the individual panels, I change the panel background color to grey95 and outline it with a thin border using 'panel.background = element_rect(..)'.
+
+I also customize the grid lines for better readability. For the major grid lines, I utilize 'panel.grid.major', and for the minor grid lines, 'panel.grid.minor' provides a subtle contrast that does not distract from the data.
+
+The axis text is tailored for clarity and style: 'axis.text = element_text()' adjusts the font size, color, and family for the axis text, while 'axis.text.y' and 'axis.text.x' rotate the y and x-axis labels for better fit and legibility.
+
+For axis titles, I emphasize them with 'axis.title = element_text(...)', ensuring they stand out in the plot. The plot caption is styled using 'plot.caption = element_text(...)', with horizontal justification and bottom margin applied for positioning.
+
+The legend is strategically placed on the right using 'legend.position = "right"'. I customize the legend title’s appearance with 'legend.title = element_text(...)', while the size of the legend keys is defined by 'legend.key(...)'. The legend text is set to be smaller and colored differently using 'legend.text(...)', with the legend background styled with 'legend.background' to ensure it fits within the overall color scheme.
+
+I also enhance the facet strip titles for clarity, modifying them with 'strip.text = element_text(...)'. The main title is centered and styled using 'plot.title = element_text(...)', while the subtitle receives a specific font family and size with appropriate justification, configured through 'plot.subtitle = element_text(...)'. For spacing, I adjust the margins with 'plot.margin = margin(...)' to ensure no labels are clipped.
+
+```{r fig.height=5, fig.width = 8.5}
+improved_graph_2 <-
+   improved_graph_2 +
+  theme(
+    panel.spacing = unit(1, "lines"),
+    plot.background = element_rect(fill = "grey15"),
+    panel.background = element_rect(fill = "grey95", color ="grey95", linewidth = 2),
+    panel.grid.major = element_line(color = "grey90"),  
+    panel.grid.minor = element_line(color = "grey95"), 
+    axis.text = element_text(size = 5, color = "lightblue1", family = "press-start"), 
+    axis.text.y = element_text( angle = 45),
+    axis.text.x = element_text( angle = 25),
+    axis.title = element_text(size = 8, face = "bold", family = "press-start",
+                              color = "yellow2"),
+    plot.caption = element_text(size = 6, family = "press-start", color = "yellow2",
+                                hjust = 1.8, margin = margin(b = 10)),
+    legend.position = "right",
+    legend.title = element_text(family = "press-start", size = 10, color = "blue"),
+    legend.key.size = unit(0.4, "cm"),
+    legend.text = element_text(size = 5, family = "press-start", color = "gray15"),
+    legend.background = element_rect(fill = "grey95", color = "grey70", size = 2),
+    strip.text = element_text(size = 7, face = "bold", family = "press-start", color = "blue"),
+    plot.title = element_text(family = "press-start", size = 10, face = "bold", 
+                              hjust = 0.5, color = "yellow2"),
+    plot.subtitle = element_text(family = "vt323", size = 14, hjust = 0.5, color = "#abdbe3"),
+    plot.margin = margin(7, 12, 1, 5)
+  ) + 
+  guides(color = guide_legend(ncol = 2))
+
+improved_graph_2
+```
+
+
+I conclude this section by organizing the plot together with annotations. The 'annotation_background' is created using 'rectGrob', which provides a rectangular background with a fill color of grey90. For the text annotation, I employ 'textGrob' to add BMI classification information, styling it with the specified size, font family, and blue colour.
+
+To combine both the plot and its annotations for final presentation, I utilize grid.arrange, ensuring that the main graph occupies 92% of the height while the annotation takes up the remaining 10%, aligning them in a single column (ncol = 1).
+
+This final improved_graph_2 now includes both the graphical data and the informative annotations  integrated for better interpretation.
+
+```{r fig.height=5, fig.width = 8.5}
+ 
+annotation_background <- rectGrob(gp = gpar(fill = "grey90"))
+
+annotation_grob <- textGrob(
+  "BMI ≤ 18.5 'Underweight' 18.5 < BMI < 25 'Normal' 25 ≤ BMI < 30 'Overweight' BMI ≥ 30 'Obese'",
+  gp = gpar(fontsize = 5.5, fontfamily = "press-start", col = "blue")
+)
+
+combined_annotation <- grobTree(annotation_background, annotation_grob)
+
+# Combine the plot and annotations
+improved_graph_2 <- 
+  grid.arrange(improved_graph_2, 
+             combined_annotation, 
+             heights = c(0.92, 0.08),  
+             ncol = 1)
+
+improved_graph_2
+
+```
+
+
+One of the main criticisms I received during my plot presentation was that women's sports were excluded from my initial work. To address this data loss, I considered recommendations from the class and created a facet for women's sports present in both the 1960 and 2016 Summer Olympic Games. This was somewhat problematic because the BMI values for some sports overlapped, and adding an extra facet just made the plot look unbalanced.
+
+To remedy this, I set aside some of the men's sports and adjusted the number of facets to two. This actually improved the appearance of my plot because I was able to manually select sports that had minimal or no overlap.
+
+Another issue raised during the presentation was related to the annotation. When a classmate asked about what the BMI values represented, I realized that my annotation might not be as visible to the reader as I intended. Therefore, I slightly increased its size to enhance visibility. But really, it is not that bad! :)
+
+Lastly, I received criticism about my legend's colorfulness and the space it occupies in the plot. I decided not to address the colorfulness because I like it that way. The space issue was resolved when I moved to two facets and reduced the number of sports displayed. Now, I believe my plot has a better balance between the sizes of the plot and the legend.
