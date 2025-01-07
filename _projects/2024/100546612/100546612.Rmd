@@ -29,17 +29,19 @@ Hence, to quote Max Roser, the author of this graph and corresponding article, "
 
 The original graph portrays the relationship between the share living in extreme poverty and the GDP per capita in 8 world regions and the global average between the years 1817 and 2017.
 
-<div style="overflow: hidden;">
-  <img src="Growth-and-poverty-since-1820.png" style="float: left; margin-right: 15px; margin-bottom: 10px; width: 350px;" alt="The graphs strengths include its clear comparison between the world regions wealth and poverty trends, which highlight the significant variation between regions, and its historical perspective, which provides some context for the global and regional progress. Visually, the regional facets and coloring contribute to their acute distinction and provide clarity and readability." />
-  <p>The graphs strengths include its clear comparison between the world regions wealth and poverty trends, which highlight the significant variation between regions, and its historical perspective, which provides some context for the global and regional progress. Visually, the regional facets and coloring contribute to their acute distinction and provide clarity and readability.</p>
-</div>
+::: {style="overflow: hidden;"}
+<img src="Growth-and-poverty-since-1820.png" alt="The graphs strengths include its clear comparison between the world regions wealth and poverty trends, which highlight the significant variation between regions, and its historical perspective, which provides some context for the global and regional progress. Visually, the regional facets and coloring contribute to their acute distinction and provide clarity and readability." style="float: left; margin-right: 15px; margin-bottom: 10px; width: 350px;"/>
 
+<p>The graphs strengths include its clear comparison between the world regions wealth and poverty trends, which highlight the significant variation between regions, and its historical perspective, which provides some context for the global and regional progress. Visually, the regional facets and coloring contribute to their acute distinction and provide clarity and readability.</p>
+:::
 
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX WORK IN PROGRESS XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 ## Before we start...
 
 ### Library and fonts
+
+To replicate the graph, the below packages and font families were used. The fonts were retrieved, for free, from Google Fonts.
 
 ```{r}
 
@@ -51,50 +53,32 @@ library(forcats)
 library(ggtext)
 library(grid)
 
-# fails: 
-# library(ggarrow) # geom_arrow instead of geom_path
-# library(arrowheadr) # arrow head
-# and many more
-
-# fonts
+# dowload fonts
 sysfonts::font_add_google("Playfair Display", family = "playfair display")
 sysfonts::font_add_google("Lato", family = "lato")
 sysfonts::font_add(regular = "./Lato/Lato-Light.ttf", family = "lato_light")
 
+# activate fonts to use them with ggplot 
 showtext::showtext_auto()
-
 ```
 
-## Pre-Steps
+### Retrieving and tidying the data
 
-### Get data:
-
--   email, data repository =\> incomplete
-
-Data handling
-
--   Read data
+While OurWorldinData does normally provide a direct link to download the data used in their graphs, this specific one did not have such an option. While there is a newer, [updated version](https://ourworldindata.org/grapher/the-share-of-people-living-in-extreme-poverty-vs-gdp-per-capita) of the graph, I decided to email directly the creator, Max Roser, who indicated me to the [research done by the Organisation for Economic Co-operation and Development OECD](https://www.oecd.org/en/publications/how-was-life-volume-ii_3d96efc5-en/full-report/component-14.html#chapter-d1e59754). It used to be that the tables with the information about extreme poverty and GDP trends were easily accessible, but now one has to scan the whole article and find the tables like a needle in a hay stack.
 
 ```{r}
-#| eval: true
-######################################## WORLD
-############### Read data 
-# gdp
-gdp_world <- read_xlsx(path = "GDP world.xlsx")
-# View(gdp_world) # 21 obs x 10 var
+gdp <- read_xlsx(path = "GDP world.xlsx")
 
-# poverty
-pov_world <- read_xlsx(path = "poverty world.xlsx")
-# View(pov_world) # 13 obs x 9 var
+poverty <- read_xlsx(path = "poverty world.xlsx")
+names(poverty)
 ```
 
--   Making it tidy
+We have two data sets: gdp, 21 observations (years from 1820-2016 in arbitrary increases) over 10 variables (YEAR + country regions), and poverty, with 13 observations (years from 1820-2016 in arbitrary increases) over 9 variables (YEAR + country regions). We will go over the differences below, when we clean the data. First, we will make it tidy adhering to the idea one variable should be stored in one column. Hence, as the column names represet regions, we `pivot_longer` to create in both data sets a new columns where the region and the metric (GDP or extreme poverty index) is indicated. Finally, we `full_join` the data sets together and make GDP a numerical variable without spaces. We obtain a tibble with 221 observations over 4 variables: YEAR, region, GDP and poverty.
 
 ```{r}
-#| eval: true
 ############### Pivot
 # gdp
-gdp_world <- gdp_world |> 
+gdp <- gdp |> 
   pivot_longer(
     cols = -YEAR,        
     names_to = "region",  
@@ -102,104 +86,87 @@ gdp_world <- gdp_world |>
   )
 
 # poverty
-pov_world <- pov_world |> 
+poverty <- poverty |> 
   pivot_longer(
     cols = -YEAR,          
     names_to = "region",  
     values_to = "poverty"  
   )
+unique(poverty$region)
+
 
 ############### Combine 
-world <- gdp_world |> 
-  full_join(pov_world, by = c("YEAR", "region")) |> 
-  mutate(source = "world_region") |> 
+world <- gdp |> 
+  full_join(poverty, by = c("YEAR", "region")) |> 
   mutate(GDP = str_remove_all(GDP, pattern = "\\s")) |> 
   mutate(GDP = as.numeric(GDP)) 
-# View(world) # 221 obs X 5 vars
+
+world
 ```
 
--   Clean data
+### Cleaning the data
+
+Cleaning the data posed itself as a tedious task due to various challenges. Firstly, as mentioned, the data sets differentiated each other by 8 observations and 1 variable. This is due to GDP having information (observations) during more years and having an extra region, "World," that represents the global average.
+
+The first, and easier task, was to clean the names of the regions, as some had been spelled differently in the different data set ("Latin America and Ca**rr**ibean" vs "Latin America and Cari**bb**ean" and "South and Southeast Asia" vs "South and Southeast Asia**)**").
+
+In hindsight, the simplest solution would have been to clean the names before merging the data sets. However, as one does learn from their mistakes, I have left my creative, but extremely unnecessarily complicated approach to the task at hand. The idea was to extract the data that contained the wrong names into a "phantom data set", clean the names, merge the poverty and GDP information (look at comments in code for more info), and the re-join that phantom data set into the original data set.
 
 ```{r}
-#| eval: true
-######################################## Clean data
-# unique(world$region)
-# Here it was important to check that the data i was merging was not stepping on top of each other!
+############### Check name disparities
+unique(world$region)
 
 ############### Clean South and Southeast Asia
-
-# Create two dataset: in one i delete south and southeast asia, and in the other 
-# i clean south and southeast asia and then join it back into the first one 
-
-# check no stepping of data (manual lol)
-# View(world |> # 34 obs
-  #filter(region %in% c("South and Southeast Asia", 
-                       #"South and Southeast Asia)")))
 
 # create new data set 
 clean_southeast <- world |>
   filter(region %in% c("South and Southeast Asia", "South and Southeast Asia)")) |>
   mutate(region = "South and Southeast Asia") |>
-  group_by(YEAR, region = "South and Southeast Asia", source) |>
+  group_by(YEAR, region = "South and Southeast Asia") |>
+
+  # for each group defined by YEAR and region, we automatically select  the first non-missing GDP or poverty value
   summarise(
     GDP = first(na.omit(GDP)),
     poverty = first(na.omit(poverty)),
     .groups = "drop"
   )
-
-# View(clean_southeast) # 22 obs (12 deleted)
 
 # remove south and southeast asia from original dataset 
 world <- world |> 
   filter(!region %in% c("South and Southeast Asia", 
                           "South and Southeast Asia)"))
-# View(world) # 187 obs 
 
-
-# combine data 
+# combine data: clean_world as an extra step during the process, as when you are playing around during the cleaning or any other step, you "safe" your progress 
 clean_world <- bind_rows(world, clean_southeast)
 
 world <- clean_world
 
-# View(world) # 209 obs
-
 ############### Clean Latin America and Caribbean
-# check no stepping of data (manual lol)
-#View(world |> # 34 obs
-       #filter(region %in% c("Latin America and Carribean",
-                            #"Latin America and Caribbean")))
 
 # create new data set 
 clean_latin <- world |>
   filter(region %in% c("Latin America and Carribean", "Latin America and Caribbean")) |>
   mutate(region = "Latin America and Caribbean") |>
-  group_by(YEAR, region = "Latin America and Caribbean", source) |>
+  group_by(YEAR, region = "Latin America and Caribbean") |>
   summarise(
     GDP = first(na.omit(GDP)),
     poverty = first(na.omit(poverty)),
     .groups = "drop"
   )
-# View(clean_latin) # 22 obs (12 deleted)
 
 # remove south and southeast asia from original dataset 
 world <- world |> 
   filter(!region %in% c("Latin America and Carribean", 
                         "Latin America and Caribbean"))
-# View(world) # 175 obs 
-
 
 # combine data 
 clean_world <- bind_rows(world, clean_latin)
-
-# View(clean_world) # 197 obs
-
 world <- clean_world
+```
 
-# unique(world$region) # 9 regions => 9 graphs 
+The second, also easy, task was to rename the "Western Offshoots" as our goal regions "Australia, New Zealand, USA and Canada" and World as "Global Average." This was not strictly necessary as the annotations of the regions in the final graph will be done manually, but it did improve clarity during the replication process.
 
-# View(world)
-
-
+```{r}
 ############### Recode names 
 
 world <- world |> 
@@ -207,34 +174,25 @@ world <- world |>
                          "Western Offshoots" = 
                            "Australia, New Zealand, USA and Canada"), 
          region = recode(region, "World" = "Global Average"))
-
-
-# View(world)
 ```
 
-### Supplementing data for World (Global Average)
+Finally, the last, and most time-consuming step in the cleaning process was supplementing the data. The hardship with this step was not its execution per se, but figuring out which data to use for the supplementation. The original article that provided the excel tables about the world GDP and poverty trends also included tables with information about 25 countries in both these metrics. Therefore, different questions arose: does GDP need supplementation, as it already has some information for its "Global Average" region? Is the supplementation done with the means of the observations out of 25 countries? Or with the means of the observations of the countries already grouped in regions? Or maybe a mix of both? These questions were answered by trial and error, as OurWorldinData had given me no information thereof nor was there any to find in the original source. Hence, I tried different approaches and looked at its impact in later stages of the replication process. It seemed to me that the *mean of the world regions* had been used for supplementing the observations *both for poverty and GDP*, while excluding the already existing GDP information for the calculation of the average of the regions.
 
 ```{r}
-#| eval: true
-######################################## Supplement data: WORLD 
-####### World (Global Average) => add poverty & GDP averages 
-
 # calculate means for GDP and poverty by YEAR, excluding "World"
 world_mean <- world |> 
   filter(region != "Global Average") |> 
   group_by(YEAR) |> 
-  summarise(
+  summarise( # create means in new columns 
     avg_poverty = mean(poverty, na.rm = TRUE), 
     avg_gdp = mean(GDP, na.rm = TRUE), 
     .groups = "drop"
   )
 
-# View(world_mean)
-
-# supplementing "world" dataset with these means (updating "World" region rows)
+# supplementing "Global Average" region
 world_supplemented <- world |> 
   left_join(world_mean, by = "YEAR") |> 
-  mutate(
+  mutate( # add means if they are missing (important for GDP!)
     poverty = if_else(
       region == "Global Average" & is.na(poverty), 
       avg_poverty, 
@@ -246,13 +204,17 @@ world_supplemented <- world |>
   ) |> 
   select(-avg_poverty, -avg_gdp)  # remove temporary average columns
 
-# View(world_supplemented) # 197 obs 
-
 world <- world_supplemented
 
+world |>
+  filter(region == "Global Average")
 ```
 
-## Replication process: Graph
+There are still some years of the poverty index that have no information, these correspond to the years that existed in the GDP data set but not in the poverty data set.
+
+## Replicating the original graph
+
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX WORK IN PROGRESS XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 (no, they dont have logical order, i just did what i could and what bugged me at the moment)
 
