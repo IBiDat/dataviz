@@ -1,7 +1,7 @@
 ---
-title: "Ternary graph by ‘The Economist’: The world’s most, and least, walkable cities"
+title: "The world’s most, and least, walkable cities"
 description: |
-  Visual representation of commuting patterns in cities worldwide, highlighting the proportions of journeys made by car, active mobility (such as walking and cycling), and public transport. The data is based on the study 'The ABC of Mobility' by Rafael Prieto-Curiel and Juan P. Ospina.
+  Ternary graph by ‘The Economist’  of commuting patterns in cities worldwide, highlighting the proportions of journeys made by car, active mobility (such as walking and cycling), and public transport. The data is based on the study 'The ABC of Mobility' by Rafael Prieto-Curiel and Juan P. Ospina.
 categories: "2024"
 author: Pablo Aísa
 date: "`r Sys.Date()`"
@@ -30,7 +30,7 @@ I chose this graph because it seems an original way of presenting information on
 
 The original graphic is an interactive ternary graphic in which a distinctive colour represents the three types of mobility mentioned above. In addition, when hovering over each point, the city's name associated with that point is indicated. The graph contains commentary, so as you scroll down, it is divided into different continents, and the article comments on the most salient results.
 
-![](images/graph.png){width="538"}
+![Ternary graph. Source: [The Economist, 2024](https://www.economist.com/).](images/graph.png){.external width="100%"}
 
 ## Replication
 
@@ -43,12 +43,10 @@ The first step is to load the libraries that will be used.
 library(tidyverse)
 library(ggthemes)
 library(scales)
-library(magick)
 library(ggtern)
 library(patchwork)
 library(plotly)
 library(lemon)
-library(shiny)
 library(showtext)
 
 ```
@@ -60,11 +58,11 @@ Obtaining the data was easy since it is free and available on the [Cities Moving
 The main issue with the dataset was that it is updated from time to time so it is impossible to find which are the cities and observations that were included in the original chart. The data contains a variable where you can check which are the last observations, but this does not mean that these were the observations initially included since there are new cities that were not included before. To mitigate this situation, I created a table from the information contained in The Economist's article. Below the graph, there is a table that contains the names of the 794 cities included in the study, but the names were not written in the same way that they are written in the mobility dataset. Therefore, I changed manually the names, erasing accents and modifying the special characters. This change provided me the possibility of joining the two tables, obtaining a final data of 773 observations, which was closer to 794 than the initial filter with the first table (866 observations).
 
 ```{r}
-## Preparing the data frame
+# Preparing the data frame
 
-mobility_data <- read_csv("D:/COMPUTATIONAL SOCIAL SCIENCE/First semester/Data visualization/data/ModalShare.csv")
+mobility_data <- read_csv("ModalShare.csv")
 
-cities <- read_csv2("D:/COMPUTATIONAL SOCIAL SCIENCE/First semester/Data visualization/data/cities.csv")
+cities <- read_csv2("cities.csv")
 
 mobility_data <- mobility_data |>
   filter(LastObservation == "YES", year <= 2019) |>
@@ -180,7 +178,7 @@ The plot maintains the same visual representation as before, without ticks or la
 The next step is to colour the points according to the colour of the region in which they are located. In order to achieve this, a function was created that assigns the different colours to the points. Several arguments are included within this function in order for it to work correctly, such as the inclusion of the function *point.in.polygon* from the [sp](https://cran.r-project.org/web/packages/sp/sp.pdf) package. The function created is then assigned to the data so that it can be included in the graph that is being replicated.
 
 ```{r}
-## Points with the colour of the regions
+# Points with the colour of the regions
 
 assign_region <- function(point, regions) {
   region_list <- 
@@ -313,7 +311,7 @@ g
 
 ## Alternative versions
 
-In my opinion, creating an improvement on the original graphic is not easy. The chart is able to convey the information in a simple way and in a novel format. In order to find an improvement that adds something to the graph, it is necessary to find a correct way to show the three variables as well. However, the graphic focuses very much on the three colours present, even linking these colours with the points. The colour of the points could be used to show more information about the cities shown.
+In my opinion, creating an improvement on the original graphic is not easy. The chart can convey the information in a simple way and in a novel format. To find an improvement that adds something to the graph, it is necessary to find a correct way to show the three variables as well. However, the graphic focuses very much on the three colours presented, even linking these colours with the points. The colour of the points could be used to show more information about the cities shown.
 
 Taking these factors into account and knowing all the information available in the data set, I thought of making two improvements related to displaying more information on the graph.
 
@@ -465,125 +463,5 @@ p
 
 ```
 
-The graphic keeps the same colours and the legend of the previous alternative. It shows the different mobility patterns according to the continent.
+The graph keeps the same colours and the legend of the previous alternative. In addition, it shows different distributions according to mobility type and continent.
 
-The information in the graph can be enhanced by creating an interactive graph. With the help of the [plotly](https://plotly.com/r/) and [shiny](https://shiny.posit.co/r/getstarted/shiny-basics/lesson1/) packages it has been possible to create an interactive plot in which the name of each city appears as the course passes over the points. In addition, it has been possible to add a search engine in which, by typing the name of each city, its points are highlighted and the rest are blurred.
-
-```{r, eval = FALSE, echo = FALSE}
-
-font_add_google("Roboto Condensed", "Roboto")
-showtext_auto()
-
-# Continent colours
-continent_colors <- c(
-  "Asia" = "#66c2a5",
-  "Europe" = "#fc8d62",
-  "Africa" = "#a6d854",
-  "North America" = "#8da0cb",
-  "South America" = "#e78ac3",
-  "Oceania" = "#ffd92f"
-)
-
-# User interface
-ui <- fluidPage(
-  
-  plotlyOutput("interactive_plot", height = "675px"),
-  
-  tags$div(
-    style = "
-      position: absolute; 
-      right: 10px;
-      top: 85px;
-      width: 200px;
-      z-index: 1000; 
-      background-color: #EEE9E9; 
-      padding: 10px; 
-      border: 1px solid #ccc; 
-    ",
-    textInput("city_search", "Search for a City:", "")
-  )
-)
-
-server <- function(input, output, session) {
-  mobility_long
-  
-    output$interactive_plot <- renderPlotly({
-    search_term <- input$city_search
-    
-    mobility_long <- mobility_long |> 
-      mutate(
-        alpha = ifelse(
-          grepl(search_term, City, ignore.case = TRUE) | 
-            search_term == "", 1, 0.1))
-    
-    p <- ggplot(mobility_long, aes(
-      x = population, 
-      y = Percentage, 
-      color = Continent, 
-      text = City,
-      alpha = alpha
-    )) +
-      geom_point(size = 2.5) +
-      facet_grid(Transport ~ ., scales = "fixed") +
-      scale_color_manual(values = continent_colors) +
-      scale_x_log10(
-        breaks = c(1e5, 1e6, 1e7, 1e8, 1e9),
-        labels = scales::label_number(scale = 1e-6, suffix = "M")
-      ) +
-      scale_y_continuous(
-        limits = c(0, 1), 
-        breaks = c(0, 0.25, 0.5, 0.75, 1),
-        labels = c("0%", "25%", "50%", "75%", "100%")
-      ) +
-      theme_minimal() +
-      labs(
-        title = "Mobility by continent",
-        x = "Population (in millions)",
-        y = "Percentage (%)",
-        color = "Continent"
-      ) +
-      guides(
-        color = guide_legend(override.aes = list(size = 5, alpha = 0.7))
-      ) +
-  theme(
-    text = element_text(family = "Roboto"),
-    strip.text = element_text(size = 14, face = "bold"),
-    panel.spacing = unit(1, "lines"),
-    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
-    axis.text = element_text(size = 8),
-    axis.title = element_text(size = 12, face = "bold", hjust = 0.5),
-    panel.grid.major.y = element_line(color = "grey80", linewidth = 0.4),
-    panel.grid.minor.y = element_blank(),
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    axis.line = element_line(color = "black", linewidth = 0.4),
-    axis.ticks = element_line(color = "black", linewidth = 0.15),
-    #Legend arguments
-    legend.title = element_text(face = "bold"),
-    legend.text = element_text(size = 10),
-    legend.box.background = element_rect(color = "black", fill = "#EEE9E9"),
-    legend.box.margin = margin(5, 5, 5, 5)
-      )
-    
-    # Interactive graph
-    ggplotly(p, tooltip = "text") |> 
-      layout(
-        font = list(
-        family = "Roboto Condensed"),
-        legend = list(
-          title = list(text = "<b>Continent</b>"),
-          orientation = "v",
-          x = 1.1, 
-          y = 0.5,
-          bgcolor = "#EEE9E9",
-          bordercolor = "black",
-          borderwidth = 1
-        )
-      )
-  })
-}
-
-shinyApp (ui = ui,  server = server)
-
-
-```
