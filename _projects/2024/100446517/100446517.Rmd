@@ -1,7 +1,7 @@
 ---
 title: "Book reading habits"
 description: |
-  A short description of the post.
+  This project explains how to replicate and create an alternative version of a chart from Eurostat about book reading habits.
 categories: "2024"
 author: Aurora Sterpellone
 date: "`r Sys.Date()`"
@@ -11,12 +11,6 @@ output:
     toc: true
 ---
 
-Distill is a publication format for scientific and technical writing, native to the web.
-
-Learn more about using Distill at <https://rstudio.github.io/distill>.
-
-# EU Book Reading Habits Graph Replication
-
 ## Introduction
 
 In 2022, according to EU statistics on income and living conditions, 52.8% of the EU population aged 16 years or over reported reading books in the past 12 months.
@@ -25,7 +19,7 @@ The “Book Reading Habits over the Past 12 Months (2022)” graph, created by E
 
 The data reflects not only cultural and educational trends in book readership but also highlights variations between countries, offering a window into broader societal behaviors. This information is valuable for understanding literacy levels, cultural engagement, and potential market demand in the publishing industry across Europe and its neighboring regions.
 
-![](images/books-day-MS-2022.png)
+![Book Reading Habits over past 12 months, 2022. Source: [Eurostat](https://ec.europa.eu/eurostat/web/main/home).](images/img1.png){.external width="100%"}{width="100%"}
 
 ## Necessary Libraries
 
@@ -48,12 +42,12 @@ library(showtext)
 Load the dataset into the environment. Here, ilc_scp27_linear represents the dataset containing information on book reading habits.
 
 ```{r}
-data <- read.csv(file = "ilc_scp27_linear.csv")
+data <- read.csv(file = "data/ilc_scp27_linear.csv")
 ```
 
 ## Data cleaning and transformation
 
-### **Step 1: Filter Relevant Data**
+### Step 1: Filter Relevant Data
 
 First, the data is cleaned by extracting only the relevant data for the year 2022 and selecting records where the unit is expressed in percentages. Thanks to the select( ) function, only the relevant columns geo (country), n_book (book categories), and OBS_VALUE (percentage) are kept.\
 The mutate() function ensures the n_book column is treated as a factor, which is necessary for ordering and labeling later.
@@ -120,7 +114,7 @@ data_aggregated <- data_filtered %>%
   ungroup()
 ```
 
-### **Step 5: Reshape Data for Visualization**
+### Step 5: Reshape Data for Visualization
 
 To make it easier to create a stacked bar plot, I pivoted the data from long format (one row per country and book category) to wide format (one row per country with separate columns for each book category).
 
@@ -207,7 +201,7 @@ I had to add and activate the Roboto Condensed font.
 
 ```{r}
 sysfonts::font_add_google("Roboto Condensed", family = "roboto_condensed")
-showtext_auto()  # Enables the use of custom fonts in ggplot2
+showtext_auto() 
 ```
 
 To ensure that the custom font is applied consistently when the code is rendered in a Quarto or R Markdown document, I had to configure chung options for Quarto/R Markdown: fig.showtext = TRUE: Ensures that showtext is used for rendering fonts in figures.
@@ -238,18 +232,9 @@ ggplot(data_aggregated, aes(x = geo, y = OBS_VALUE, fill = n_book)) +
   )
 ```
 
-Finally, I wanted to verify that the Roboto Condensed font is rendered in the final plot. The re-plot confirms that the font is successfully applied.
-
-```{r}
-# ggplot(data_aggregated, aes(x = geo, y = OBS_VALUE, fill = n_book)) +
-#   ...
-#   theme_minimal(base_family = "Roboto Condensed") +
-#   ...
-```
-
 The final plot uses the “Roboto Condensed” font across all text elements (title, subtitle, legend, axis labels, etc.), ensuring a clean and cohesive visual style. This is particularly useful for creating professional-quality visualizations that match specific branding or design requirements.
 
-### Space b/w countries
+### Space between countries
 
 The original graph separates the EU average from the other countries, leaving the EU bar on the far left of the graph, and the other countries alphabetically ordered on the right.\
 To do so, I created a dummy level and explicitly added to 'geo' variable. The dummy space (geo = " ") creates a visual gap between the bar for EU and the rest of the countries.Then, to ensure the 'geo' variable has the correct order for the bars in the graph, I have make explicit the levels: "EU" is placed first; " " (a dummy space) is added as a placeholder to create the gap; the remaining countries are sorted alphabetically and placed after the dummy space.
@@ -279,7 +264,7 @@ Finally, we plot the stacked bar chart
 # Plot with a gap between EU and the other countries
 ggplot(data_aggregated_with_space, aes(x = geo, y = OBS_VALUE, fill = n_book)) +
   geom_bar(stat = "identity", position = "stack") +
-  scale_fill_manual(values = colors, na.translate = FALSE) + # Ensure no fill for dummy
+  scale_fill_manual(values = colors, na.translate = FALSE) +
   labs(title = "Book reading habits over past 12 months, 2022",
        subtitle = "(% of people aged 16 and over)",
        x = NULL,
@@ -294,7 +279,7 @@ ggplot(data_aggregated_with_space, aes(x = geo, y = OBS_VALUE, fill = n_book)) +
   )
 ```
 
-### Background colour and some more changes…
+### Background colour and some more changes
 
 A few more changes:
 
@@ -302,18 +287,18 @@ A few more changes:
 
 -   Change the y-axis ticks to show every percentage: Use scale_y_continuous() and specify the breaks.
 
--   remove the legend title “Books Read.”
+-   Remove the legend title “Books Read.”
 
 ```{r}
 ggplot(data_aggregated_with_space, aes(x = geo, y = OBS_VALUE, fill = n_book)) +
   geom_bar(stat = "identity", position = "stack") +
-  scale_fill_manual(values = colors, na.translate = FALSE) + # Ensure no fill for dummy
+  scale_fill_manual(values = colors, na.translate = FALSE) +
   labs(title = "Book reading habits over past 12 months, 2022",
        subtitle = "(% of people aged 16 and over)",
        x = NULL,
        y = "Percentage",
        fill = " ") + # Remove legend title by leaving it blank
-  scale_y_continuous(breaks = seq(0, 100, by = 10)) +  # Set y-axis ticks at intervals of 10
+  scale_y_continuous(breaks = seq(0, 100, by = 10)) +
   theme_minimal(base_family = "roboto_condensed") +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1),
@@ -365,26 +350,26 @@ data_aggregated_with_space$geo <- recode(data_aggregated_with_space$geo,
                                          "TR" = "TURKEY",
                                          "RO" = "ROMANIA",
                                          "CY" = "CYPRUS",
-                                         "DE" = "GERMANY")  # Ensure the dummy space remains unchanged
+                                         "DE" = "GERMANY")
 
 # Re-plot the graph with full country names
 ggplot(data_aggregated_with_space, aes(x = geo, y = OBS_VALUE, fill = n_book)) +
   geom_bar(stat = "identity", position = "stack") +
-  scale_fill_manual(values = colors, na.translate = FALSE) + # Ensure no fill for dummy
+  scale_fill_manual(values = colors, na.translate = FALSE) +
   labs(title = "Book reading habits over past 12 months, 2022",
        subtitle = "(% of people aged 16 and over)",
        x = NULL,
        y = "Percentage",
-       fill = " ") + # Remove legend title by leaving it blank
-  scale_y_continuous(breaks = seq(0, 100, by = 10)) +  # Set y-axis ticks at intervals of 10
+       fill = " ") +
+  scale_y_continuous(breaks = seq(0, 100, by = 10)) +
   theme_minimal(base_family = "roboto_condensed") +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1),
     panel.grid.major.x = element_blank(),
     legend.position = "top",
     plot.subtitle = element_text(face = "italic"),
-    panel.background = element_rect(fill = "#f5f5f5", color = NA),  # Set panel background
-    plot.background = element_rect(fill = "#f5f5f5", color = NA)    # Set plot background
+    panel.background = element_rect(fill = "#f5f5f5", color = NA),
+    plot.background = element_rect(fill = "#f5f5f5", color = NA)
   )
 ```
 
@@ -392,16 +377,16 @@ ggplot(data_aggregated_with_space, aes(x = geo, y = OBS_VALUE, fill = n_book)) +
 
 #### Bold Title
 
-```{r}
+```{r, preview = TRUE}
 ggplot(data_aggregated_with_space, aes(x = geo, y = OBS_VALUE, fill = n_book)) +
   geom_bar(stat = "identity", position = "stack") +
-  scale_fill_manual(values = colors, na.translate = FALSE) + # Ensure no fill for dummy
+  scale_fill_manual(values = colors, na.translate = FALSE) +
   labs(title = "Book reading habits over past 12 months, 2022",
        subtitle = "(% of people aged 16 and over)",
        x = NULL,
        y = "Percentage",
-       fill = " ") + # Remove legend title by leaving it blank
-  scale_y_continuous(breaks = seq(0, 100, by = 10)) +  # Set y-axis ticks at intervals of 10
+       fill = " ") +
+  scale_y_continuous(breaks = seq(0, 100, by = 10)) +
   theme_minimal(base_family = "roboto_condensed") +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1),
@@ -409,14 +394,12 @@ ggplot(data_aggregated_with_space, aes(x = geo, y = OBS_VALUE, fill = n_book)) +
     legend.position = "top",
     plot.title = element_text(face = "bold"),  # Make the title bold
     plot.subtitle = element_text(face = "italic"),  # Subtitle italic
-    panel.background = element_rect(fill = "#f5f5f5", color = NA),  # Set panel background
-    plot.background = element_rect(fill = "#f5f5f5", color = NA)    # Set plot background
+    panel.background = element_rect(fill = "#f5f5f5", color = NA),
+    plot.background = element_rect(fill = "#f5f5f5", color = NA)
   )
 ```
 
-…
-
-# My graph enhancement (?)
+# My graph enhancement
 
 For my graph replication, I opted to separate each country’s bars to make it easier to distinguish between the various categories of books read. Each book category is represented by a separate bar for clarity. As part of the process, I loaded the necessary libraries and data, then I did some data cleaning and transformation to prepare it for visualization: (1) filter the data for 2022 and specific columns, (2) convert OBS_VALUE to numeric, (3) recode n_book with descriptive labels, (4) reorder n_book levels, (5) rename geo for EU regions, (6) filter out specific regions and categories.
 
@@ -433,7 +416,7 @@ library(showtext)
 ```
 
 ```{r}
-data <- read.csv(file = "ilc_scp27_linear.csv")
+data <- read.csv(file = "data/ilc_scp27_linear.csv")
 
 # data cleaning and transformation:
 
@@ -479,7 +462,7 @@ data_aggregated <- data_filtered %>%
 
 # Add dummy rows for spacing
 dummy_data <- data.frame(
-  geo = " ",  # Space as a category
+  geo = " ",
   n_book = unique(data_aggregated$n_book),
   OBS_VALUE = 0
 )
@@ -556,7 +539,7 @@ First, I generated the bar graph creating a grouped bar chart with geo on the x-
 ```{r}
 #### Plot ####
 ggplot(data_with_space, aes(x = geo, y = OBS_VALUE, fill = n_book)) +
-  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +  # Grouped bars
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
   scale_fill_manual(values = colors) +
   labs(
     title = "Book Reading Habits: 2022",
@@ -606,12 +589,12 @@ I tried to add numbers, but I don't like it.
 ```{r}
 # numbers?
 ggplot(data_with_space, aes(x = geo, y = OBS_VALUE, fill = n_book)) +
-  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +  # Grouped bars
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
   geom_text(
-    aes(label = round(OBS_VALUE, 1)),  # Add text with rounded values
-    position = position_dodge(width = 0.8),  # Match the dodge width to align with bars
-    vjust = -0.5,  # Adjust the text position above the bars
-    size = 3  # Adjust font size of the labels
+    aes(label = round(OBS_VALUE, 1)), 
+    position = position_dodge(width = 0.8),
+    vjust = -0.5, 
+    size = 3
   ) +
   scale_fill_manual(values = colors) +
   labs(
@@ -661,14 +644,14 @@ data_filtered <- data.frame(
 
 # Duplicate rows to simulate "stacked books"
 books_data <- data_filtered %>%
-  mutate(num_books = round(OBS_VALUE / 5)) %>%  # Scale down percentages
-  uncount(num_books, .id = "book_id") %>%       # Duplicate rows for book tiles
+  mutate(num_books = round(OBS_VALUE / 5)) %>%
+  uncount(num_books, .id = "book_id") %>%   
   group_by(geo, n_book) %>%
-  mutate(y_position = row_number())             # Vertical position for stacking
+  mutate(y_position = row_number())             
 
 # Plot using geom_tile()
 ggplot(books_data, aes(x = geo, y = y_position, fill = n_book)) +
-  geom_tile(width = 0.7, height = 0.3, color = "white") +  # White borders for books
+  geom_tile(width = 0.7, height = 0.3, color = "white") +  
   scale_fill_manual(
     values = c("Less than 5 books" = "#a8c9a8",
                "5 to 9 books" = "#4b8b4b",
@@ -689,4 +672,3 @@ ggplot(books_data, aes(x = geo, y = y_position, fill = n_book)) +
   )
 ```
 
-.
