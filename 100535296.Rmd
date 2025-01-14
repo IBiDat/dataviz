@@ -1,0 +1,546 @@
+---
+title: "Distribution of Athletes by Sport and Age Since 1896"
+description: |
+  This project focuses on recreating the original visualization, published by The Washington Post, of Olympic athlete distribution by sport and age since the inception of the modern Games in 1896. The aim is to critically analyze the design and propose an alternative visualization that enhances clarity, and interpretability of the data.
+categories: "2024"
+author: "Irene Bosque Gala"
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+# ORIGINAL GRAPH
+
+The selected graph is a heatmap published in an online article by The Washington Post. It displays the age distribution of athletes who participated in the Olympic Games, categorized by sport, from the first games in Athenas in 1896 up to 2012, the publication date of the article. The graph uses a color gradient to represent the density of athletes within specific age ranges for each sport.
+
+Although the original graph is now inaccessible (I had to recover a screenshot from an image repository), it initially allowed users to explore data by gender, country, or year. For this project, however, I focused solely on replicating the static version of the graph, which includes all genders, years, and countries to reflect the data as it appears in the original snapshot.
+
+
+
+```{r}
+#| echo: false
+knitr::include_graphics("C:/Users/irene/OneDrive/Escritorio/432ccc9bae023c97f2f7a035df4d3e13.jpg")
+```
+One of the most notable strengths of the graph is the amount of information it gathers in a really compact space. We can observe up to 32 sports, providing a comprehensive overview of how age distribution varies across disciplines. For example, we can quickly identify which sports are inclusive of a broader range of ages (like archery, equestrianism or shooting) and which are dominated by younger athletes (like rhythmic gymnastics, taekwondo or syncronized swimming).
+
+Despite its strengths, the graph has notable limitations. While it clearly establishes the age range, it does not provide deeper insights into the distribution, such as means or medians. Additionally, it is challenging to discern where the majority of athletes are concentrated. For sports with less data (e.g., taekwondo, triathlon, and rhythmic gymnastics), it becomes even harder to identify trends or clusters. Even in sports with substantial data, the visualization does not make it easy to differentiate information between closely spaced age groups.
+
+
+# GRAPH REPLICATION
+
+## DOWNLOADING LIBRARIES
+
+```{r}
+#| echo: false
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(gplots)
+library(ggtext)
+library(ggdist)
+library(glue)
+library(patchwork)
+library(paletteer)
+```
+
+## CLEANING DATA
+
+As we mentioned earlier, the original graph is now inaccessible. To recover the original dataset, we had to retrieve the link through another website that specializes in retrieving broken links. This led us to a dataset obtained from Kaggle, which included information such as the athlete's name, sport, year of birth, age, gender, nationality, weight, and height. It covers all athletes who have participated in the Olympic Games from their inception up to 2016. Consequently, our graph includes slightly more data than the original.
+
+```{r}
+olympics3 <- read_csv("athlete_events1.csv")
+```
+
+We, then, specify the variable we want to mantain, as we only need the age and the sport each thlete practice:
+
+```{r}
+data <- olympics3 |> 
+  select(Age, Sport)
+```
+
+We observe there are too many sports, so we filter as following with the function filter from the tidyverse package:
+
+```{r}
+data_filtered <- data |> 
+  filter(Sport=="Archery" | Sport=="Athletics" | Sport=="Badminton" | Sport=="Basketball" |
+           Sport=="Beach Volleyball"| Sport=="Boxing"|Sport=="Canooing"|
+           Sport=="Cycling"|Sport=="Diving"|Sport=="Equestrianism"|
+           Sport=="Fencing"|Sport=="Football"|Sport=="Artistic Gymnsatics"|
+           Sport=="Handball"|Sport=="Hockey"|Sport=="Judo"|
+           Sport=="Modern Pentathlon"|Sport=="Rhythmic Gymnastics"|Sport=="Rowing"|
+           Sport=="Sailing"|Sport=="Shooting"|Sport=="Swimming"|
+           Sport=="Table Tenis"|Sport=="Taekwondo"|Sport=="Tennis"|Sport=="Trampoling"|
+           Sport=="Triathlon"|Sport=="Volleyball"|Sport=="Water Polo"|Sport=="Weightlifting"|
+           Sport=="Wrestling"|Sport=="Table Tennis"|Sport=="Canoeing"|Sport=="Volleyball"|
+           Sport=="Gymnastics"|Sport=="Synchronized Swimming"| Sport=="Trampolining")
+```
+
+Now, we need to count how many people in each sport are a certain age. For this, we use the count() function. The following code will create another dataset showing the number of people who, for instance, are 24 years old and participate in athletics. Next, we group these counts according to the original graph's legend using the case_when() function:
+
+```{r}
+data_counts <- data_filtered |> 
+  count(Sport, Age) |>         
+  rename(Count = n) 
+
+data_counts <- data_counts %>%
+  mutate(grouped_count = case_when((Count>=1) & (Count<5) ~ "1-5",
+         (Count>=5) & (Count<30) ~ "<30",
+         (Count>=30) & (Count<60) ~ "<60",
+         (Count>=60) & (Count<90) ~ "<90",
+         (Count>=90) & (Count<120) ~ "<120", 
+         (Count>=120) & (Count<150) ~ "<150",
+         (Count>=150) & (Count<400) ~ "<400",
+         (Count>=400) ~ "400 or higher"))
+
+```
+
+We make sure Age is a numerical variable adn we erase the data within Age that is NA:
+
+```{r}
+data_counts$Age <- as.numeric (data_counts$Age)
+
+data_counts <- data_counts |> 
+  drop_na(Age)
+```
+
+We then rename the sports to match how they appear in the original graph, as "Rhythmic Gymnastics" and "Synchronized Swimming" are written differently
+
+```{r}
+#Rythmic gymnastics into Rythimc Gym.
+
+data_counts <- data_counts |> 
+  mutate(Sport = ifelse(Sport == "Rhythmic Gymnastics", "Rhythmic Gym.", Sport))
+
+# Synchronized Swimming into Sync. Swimming
+
+data_counts <- data_counts |> 
+  mutate(Sport = ifelse(Sport == "Synchronized Swimming", "Sync. Swimming", Sport))
+
+```
+
+As shown in the original graph, we order the sports from A to Z
+
+```{r}
+data_counts <- data_counts |> 
+  arrange(Sport) |> 
+  mutate(Sport = factor(Sport, levels = rev(sort(unique(Sport)))))
+```
+
+Finally, we create a new table using summarise to calculate the minimum and maximum ages for each sport in order to be able to add this information more easily to the graph later. Afterward, we merge this table with the original one using left_join.
+
+```{r}
+age_extremes <- data_counts |> 
+  group_by(Sport) |> 
+  summarise(min_age = min(Age, na.rm = TRUE), 
+            max_age = max(Age, na.rm = TRUE)) |> 
+  ungroup() 
+
+data_counts <- data_counts |> 
+  left_join(age_extremes, by = "Sport")
+
+```
+
+## BUILDING THE GRAPH
+
+### FONTS
+
+For the fonts used in the graph, I tried to replicate all the fonts that appeared in the original graph, which I found thanks to The Washington Post's design system page. This page shows the types of fonts they use, as well as their size, weight, and height for writing articles:  https://build.washingtonpost.com/foundations/typography 
+
+I was able to recover all of them except the title font, Postoni, since it is a paid font. Instead, I used Georgia, which is also used by The Washington Post for the body text of articles.
+
+To implement this, I used the showtext package, which allows for text rendering using fonts downloaded from Google Fonts, such as Libre Franklin, the font used for annotations. I also used extrafont, which simplifies the registration and use of external fonts installed on the operating system, such as Georgia, used for the title, subtitle, and caption, and Arial, which was used for the numbers indicating the maximum and minimum ages of athletes in each sport.
+
+```{r}
+
+library(showtext)
+library(extrafont)
+
+font_add_google("Libre Franklin", "franklin")
+showtext_auto() 
+
+font_add(family = "Georgia", regular = "C:/Windows/Fonts/georgia.ttf")
+font_add(family = "Arial", regular = "C:/Windows/Fonts/arial.ttf")
+
+```
+
+### THEME
+
+I believe that the most important and complex part of creating the graph was defining the theme. This graph is highly intricate, containing numerous elements and details that must be precisely arranged. As a result, I had to carefully adjust not only the annotations but also the axis titles, legend titles, legend colors, spacing between the elements, text sizes, and more. Once the theme was successfully applied, it immediately brought the graph closer to its final design, demonstrating just how crucial the theme is in shaping its overall aesthetic and coherence. This is why the graph appears so similar to the original from the very beginning, as in this final version it is applied since the first steps.
+
+Some of the functions that help achieve this level of precision include starting with theme_minimal(base_size = 7) to establish a minimalist base with small text. The primary and secondary grids are removed using element_blank(), and panel.background sets a light gray background (gray97) with no borders (color = NA). The axis texts are customized in black, with adjusted sizes and very specific margins to replicate the original design. The legend is configured with legend.position to place it at the top of the graph, and legend.justification to fine-tune its exact position. The legend texts are personalized using legend.title and legend.text, with small sizes and precise margins. Additionally, legend.key.size reduces the size of the legend keys to 0.1 cm, creating a more compact design. 
+
+Another crucial factor for accurately representing this graph has been the proportions. For every version of the graph, the specification {r, fig.width=4, fig.height=6, out.width="100%"} was added to each chunk, ensuring consistent sizing across all iterations. Additionally, coord_fixed(ratio=1.5) was used to adjust the aspect ratio between the X and Y axes. This ratio means that 1 unit on the Y-axis corresponds to 1.5 units on the X-axis, resulting in a Y-axis that appears more elongated and less compact than the X-axis. This adjustments were crucial for achieving the correct visual proportions and ensuring that the graph closely aligned with the original design.
+
+
+
+```{r}
+
+theme <- theme_minimal(base_size = 7) +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "gray97", color = NA),
+    axis.text.x = element_text(color = "black", angle = 0, hjust = 0.7, size = 7),
+    axis.text.y = element_text(color = "black", size = 7.3, margin = margin(r = 3)),
+    plot.title = element_text(family = "Georgia", size = 25, face = "bold", hjust = 0.05, vjust = 0, color = "black"),
+    plot.subtitle = element_text(family = "Georgia", size = 8, face = "bold", color = "gray60", hjust = 0.05, vjust = -5, margin = margin(b = 15)),
+    plot.caption = element_text(
+      family = "Georgia", size = 7.5, hjust = 0, vjust = 247, margin = margin(t = 0, l= 100), color = "gray60", lineheight = 0.5
+    ),
+    legend.position = "top",
+    legend.justification = c(0,1.2),
+    legend.title = element_text(size = 7.5, face = "bold"),
+    legend.text = element_text(size = 7, margin = margin(l = 1, r = 0)),
+    plot.caption.position = "panel",
+    legend.key.size = unit(0.1, "cm"),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(
+      size = 6.5,
+      angle = 0,
+      hjust = -24,
+      vjust = 1.035,
+      face = "bold"),
+    plot.margin = margin(t = 20, r = 20, b = 20, l = 0))
+
+
+```
+
+### GRAPH 
+
+Once the theme was defined, we proceeded to create the base of the graph using the geom_tile function, which generates a mosaic plot. The aes(x = Age, y = Sport, fill = grouped_count) function maps ages to the X-axis, sports to the Y-axis, and the group size to the color of the tiles. To customize the colors, we've used scale_fill_manual, with colors carefully chosen thanks to imagecolorpicker.com.  These colors correspond to specific categories of grouped_count (such as "1-5", "<30", etc.), with lighter blues representing smaller values and darker blues for larger ones. The limits argument ensures that the legend displays the categories in a specific order, from "1-5" to "400 or higher", while the labels argument customizes the labels in the legend to clearly describe the range of athletes in each group. Additionally, we set a clear title for the legend using the name parameter and arranged the legend in a single row with guide_legend(nrow = 1).
+
+```{r}
+p <- ggplot(data_counts, aes(x = Age, y = Sport, fill = grouped_count)) + 
+  geom_tile(size = 0) +
+  scale_fill_manual(
+    values = c(
+      "1-5" = "#ddeaf9",
+      "<30" = "#c4dbf1",
+      "<60" = "#9fcae2",
+      "<90" = "#6cadd4",
+      "<120" = "#4193c3",
+      "<150" = "#2372b5",
+      "<400" = "#08519d",
+      "400 or higher" = "#083069"
+    ), 
+    labels = c(
+      "1-5" = "1-5 athletes",
+      "<30" = "<30",
+      "<60" = "<60",
+      "<90" = "<90",
+      "<120" = "<120",
+      "<150" = "<150",
+      "<400" = "<400",
+      "400 or higher" = "400 or higher"
+    ),
+    limits = c("1-5", "<30", "<60", "<90", "<120", "<150", "<400", "400 or higher"),
+    name = "Total athletes in each age group:",
+    guide = guide_legend(nrow = 1)
+  ) + theme +
+  coord_fixed(ratio = 1.5)
+
+p
+
+```
+
+Next, we customized the graph's axes. For the X-axis, scale_x_continuous positions it at the top of the graph, defines a range between 10 and 73, sets tick marks at intervals of 5, and customizes the labels to display "10YRS" only for the value 10, while showing the other values as numbers. For the Y-axis, scale_y_discrete removes extra space before and after the categories (expand = c(0, 0)), ensuring that the graph elements fit directly within the drawing area. After adjusting the axes, we added the title, subtitle, and caption (which will appear as the description in the top-right corner of the graph) using the labs function.
+
+```{r, fig.width=4, fig.height=6, out.width="100%"}
+p <- p + 
+  scale_x_continuous(
+    position = "top",
+    limits = c(10, 73),
+    breaks = seq(10, 70, by = 5),
+    labels = function(x) ifelse(x == 10, "10YRS", as.character(x))
+  ) +
+  scale_y_discrete(expand = c(0, 0)) +
+  labs(
+    title = "Olympians",
+    subtitle = "By age, sport, country, and sex",
+    y = "BY SPORT",
+    caption = "Explore a Washington Post breakdown of all Summer Olympics\n athletes who have competed since the first modern Games in 1896.\n See the expansive rang in age of the competitors, and when men\n and women first competed in each sport."
+    )  
+  
+
+p
+```
+
+
+In this step, we use the geom_hline() function to add a white line to the graph, separating the sport categories. We position the line just below each category by converting the values of the Sport variable to numeric format and adjusting them by 0.5. This creates a clear visual separation between the categories, helping to improve the readability of the graph.
+
+```{r, fig.width=4, fig.height=6, out.width="100%"}
+
+p <- p +
+  geom_hline(
+    aes(yintercept = as.numeric(Sport) - 0.5),
+    color = "white",
+    size = 0.3
+  )
+
+p
+```
+
+Next, we add the maximum and minimum age for each sport by using the variables max_age and min_age, which we created earlier. These values are then displayed on the graph using geom_text(), positioning the text labels accordingly.
+
+```{r, fig.width=4, fig.height=6, out.width="100%"}
+
+p <- p +geom_text(
+    aes(x = min_age, y = Sport, label = min_age),
+    size = 2.5,
+    hjust = 1.1,
+    color = "gray40",
+    family = "Arial"
+  ) +
+  geom_text(
+    aes(x = max_age, y = Sport, label = max_age),
+    size = 2.5,
+    hjust = -0.1,
+    color = "gray40",
+    family = "Arial")
+
+p
+```
+
+Finally, we add the annotations and the lines that connect the data points to these annotations. To create the L-shaped arrows, we combine two geom_segment() functions, one vertical and one horizontal, and position them on the plot to form this shape. Next, we add the three annotations visible in the graph using annotate(), specifying the exact location within the plot, as well as the size, color, font, and line spacing (with lineheight).
+
+```{r, fig.width=4, fig.height=6, out.width="100%"}
+
+p <- p + 
+  geom_segment(
+    aes(x = 72.5, xend = 73, y = 29 , yend = 29),  
+    color = "gray60", size = 0.04
+  ) +
+  geom_segment(
+    aes(x = 73, xend = 73, y = 24, yend = 29),  
+    color = "gray60", size = 0.04
+  ) +
+annotate(
+  "text",
+  x = 62, y = 28,
+  label = "Arthur von Pongracz\nof Austria, competed in\nindividual and team\ndressage. At 72\nPongracz placed fourth\nin team and 16th in\nindividual.",
+  hjust = 0,
+  size = 2.1,
+  color = "gray30", 
+  family = "franklin",
+  lineheight = 0.5) +
+  geom_segment(
+    aes(x = 50, xend = 59, y = 20.5, yend = 20.5),
+    color = "gray60", size = 0.04
+  ) +
+  annotate(
+    "text",
+    x = 60, y = 18.5, 
+    label = "At age 10, Dimitrios \nLoundras of Greece, won\nbronze in the 1896 men's\nteam parallel bars. Jan de\nBoer of Netherlands, then 49\nyears old, competed in the\n1908 men's team all-around.",
+    hjust = 0,
+    size = 2.1,
+    color = "gray30",
+    family = "franklin",
+    lineheight = 0.5) +
+  geom_segment(
+    aes(x = 72.5, xend = 73, y = 6, yend = 6),  
+    color = "gray60", size = 0.04
+  ) +
+  geom_segment(
+    aes(x = 73, xend = 73, y = 6, yend = 11),  
+    color = "gray60", size = 0.04
+  ) +
+  annotate(
+    "text",
+    x = 62, y = 6,  
+    label = "Oscar Swahn of\nSweden, set the first\nOlympic record in\nmen's single shot\nrunning target in 1908,\nat age 60. He is also\nthe oldest gold\nmedalist in an\nindividual Olympic\nevent.",
+    hjust = 0,
+    size = 2.1,
+    color = "gray30",
+    family = "franklin",
+    lineheight = 0.5
+  ) 
+
+p
+```
+
+
+# ALTERNATIVE GRAPH
+
+Considering the limitations of the original graph, I developed an alternative version. Among the proposed improvements, I wanted to create a graph that included key estimates such as the mean, median, and that represents more accurately the distributions we aimed to analyze. To achieve this, I designed a ridgeline plot with an additional inside plot as a legend to make the data easier to interpret
+
+
+First of all, we clean the data again using the same steps, except for the last one, as we want a different order from the original graph. We find it more useful to order the sports based on the median age of athletes in each sport, allowing us to clearly see which sports accommodate a broader range of ages and which are concentrated with younger athletes. We reorder the sports using the reorder() function, specifying FUN = median to arrange them by median age, and -Age to sort them from lowest to highest.
+
+```{r, fig.asp= 1.5, fig.height=13}
+
+olympics3 <- read_csv("athlete_events1.csv")
+
+olympics <- olympics3 |> 
+  select(Age, Sport) |> 
+  drop_na(Age, Sport)
+
+olympics <- olympics |> 
+  filter(Sport=="Archery" | Sport=="Athletics" | Sport=="Badminton" | Sport=="Basketball" |
+           Sport=="Beach Volleyball"| Sport=="Boxing"|Sport=="Canooing"|
+           Sport=="Cycling"|Sport=="Diving"|Sport=="Equestrianism"|
+           Sport=="Fencing"|Sport=="Football"|Sport=="Artistic Gymnsatics"|
+           Sport=="Handball"|Sport=="Hockey"|Sport=="Judo"|
+           Sport=="Modern Pentathlon"|Sport=="Rhythmic Gymnastics"|Sport=="Rowing"|
+           Sport=="Sailing"|Sport=="Shooting"|Sport=="Swimming"|
+           Sport=="Table Tenis"|Sport=="Taekwondo"|Sport=="Tennis"|Sport=="Trampoling"|
+           Sport=="Triathlon"|Sport=="Volleyball"|Sport=="Water Polo"|Sport=="Weightlifting"|
+           Sport=="Wrestling"|Sport=="Table Tennis"|Sport=="Canoeing"|Sport=="Volleyball"|
+           Sport=="Gymnastics"|Sport=="Synchronized Swimming"| Sport=="Trampolining")
+
+olympics$Age <- as.numeric (olympics$Age)
+
+#Rythmic gymnastics into Rythimc Gym.
+
+olympics <- olympics|> 
+  mutate(Sport = ifelse(Sport == "Rhythmic Gymnastics", "Rhythmic Gym.", Sport))
+
+# Synchronized Swimming into Sync. Swimming
+
+olympics <- olympics |> 
+  mutate(Sport = ifelse(Sport == "Synchronized Swimming", "Sync. Swimming", Sport))
+
+#in order to order the y axes by the median
+
+olympics <- olympics |> 
+  mutate(Sport = reorder(Sport, -Age, FUN = median, na.rm = TRUE))
+
+```
+
+Next, and continuing with the data preparation, we create additional variables that will be useful when creating the graph. To identify outliers, we calculate the IQR (Interquartile Range) for each sport to determine the lower (lower_limit) and upper (upper_limit) boundaries, filtering out any values that fall outside these limits. Later, we will overlay the outliers on the main plot using geom_point() and the olympics_outliers dataset to highlight them.
+
+```{r}
+
+# Calcular outliers
+outliers <- olympics |> 
+  group_by(Sport) |> 
+  summarise(
+    Q1 = quantile(Age, 0.25, na.rm = TRUE),
+    Q3 = quantile(Age, 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1
+  ) |> 
+  mutate(
+    lower_limit = Q1 - 3 * IQR,
+    upper_limit = Q3 + 3 * IQR
+  ) |> 
+  select(Sport, lower_limit, upper_limit)
+
+# Unir límites al dataset original
+olympics_outliers <- olympics |> 
+  left_join(outliers, by = "Sport") |> 
+  mutate(is_outlier = Age < lower_limit | Age > upper_limit) |> 
+  filter(is_outlier)  # Filtrar solo los outliers
+
+```
+
+We create and store the median age for each sport within the original dataset, allowing us to add the dashed line to the plot and make comparisons between sports more easily.
+
+```{r}
+
+median_age <- median(olympics3$Age, na.rm = TRUE)
+
+```
+
+After reprocessing the data, we move on to creating the graph, starting with the base without the legend. To achieve this, I designed a ridgeline plot with an additional inner plot acting as a legend to make the data easier to interpret. This graph effectively visualizes the age distribution in each sport, using stat_halfeye() and stat_interval() from the ggdist package. The median age is marked using stat_summary(), and the average age is indicated with an annotation. Additionally, we draw a dashed line at the median age and add points for outliers using geom_point().
+
+```{r, fig.width = 9, fig.height= 22}
+  
+p <- ggplot(olympics, aes(Sport, Age)) +
+  stat_halfeye(fill_type = "segments", alpha = 0.8, scale = 0.9) +
+  stat_interval() +
+  stat_summary(geom = "point", fun = median, color = "black", size = 3) +
+  annotate("text", x = 33, y = 0, label = "(\U00F8 age)",
+           family = "franklin", size = 6.5, hjust = 0.5) +
+  stat_summary(
+    aes(y = Age),
+    geom = "text",
+    fun.data = function(x) {
+      data.frame(
+        y = 0,
+        label = sprintf("(%s)", scales::number(mean(ifelse(x > 0, x, NA), na.rm = TRUE), accuracy = 0.1)))},
+    family = "franklin", size = 6
+  ) +
+  geom_hline(yintercept = median_age, col = "black", lty = "dashed") +
+  annotate("text", x = 33.3, y = 25, label = "Median age",
+           family = "franklin", size = 8, hjust = 0) +
+  geom_point(data = olympics_outliers, aes(x = Sport, y = Age),
+             size = 1, shape = 19) + 
+  scale_y_continuous(breaks = seq(10, 70, by = 10)) +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_color_manual(values = c("#e7e5cc", "#9fcae2", "#08519d")) +
+  coord_flip(ylim = c(0, 80), xlim = c(0, 33.5), expand = TRUE) +
+  guides(col = "none") +
+  labs(
+    title = "OLYMPICS",
+    subtitle = "by age and sport",
+    x = NULL,
+    y = NULL) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    panel.grid.major.x = element_line(linewidth = 0.1, color = "grey75"),
+    plot.title = element_text(family = "Georgia", size = 45, margin = margin (b = 5)),
+    plot.title.position = "plot",
+    plot.subtitle = element_textbox_simple(size = 40, family = "Georgia", color = "gray40", margin = margin (b = 20)),
+    plot.caption.position = "plot",
+    axis.text.y = element_text(hjust = 1, family = "franklin", size = 25, color = "black", face = "bold"),
+    axis.text.x = element_text(size = 25, family = "franklin", margin = margin(r = 0), color = "black"),
+    plot.margin = margin(4, 17, 4, 4))
+
+p
+
+```
+
+To create the inside plot as a legend, we took the example of a specific sport, in this case, volleyball. We add annotations with annotate() to label specific age ranges (such as 50%, 80%, and 95% of ages), as well as to explain the median and the overall age distribution. geom_curve() is used to draw curved arrows pointing to the annotations, making it easier to connect each label to its corresponding feature on the plot. The colors for the plot are defined using scale_color_manual(), and coord_flip() is applied to rotate the plot for a clearer view.
+
+```{r}
+df_for_legend <- olympics |>  
+  filter(Sport == "Volleyball") 
+
+p_legend <- df_for_legend |>  
+  ggplot(aes(Sport, Age)) +
+  stat_halfeye(fill_type = "segments", alpha = 0.8, scale = 0.6) +  
+  stat_interval() +
+  stat_summary(geom = "point", fun = median, size = 3) +
+  annotate(
+    "text",
+    x = c(0.65, 0.65, 0.65, 1.34, 1.6),
+    y = c(21 , 29, 36, 27, 33),
+    label = c("50% of ages\nfall within this range", "80% of ages", 
+              "95% of ages", "Median", "Distribution\n of ages"),
+    fill = NA, family = "Arial", size = 5.8, vjust = 1, lineheight = 0.5  
+  ) +
+  geom_curve(
+    data = data.frame(
+      x = c(0.7, 0.7, 0.7, 1.225, 1.4),
+      xend = c(0.98, 0.98, 0.98, 1.02, 1.5),
+      y = c(24, 30, 33, 26, 28),
+      yend = c(24, 30, 33, 25, 30)),
+    aes(x = x, xend = xend, y = y, yend = yend),
+    stat = "unique", curvature = 0.2, size = 0.6, color = "grey12",
+    arrow = arrow(angle = 20, length = unit(1, "mm"))
+  ) +
+  scale_color_manual(values = c("#e7e5cc", "#9fcae2", "#08519d")) +
+  coord_flip(expand = TRUE) +
+  guides(color = "none") +
+    theme_void() +
+  theme(plot.background = element_rect(color = "black", fill = "grey95"),
+        plot.margin = margin(t = -0.5, r = 0, b = 0, l = 0, unit = "cm"))
+
+p_legend
+```
+
+Finally, we combine the original plot with the legend by using inset_element():
+
+```{r, fig.width = 9, fig.height= 22}
+p + 
+  inset_element(p_legend, 
+                left = 0.58, 
+                right = 1, 
+                top = 0.95, 
+                bottom = 0.85)
+```
+
+
+This alternative graph not only shows where most athletes are concentrated much more clearly, thanks to the color legend and the distribution displayed, but also highlights individual means and medians, comparing them with the overall mean of all Olympic disciplines. This allows us to observe how each sport deviates from the general average.
