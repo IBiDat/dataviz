@@ -117,7 +117,7 @@ The visualization highlights age trends within each category, offering a clear p
 
 To replicate this plot, we will need to, first, compute the age of each Laureate at the time of their award. For this action, we ensure that the `birth_date` variable is a date object for date-based calculations. Then, we create a new variable (`age`) by calculating the difference between the year the prize was awarded (`awardYear`) and the Laureate's year of birth, extracted from the `birth_date` column.
 
-```{r laureates ages}
+```{r laureates-ages}
 tidy_nobels <- tidy_nobels |>
   mutate(birth_date = as.Date(birth_date, format = "%Y-%m-%d")) |> 
   mutate(age = awardYear - as.numeric(format(birth_date, "%Y")))
@@ -125,7 +125,7 @@ tidy_nobels <- tidy_nobels |>
 
 Next, we calculate the average age of Laureates for each category. The data is grouped by category, and the mean age is calculated within each group, ignoring any missing values. The resulting average age is rounded to the nearest whole number, and the grouping structure is removed to produce a simplified data frame.
 
-```{r avg age per category}
+```{r avg-age-per-category}
 avg_age <- tidy_nobels |> 
   group_by(category) |> 
   summarise(avg_age = round(mean(age, na.rm = TRUE))) |>
@@ -169,7 +169,7 @@ maj.years_label$category <- factor(maj.years_label$category,
 
 On the other hand, similar problems arise with all the labels annotated at the y-axis of the plot. By default, when applying `facet_grid` , `ggplot2` does not allow us to move independently each of the labels. Therefore, we create individual data frames for each of the three components needed on the y-axis: name of the category, average age within each category, and average among all the categories. This customization will allow us to determine manually each of the positions of the labels. We then combine this new information to the `avg_age` data by `category` .
 
-```{r text annotations}
+```{r text-annotations}
 
 #annotations: average age among all noble laureates
 label_avg_laureate <- data.frame(
@@ -199,7 +199,7 @@ For warranting a clear and focused visualization, the plot is designed with spec
 
 Having built and settled all the essential components, the final code to generate the plot is as follows:
 
-```{r age plot, layout="l-page", fig.height=6, fig.width=12}
+```{r age-plot, layout="l-page", fig.height=6, fig.width=12}
 gp1 <- ggplot(tidy_nobels,aes(color = category)) +
   
   #facet grid: divided plot into facets
@@ -304,7 +304,7 @@ The bars represent the relative percentage of each level of formal education eac
 
 To analyze this, we select both `category`and `academic_degree` variables, isolating missing values for this second one. Data is then grouped by both variables and computed the number of Laureates for each combination. To facilitate meaningful interpretation, the `academic_degree` variable is transformed into an ordered factor, with levels arranged from "no degree" to "PhD," reflecting a logical progression of educational attainment.
 
-```{r education data}
+```{r education-data}
 education <- tidy_nobels |>
   select(category, academic_degree) |> 
   filter(academic_degree != "NA") |> 
@@ -317,7 +317,7 @@ education <- tidy_nobels |>
 
 As we did before, we divided the plot into facets, with each category displayed in its own horizontal bar chart. Horizontal grid lines are annotated for each academic level, aiding readability. The bars representing the counts of Laureates are styled with distinct colors corresponding to their categories, using the custom color palette per category previously established. Also, we remove unnecessary elements with a void theme and create custom annotation frames with clasps on either side to add structure. Finally, `ggplot2` expects a continuous variable for the y-axis by default, but we are supplying a discrete factor, therefore we add `scale_y_discrete` to specify that the y-axis uses discrete values.
 
-```{r education plot}
+```{r education-plot}
 gp2 <- ggplot(education) + 
   
   #facet grid: divided plot into facets
@@ -378,7 +378,7 @@ The chart below the main plot represent the most frequent hometowns out of the t
 
 First, we standardize the names of Nobel Laureates' hometowns that will be part of the final plot for eliminating inconsistencies in the data set that might arise due to minor variations in how city names are recorded. Then, we customize the city order, stored in the `city_order` vector, to ensure consistent presentation in the visualization.
 
-```{r hometown list}
+```{r hometown-list}
 tidy_nobels <- tidy_nobels |> 
   mutate(
     birth_cityNow = recode(birth_cityNow,
@@ -412,7 +412,7 @@ topcities <- tidy_nobels |>
 
 Next, we converted `birth_cityNow` into a factor with a defined order. This ordering ensures that the cities will be displayed in a predefined sequence (from "Washington" to "New York") when used in any plots or analyses. The same is done in the dataset for ensuring the correct sequence.
 
-```{r city order}
+```{r city-order}
 topcities$birth_cityNow <- factor(topcities$birth_cityNow, 
                                   levels = c("Washington", "Munich", "Moscow",
                                              "Budapest", "Boston", "Berlin",
@@ -424,7 +424,7 @@ topcities <- topcities[order(topcities$birth_cityNow), ]
 
 Once we have the total number of laureates in each city, we will focus on how many there are in each era. For this, we select our original data frame and, as we did before, consolidate the city of New York. The dataset is then filtered to include only the cities from the `topcities` dataset, ensuring that only the most frequent cities, as identified earlier, are included in the analysis. We then create a new variable (`era`) containing the four different periods. By grouping the data by `birth_cityNow`, `era`, and `category`, we calculate the number of Nobel Laureates (`people_count`) for each city within each era and category using the `summarise()` function. Finally, we order the cities according to the previously defined distribution.
 
-```{r topcities era}
+```{r topcities-era}
 topcities_era <- tidy_nobels |> 
   mutate(birth_cityNow = ifelse(birth_cityNow %in% c("Brooklyn, NY", "New York, NY"), 
                                 "New York", birth_cityNow)) |>
@@ -442,7 +442,7 @@ topcities_era <- topcities_era |>
 
 For creating the stacked barplot, we will need to first determine the specific intervals that we are going to be using. These eras are structured by specifying both the starting and ending years for each period. The `era` column marks the year the era begins, while the `start_year` and `end_year` columns indicate the specific years that define each era's range. Incrementing the `start_year` by a couple of years will allow us to create this separated visual effect needed for the replication.
 
-```{r era intervals}
+```{r era-intervals}
 era_intervals <- data.frame(
   era = c(1901, 1931, 1961, 1991),
   start_year = c(1904, 1934, 1964, 1994),
@@ -454,7 +454,7 @@ We now need to join our `topcities_era` data set with the `era_intervals` in ord
 
 Next, by grouping the data by each city and the different eras we will create two new variables: one for the total number of Nobel Laureates for each era across all cities, and another that scales the duration of each era computing how much of the era’s total duration should be allocated to each one
 
-```{r era duration}
+```{r era-duration}
 topcities_era <- topcities_era |> 
   left_join(era_intervals, by = "era") |> 
   mutate(era_duration = end_year - start_year)  
@@ -469,7 +469,7 @@ topcities_era <- topcities_era |>
 
 Having the start and end year, we can define the length of each category for each era and city. In order to do this, we establish a scaling factor (`cm_per_unit`), corresponding to one unit, that we multiplied for the total count of Laureates. This will indicate how much each city contributes to each era. With this new length, we compute the start position -subtracting the `scaled_duration` from the cumulative sum to avoiding overlapping- and the end position of each category in the visualization.
 
-```{r length category}
+```{r length-category}
 cm_per_unit <- 0.5
 
 topcities_era <- topcities_era |> 
@@ -484,7 +484,7 @@ topcities_era <- topcities_era |>
 
 Up to now, we have calculated the total number of Laureates for each city and era, established their scaled duration, and computed their adjusted start and end years. With these processed data, we can start plotting our visualization. 
 
-```{r hometown plot, layout="l-page", fig.height=3, fig.width=12}
+```{r hometown-plot, layout="l-page", fig.height=3, fig.width=12}
 gp3 <- ggplot(topcities_era, aes(y = birth_cityNow, color = category)) +
   
   #grid: horizontal lines
@@ -569,7 +569,7 @@ This Sankey diagram was constructed by categorizing Nobel Laureates based on the
 
 Once the data is refined, the prize categories and the standardized affiliations are reordered to create the desired structure. Finally, we count the frequency of laureates for each combination of affiliation and prize category removing any incomplete entry leaving a clean dataset. 
 
-```{r university list}
+```{r university-list}
 univ <- tidy_nobels  |> 
   select(category, affiliation_1_bis, affiliation_1) |>
   
@@ -606,7 +606,7 @@ univ <- tidy_nobels  |>
 
 Once we have the clean data, we need to transform it into a format suitable for creating parallel sets plots. The first step involves reshaping the data with the `gather_set_data` function. The process takes each observation and organizes the combinations into individual rows representing combinations of categories and affiliations, making it possible to visualize the relationships between these levels. It creates new columns that represent the axis and a unique ID for each flow.
 
-```{r geom_parallel data}
+```{r geom_parallel-data}
 univ_data <- gather_set_data(univ, 1:2) 
 ```
 
@@ -637,7 +637,7 @@ For this, we create a new row where the affiliation information is missing (NA) 
 
 The same is done for the universities but, in this case, we just exclude the first university (Harvard) and the specific gaps are the same across all universities creating a clean alienation of the flows. 
 
-```{r adding NAs}
+```{r adding-NAs}
 univ <- univ |>
   
   #NAs to emulate the gaps in the categories (left side)
@@ -664,7 +664,7 @@ Next, we extract the lengths for the university segments on the right side based
 
 With the aim of preventing visual clutter while maintaining consistency and maintaining balance in the graph, we create a "fake" affiliation (`ZZZ`) to the dataset. This placeholder does not represent any real institution but is used solely for layout purposes. It introduces a gap at the bottom of the affiliations section, preventing overcrowding and ensuring that the graph maintains a neat structure. The "fake" affiliation is added with a manually adjusted count of 20 laureates.
 
-```{r lines and fake category}
+```{r lines-and-fake-category}
 #category lines (left side)
 lines_cat <- data.frame(
   x = 0.98, y = seq(-37, by=58, length.out=6),
@@ -700,7 +700,7 @@ By using `ggalluvial::geom_flow`function we create flows between the categories 
 
 Finally, as done before, to ensure a correct alignment with the other graphs once we combined them all, we settle the plot limits as the previous graphs.
 
-```{r sankey plot}
+```{r sankey-plot}
 gp4 <- ggplot(univ) +
   
   #flow between categories
@@ -736,7 +736,7 @@ gp4
 
 Having all our graphs individually created, it's time to assemble all the parts. In this process, first, we create a `colored_spacer`, which serves as a visual separator between the plots. Then, we arrange the individual plots (`gp1`, `gp2`, `gp3`, and `gp4`) along with the spacers into different rows, adjusting their widths and margins to ensure everything is properly spaced and aligned. Finally, we combine all the rows into a single layout, adjusting their heights to create the desired proportions and visual flow.
 
-```{r joint plot, layout="l-screen", preview=TRUE, fig.height=10, fig.width=16}
+```{r joint-plot, layout="l-screen", preview=TRUE, fig.height=10, fig.width=16}
 
 colored_spacer <- plot_spacer() + 
   theme(plot.background = element_rect(fill = "#f2ebde", color = NA))
@@ -945,7 +945,7 @@ graph_title
 
 Finally, upon examining the data, it is evident that only 44 Laureates are women. In the original graph, this distinction is marked by a double-rounded dot. However, since ages are also represented using points regardless of gender, we believe that adopting a more distinctive shape, such as a diamond, better highlights and draws attention to the significant role of women in the history of the awards. To implement this change, we reused the existing code but modified the `geom_point shape to 23, which corresponds to a diamond.
 
-```{r diamond women, layout="l-page", fig.height=6, fig.width=12}
+```{r diamond-women, layout="l-page", fig.height=6, fig.width=12}
 gp1 <- ggplot(tidy_nobels,aes(color = category)) +
   
   geom_vline(xintercept = seq(1906, 2010, by = 5), linetype = "solid", color = "#A6A9AC", 
@@ -1025,7 +1025,7 @@ gp1
 
 Included all the improvements, the final graph will be as follow:
 
-```{r final plot improved,layout="l-screen", fig.height=10, fig.width=16}
+```{r final-plot improved,layout="l-screen", fig.height=10, fig.width=16}
 
 colored_spacer <- plot_spacer() + 
   theme(plot.background = element_rect(fill = "#f2ebde", color = NA))
