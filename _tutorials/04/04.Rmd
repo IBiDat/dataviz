@@ -1,0 +1,139 @@
+---
+title: "04. Faceting"
+description: |
+  Faceting is a way to trade off some discrete aesthetic (e.g. hue) for position.
+  It generates multiple subsets of the data (filtered by the values of some
+  typically categorical variable) and shows them side by side. In this tutorial,
+  the three kinds of facets available are explored as well as how they interact
+  with position scales.
+categories: "Chapter 2"
+author:
+  - name: Iñaki Ucar
+    affiliation: Department of Statistics
+    orcid_id: 0000-0001-6403-5550
+date: 2022-10-05
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+preview: position-facets.png
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, eval=FALSE)
+registerS3method("knit_print", "data.frame", function(x, ...) {
+  rmarkdown:::knit_print.data.frame(rmarkdown::paged_table(x))
+}, envir = asNamespace("knitr"))
+```
+
+Source: [`_tutorials/04/04.Rmd`](https://github.com/IBiDat/dataviz/blob/main/_tutorials/04/04.Rmd)
+
+## Facet specification
+
+Faceting is a powerful tool for exploratory data analysis. It is not just a mapping to position, but also a data filtering operation: it generates as many different views of the dataset as levels of the variable(s) selected. Therefore, instead of being specified as another aesthetic, faceting is performed via three functions:
+
+-   `facet_null()`: this is the default, meaning that no faceting is performed.
+-   `facet_wrap()`: *wraps* a 1D ribbon of panels defined by a variable (or interaction between variables) into 2D, by default using the same number of rows and columns as much as possible.
+-   `facet_grid()`: produces a matrix, a 2D grid of panels, with rows and columns respectively indexed by a different variable (or interaction between variables).
+
+![Differences between `facet_grid` and `facet_wrap`. Figure from the [ggplot2 book](https://ggplot2-book.org/facet.html).](position-facets.png){.external}
+
+The differences between `facet_wrap()` and `facet_grid()` are depicted in the figure above. Essentially, on the left we have two factors: the first one indexes rows with levels 1, 2, 3; the second one indexes columns with levels A, B, C. On the other hand, on the right, a single factor has nine levels, and the set of panels are just arranged sequentially on a 3x3 grid.
+
+## Facet wrap
+
+`facet_wrap()` takes a long ribbon of panels and wraps it in a space-efficient manner, i.e. in a grid with a balanced number of rows and columns. In its simplest form, each panel depicts the data filtered by the factor level defined by a single variable.
+
+```{r}
+library(ggplot2)
+
+p <- ggplot(mpg, aes(displ, hwy)) + 
+  geom_point()
+
+p + facet_wrap(~ class)
+```
+
+Note the use of the formula notation, `~ class`, and the strips on top labeled with the values of the variable `class`. Note also that all the facets share the same x/y scales (same limits, same guides...).
+
+More variables can be *added* to such formula, and this is interpreted as the \_interaction between the variables. Therefore, the facets depict all the possible **combinations** of the levels of those variables.
+
+```{r}
+p + facet_wrap(~ class + cyl)
+```
+
+You can control the dimensions of this grid with `ncol` and `nrow` (you only need to set one), while `as.table` and `dir` define how the grid is filled. The position of the strip can be controlled with `strip.position`.
+
+## Facet grid
+
+`facet_grid()` is a similar concept, but now the left and right side of the formula index the rows and columns respectively.
+
+```{r}
+p + facet_grid(class ~ .) # by row
+p + facet_grid(~ class)   # by column
+```
+
+On the one hand, the number of rows and columns cannot be fixed anymore, because it depends on the number of levels that the associated variable contains. On the other hand, positioning by row facilitates the comparison of x values, because horizontal scales are all aligned (useful to compare distributions), while positioning by column facilitates the comparison of y values (useful to compare bar heights).
+
+Moreover, comparing the levels of two factors is easier too:
+
+```{r}
+p + facet_grid(cyl ~ class) # cyl by row, class by column
+```
+
+#### Checkpoint 1
+
+1.  Consider the last example. Using the same specification, `cyl ~ class`, how many panels are produced with `facet_wrap()` and `facet_grid()`? Why? Investigate how to produce the exact same panel layout of the `facet_grid()` invocation by modifying the arguments of the `facet_wrap()` function.
+
+2.  `facet_grid()` has the same parameter you modified above. Why is it not taking any effect? When would it take effect?
+
+3.  Investigate the `margins` argument for the `facet_grid()` function. Add color by `cyl` and by `class` alternatively to demonstrate the effect of the `margins` argument.
+
+## Controlling the scales
+
+By default, all panels share the same position scales, which is the best choice for most applications to avoid confusing the reader. However, sometimes it is useful to be able to zoom in the data, or, in other words, to drop some empty parts in order to increase the data-ink ratio. This is achieved via the `scales` argument:
+
+-   `scales = "fixed"`: x and y scales are fixed across all panels (default).
+
+-   `scales = "free_x"`: the x scale is free, and the y scale is fixed.
+
+-   `scales = "free_y"`: the y scale is free, and the x scale is fixed.
+
+-   `scales = "free"`: x and y scales vary across panels.
+
+This is particularly interesting for comparing time series that may be measured in very different units.
+
+```{r}
+p <- ggplot(economics_long) +
+  aes(date, value) +
+  geom_line()
+
+p + facet_grid(variable ~ .)
+p + facet_grid(variable ~ ., scales="free_y")
+```
+
+#### Checkpoint 2
+
+1.  `facet_grid()` has an additional parameter `space` that is very useful in conjunction with `scales`. Using `ggplot(mpg) + aes(cty, model) + geom_point()` as your base graph, set facets so that rows are indexed by manufacturer, and investigate how to use the `scales` and `space` arguments to improve the visualization.
+
+## Missing faceting variables
+
+Unlike aesthetics, faceting is always set globally and cannot be specified per geometry. What happens then if we specify multiple datasets in multiple geometries and faceting variables are missing in some of them? Let's find out:
+
+```{r}
+df1 <- data.frame(x = 1:3, y = 1:3, gender = c("f", "f", "m"))
+df2 <- data.frame(x = 2.5, y = 2.5)
+
+ggplot(df1) +
+  aes(x, y) +
+  geom_point(data = df2, color = "red") + 
+  geom_point() +
+  facet_wrap(~ gender)
+```
+
+As can be seen, the red dot, corresponding to the dataset without the gender variable, appears in all facets.
+
+#### Checkpoint 3
+
+1.  Use the first example (`hwy` vs. `displ`, faceted by `class`) as your base plot. Add another `geom_point()` layer with a new dataset, in the appropriate place, so that all the points appear in all the facets but dimmed in the background.
+
+2.  How can we add to the previous plot a `geom_smooth()` curve to all facets based on the whole dataset?

@@ -1,0 +1,697 @@
+---
+title: "The Evolution of the US Military Deployment"
+description: |
+  Visualising data on the evolution of the US military presence around the world
+  from 1950 to 2020.
+categories: "2023"
+author: Clara Fernanda Martín-Villaescusa
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true 
+editor_options: 
+  chunk_output_type: console
+---
+
+## Introduction
+
+### The original graph 
+
+The international analysis media El Orden Mundial published this graph in order to visualise ["la evolución de la presencia militar de Estados Unidos en el mundo desde 1950"](https://elordenmundial.com/mapas-y-graficos/presencia-militar-estados-unidos-mundo/){.uri}. This graph was made possible thanks to research data from the scientific journal [*Conflict Management and Peace Science*](https://journals.sagepub.com/doi/abs/10.1177/07388942211030885){.uri}. It highlights the most critical points of the US military deployment:
+
+-   Between 1950 and 1990, the United States never had fewer than 400,000 troops outside its borders, with the Korean and Vietnam Wars marking particularly critical points in this process.
+
+-   After the fall of the Berlin Wall and the collapse of the USSR, military deployment dropped to 200,000.
+
+-   Following the 9/11 attacks, Washington attacked Afghanistan (20019 and Iraq (2003), where it is estimated that at least 2.3 million US troops have served in both countries since they were invaded.
+
+In addition, the graph shows the continued presence of US troops around the world. The countries where most US troops are concentrated are Japan, where there are still more than 53,000 troops, Germany and South Korea, where there are around 34,000 and 26,400, respectively. Puerto Rico and the United Kingdom are other states where there are more bases and soldiers. These countries are not in close conflict but are fully aligned with US interests at the international level because they are protected by the United States.
+
+The aim of this tutorial is to reproduce the graph and propose an alternative visualization using the same dataset.
+
+![La evolución del despliegue militar de EE.UU. Fuente: [El Orden Mundial](https://elordenmundial.com/mapas-y-graficos/presencia-militar-estados-unidos-mundo/)](images/Presencia-militar-Estados-Unidos%20(2).png){width="100%" .external}
+
+```{r}
+library(tidyverse)
+library(ggtext)
+library(troopdata)
+library(dplyr)
+
+sysfonts::font_add_google("Outfit", family="outfit")
+showtext::showtext_auto()
+
+```
+
+## Replication process
+
+### Getting and cleaning data
+
+The database is quite complete, in it we can see both the number of military bases and the number of US soldiers in each country and region from 1950 to 2020. First we have organised the database, putting the same identification code for the Republic of Vietnam and Vietnam, among other details. In addition to translating the name of the regions into Spanish.
+
+```{r}
+troopdata <- troopdata::troopdata |>  
+  filter(ccode != 2 & year >= 1950) |> 
+  mutate(ccode = ifelse(ccode == 260, 255, ccode),
+         ccode = ifelse(countryname == "Republic of Vietnam", 816, ccode),
+         iso3c = ifelse(countryname == "Republic of Vietnam", "VNM", iso3c),
+         region = countrycode::countrycode(iso3c, "iso3c", "region"),
+         region = case_when(
+           ccode == 1003 ~ "Afloat",
+           ccode == 70 ~ "North America",
+           region == "Latin America & Caribbean" ~ "Central & South America & Caribbean", 
+           TRUE ~ region), 
+         region = recode(region, 
+                         "Central & South America & Caribbean" = "Latinoamérica y Caribe",
+                         "Europe & Central Asia" = "Europa y Asia Central", 
+                         "Middle East & North Africa" = "Oriente Próximo y Magreb", 
+                         "Sub-Saharan Africa" = "África Subsahariana", 
+                         "South Asia" = "Asia Meridional", 
+                         "East Asia & Pacific" = "Asia Oriental y Oceanía"))
+```
+
+If you look at the graph, there are countries that are highlighted in other colours than those of their region, because in these countries the presence of US soldiers was much higher than in other countries. For instance, Germany, Vietnam or Japan.
+
+I will make a database without these countries, so that they are not counted twice afterwards.
+
+```{r}
+delete <- c("Germany", 
+              "West Germany", 
+              "German Democratic Republic", 
+              "Vietnam", 
+              "Japan", 
+              "South Korea", 
+              "Iraq")
+
+no_countries <- troopdata::troopdata |>  
+  filter(ccode != 2 & year >= 1950) |> 
+  mutate(
+         region = countrycode::countrycode(iso3c, "iso3c", "region"),
+         region = case_when(
+           ccode == 1003 ~ "Afloat",
+           ccode == 70 ~ "North America",
+           region == "Latin America & Caribbean" ~ "Central & South America & Caribbean", 
+           TRUE ~ region), 
+         region = recode(region, 
+                         "Central & South America & Caribbean" = "Latinoamérica y Caribe", 
+                         "Europe & Central Asia" = "Europa y Asia Central", 
+                         "Middle East & North Africa" = "Oriente Próximo y Magreb", 
+                         "Sub-Saharan Africa" = "África Subsahariana", 
+                         "South Asia" = "Asia Meridional", 
+                         "East Asia & Pacific" = "Asia Oriental y Oceanía")) |> 
+  filter(!(countryname %in% delete))
+
+```
+
+So, now we have two databases: one with regions and highlighted countries, and another without the highlighted countries. With these, we will proceed to form the necessary data frame for replicating the graph.
+
+#### Region data
+
+I do the region data with troopdata without the highlighted countries.
+
+```{r}
+regional.data <- no_countries |> 
+  group_by(region, year) |>  
+  dplyr::summarise(troopsum = sum(troops, na.rm = TRUE)) |>  
+  filter(region != 'Afloat') |> 
+  filter(region != 'North America') 
+
+
+regional.data <- subset(regional.data, year <= 2020)
+
+regional.data$region <- factor(regional.data$region , 
+                               levels= c("Europa y Asia Central", 
+                                         "África Subsahariana", 
+                                         "Asia Oriental y Oceanía", 
+                                         "Latinoamérica y Caribe", 
+                                         "Asia Meridional", 
+                                         "Oriente Próximo y Magreb"))
+
+```
+
+#### Country data
+
+Here are only the highlighted countries. Germany is recategorised because there are several germanies in the database.
+
+```{r}
+country.data <- troopdata |>
+  filter((grepl("Vietnam", countryname)) | 
+           grepl('Germany', countryname) | 
+           grepl ("South Korea", countryname) | 
+           grepl ("Japan", countryname) | 
+           grepl ("Iraq", countryname)) |>
+  mutate(countryname = ifelse(countryname == "Republic of Vietnam", "Vietnam", countryname),
+            countryname = ifelse(countryname == "West Germany", "Germany", countryname),
+         countryname = ifelse(countryname == "German Democratic Republic", "Germany", countryname))|>
+  group_by(countryname, year) |>  
+  dplyr::summarise(troopsum = sum(troops, na.rm = TRUE)) |>
+  mutate(countryname = factor(countryname, 
+                              levels = c("Iraq", "Japan", 
+                                         "South Korea", "Vietnam",
+                                         "Germany", 
+                                         setdiff(unique(countryname),
+                                                 c("Iraq", "Japan",
+                                                   "South Korea",
+                                                   "Vietnam",
+                                                   "Germany")))))
+
+country.data$countryname <- factor(country.data$countryname , 
+                                   levels=rev(c("Germany",
+                                                "Vietnam",
+                                                "Japan",
+                                                "South Korea",
+                                                "Iraq")))
+
+```
+
+#### Combination of region and country
+
+Once we have both data frames (with and without the highlighted countries), we put them together in order to manipulate the data for the highlighted countries and the regions without the featured countries.
+
+```{r}
+combined_data <- bind_rows(
+  mutate(regional.data, data_type = "region"),
+  mutate(country.data, data_type = "country"))
+
+combined_data <- bind_rows(regional.data, country.data)
+
+combined_data <- combined_data |> 
+  pivot_longer(cols = c(region, countryname), names_to = "tipo", values_to = "region_country")
+
+```
+
+We order the categories so that the areas are stacked correctly on the graph.
+
+```{r}
+combined_data$region_country <- factor(combined_data$region_country , 
+                                       levels = c("Latinoamérica y Caribe", 
+                                                  "África Subsahariana",
+                                                  "Iraq", 
+                                                  "Oriente Próximo y Magreb", 
+                                                  "Asia Meridional",
+                                                  "South Korea",
+                                                  "Japan",
+                                                  "Vietnam",
+                                                  "Asia Oriental y Oceanía", 
+                                                  "Germany",
+                                                  "Europa y Asia Central"))
+
+```
+
+## Building the graph
+
+### Theme
+
+An important part to replicate this graph, in the THEME, as it is the skeleton of any graph. For this, I created my own theme. Where first we adjust everything related to the texts that appear in the graphic (Title, Subtitle, Caption), then everything related to the axes, and the background of the graphic itself and finally the style of the legend.
+
+```{r}
+theme_ok <- theme(text = element_text(family="outfit", 
+                                      size = 25),
+  plot.title = element_text(face = "bold", 
+                            size = 45),
+  plot.subtitle = element_text(face = "bold", 
+                               color = "gray38",
+                               size = 34),
+  plot.title.position = "plot",
+  plot.caption = ggtext::element_markdown(
+    size = rel(1.2),
+    hjust = 0,
+    margin = margin(0, 0, 0, 0),
+    lineheight = 0.2),
+  plot.caption.position = "plot",
+  strip.background = element_rect(fill = "gray80", 
+                                  color = "black"),
+  panel.background = element_rect(fill = "white"),
+  strip.text = element_text(color = "black", 
+                            face = "bold"),
+  panel.grid.major.y = element_line(color = "lightgrey"),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  axis.line = element_line(color = "black",
+                           size = 1),
+  axis.text.x = element_text(angle = 45, 
+                             hjust = 1),
+  legend.position = "top",
+  legend.direction = "horizontal",
+  legend.title = element_blank(),  
+  legend.text = element_text(size = 22, 
+                             hjust = 0, 
+                             face = "plain", 
+                             color = "gray40"),
+  legend.background = element_blank(),  
+  legend.box = "none",  
+   legend.justification = "left", 
+  legend.margin = margin(t = 3, r = 0, b = 3, l = -70),
+  legend.key = element_blank(),
+  legend.key.size = unit(0.6, "cm"),
+  legend.key.width = unit(0.7, "cm"),
+  legend.key.height = unit(0.5, "cm"))
+
+```
+
+Here, I create a vector to give the specific colour to each region and country.
+
+```{r}
+colors <- c("Europa y Asia Central" = "#676B90", 
+            "Asia Oriental y Oceanía" = "#DE5A3C", 
+            "Asia Meridional" = "#70B3B5", 
+            "Oriente Próximo y Magreb" = "#8BA629", 
+            "África Subsahariana" = "#9E65A6", 
+            "Latinoamérica y Caribe" = "#F2BE5C", 
+            "Iraq" = "#AACE7B", 
+            "Japan" = "#DEA281", 
+            "South Korea" = "#E5C5B1", 
+            "Vietnam" = "#DF8756", 
+            "Germany" = "#7185B5")
+
+colors2 <- c("Europa y Asia Central" = "#676B90", 
+             "Asia Oriental y Oceanía" = "#DE5A3C", 
+             "Asia Meridional" = "#70B3B5", 
+             "Oriente Próximo y Magreb" = "#8BA629", 
+             "África Subsahariana" = "#9E65A6", 
+             "Latinoamérica y Caribe" = "#F2BE5C", 
+             "Iraq" = "#8BA629", "Japan" = "#DEA281", 
+             "South Korea" = "#DE5A3C", 
+             "Vietnam" = "#DF8756", 
+             "Germany" = "#676B90")
+
+```
+
+### Graph
+
+#### Region graph
+
+To understand what I have done above with the database, I have first created a graph with the regions, without the countries highlighted.
+
+```{r,  fig.width = 11,  fig.height = 8}
+regional.time <- ggplot(regional.data, 
+                        aes(x = year, 
+                            y = troopsum, 
+                            fill = region)) +
+  geom_area() +
+  scale_x_continuous(
+    limits = c(1950, 2020),
+    breaks = seq(1950, 2020, 10),
+    expand = expansion(add = c(1.5, 0))) +
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", 
+                                                    decimal.mark = ",", 
+                                                    accuracy = 1), 
+                     limits = c(0, 1200000),
+                     breaks = seq(0, 1200000, 200000),
+                     expand = expansion(0)) +
+  scale_fill_manual(values = colors) +
+  theme_ok +
+  labs(x = "",
+       y = "Soldados",
+       color = "Region",
+       linetype = "Region",
+       title = "La evolución del despligue militar de EE.UU.",
+       subtitle = "Presencia de tropas por regiones y países más destacados (1950-2020)") 
+
+print(regional.time)
+
+```
+
+#### Country graph
+
+In the following graph we see the countries highlighted without the regions, clearly these countries are the ones that had/have the largest US military presence.
+
+```{r,  fig.width = 11,  fig.height = 8}
+country.time <- ggplot(country.data, aes(x = year, 
+                                         y = troopsum, 
+                                         fill = countryname)) +
+  geom_area() +
+  scale_x_continuous(limits = c(1950, 2020), 
+                     breaks = seq(1950, 2020, 10), 
+                     expand = expansion(0.02)) +
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", 
+                                                    decimal.mark = ",", 
+                                                    accuracy = 1), 
+                     limits = c(0, 1200000),
+                     breaks = seq(0, 1200000, 200000),
+                     expand = expansion(0))  +
+  scale_fill_manual(values = colors) +
+  theme_ok + 
+  labs(x = "",
+       y = "Soldados",
+       color = "Region",
+       linetype = "Region",
+       title = "La evolución del despligue militar de EE.UU.",
+       subtitle = "Presencia de tropas por regiones y países más destacados (1950-2020)")  
+
+country.time
+
+```
+
+#### Combined graph
+
+I then created the chart with the data frame combining the regions and countries highlighted. To replicate the original graph, `geom_area` is used, where the `position` of the areas is `"stacked"`, that is, the areas of the regions and the highlighted countries are stacked on top of each other, that is why the categories of both variables were previously ordered.
+
+With `scale_fill_manual` I am creating what I want to appear inside the legend (regions only). And with scale_color_manual I am colouring the areas, indicating that I want them to be coloured with the colours of the vector colours2, and the categories of my data frame variable combinated_data.
+
+```{r,  fig.width = 11,  fig.height = 8}
+combined.time <- ggplot() +
+  geom_area(data = combined_data |>  
+              filter(!is.na(region_country)), 
+            mapping = aes(x = year, 
+                          y = troopsum, 
+                          fill = region_country, 
+                          color = region_country), 
+            position = "stack", size = 1.3) +  
+  scale_x_continuous(
+    limits = c(1950, 2020),
+    breaks = seq(1950, 2020, 5),
+    expand = expansion(add = c(0.5, 0)))+
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", 
+                                                    decimal.mark = ",", 
+                                                    accuracy = 1),
+                     limits = c(0, 1200000),
+                     breaks = seq(0, 1200000, 200000),
+                     expand = expansion(0)) +
+   scale_fill_manual(name = "Leyenda", 
+                     values = colors, 
+                     breaks = c("Europa y Asia Central", 
+                                "África Subsahariana", 
+                                "Asia Oriental y Oceanía", 
+                                "Latinoamérica y Caribe", 
+                                "Asia Meridional", 
+                                "Oriente Próximo y Magreb")) +
+  scale_color_manual(values = colors2, 
+                     breaks = unique(combined_data$region_country), 
+                     guide = FALSE) +
+  theme_ok +
+  labs(
+    x = "",
+    y = "",
+    color = "Data Type",
+    fill = "Data Type",
+    title = "La evolución del despliegue militar de EE.UU.",
+    subtitle = "Presencia de tropas por regiones y países más destacados (1950-2020)",  
+    caption = "**Gráfico:** \nÁlvaro Merino (2021) \n\n**Fuente:**
+    Michael A. Allen, Michael E. Flynn y Carla Martínez Machain, Us global military deployments, 1950-2020 (2021)" ) 
+
+combined.time
+
+```
+
+### Annotations and replicated graph
+
+With `annotate`, I have added all the labels that appear on the graph, so that the person viewing the graph can better place the data historically in his or her head. For instance, the highest peak of the graph is indicated with an arrow to indicate that it was due to the Vietnam War.
+
+Also, another small detail I got with `annotate`, is the title of the Y-axis, where the original graph indicates that the Y-axis is about the number of soldiers by putting "Soldados" under the last figure that is displayed. I achieved it with `coord_cartesian`, setting `clip="off"`, to be able to place an annotation outside the graph axes.
+
+```{r,  fig.width = 11,  fig.height = 8, preview=TRUE}
+combined.timeA <- combined.time + 
+  annotate("text",
+  label = "Alemania",
+  x = 1980, y = 150000, hjust = 0.3, vjust = 0, size = 9, 
+  color = "white", family="outfit") + 
+  annotate("text",
+  label = "Vietnam",
+  x = 1968, y = 450000, hjust = 0.4, vjust = 0, size = 9, 
+  color = "white", family="outfit") +
+  annotate("text",
+  label = "Irak",
+  x = 2006, y = 300000, hjust = 0.6, vjust = 0, size = 9, 
+  color = "white", family="outfit") +
+  annotate("text",
+  label = "Japón",
+  x = 1955, y = 520000, hjust = 0.5, vjust = 0, size = 9, 
+  color = "white", family="outfit") +
+   annotate("text",
+  label = "11S",
+  x = 2001, y = 440000, hjust = 0.5, vjust = 0, size = 9, 
+  color = "gray30", family="outfit") +
+  annotate("text",
+  label = "Colapso de la URSS",
+  x = 1992, y = 540000, hjust = 0.09, vjust = 0, size = 9, 
+  color = "gray30", family="outfit") +
+  annotate("text",
+  label = "Caída del Muro \nde Berlín",
+  x = 1990, y = 700000, hjust = 0.5, vjust = -0.4, size = 9, 
+  color = "gray30", family="outfit", lineheight = 0.6) +
+  annotate("segment", 
+           x = 1990, xend = 1990, y = 0, yend = 700000, 
+           color = "gray50", linetype = "aa") +
+  annotate("segment", 
+           x = 1992, xend = 1992, y = 0, yend = 520000, 
+           color = "gray50", linetype = "aa") +
+  annotate("segment", 
+           x = 2001, xend = 2001, y = 0, yend = 420000, 
+           color = "gray50", linetype = "aa") +
+  annotate("segment", 
+           x = 2012, xend = 2014, y = 200000, yend = 330000, 
+           color = "gray30", linetype = "solid") +
+  annotate("text",
+  label = "Afganistán", 
+  x = 2014, y = 330000, hjust = 0.3, vjust = -0.5, size = 9, 
+  color = "gray30", family="outfit") +
+  annotate("segment", 
+           x = 1953, xend = 1957, y = 700000, yend = 840000, 
+           color = "gray30", linetype = "solid") +
+  annotate("text",
+  label = "Corea \ndel Sur",
+  x = 1958, y = 800000, hjust = 0.2, vjust = -0.2, size = 9, 
+  color = "gray30", family="outfit", lineheight = 0.6) +
+  annotate("curve", 
+           x = 2010, y = 210000 , xend = 2011, yend = 640000, 
+           color = "gray30", curvature = 0.06, 
+           arrow = arrow(length = unit(0.02, "npc"), angle = 20, type = "closed")) +
+  annotate("curve", 
+           x = 2006, y = 350000 , xend = 2007, yend = 640000, 
+           color = "gray30", curvature = -0.1, 
+           arrow = arrow(length = unit(0.02, "npc"), angle = 20, type = "closed")) +
+  annotate("text",
+  label = "Guerra contra \nel terror",
+  x = 2009, y = 660000, hjust = 0.5, vjust = 0, size = 9, 
+  color = "gray30", family="outfit", lineheight = 0.6) +
+  annotate("curve", 
+           x = 1968, y = 850000 , xend = 1975, yend = 920000, 
+           color = "gray30", curvature = -0.2, 
+           arrow = arrow(length = unit(0.02, "npc"), angle = 20, type = "closed")) +
+  annotate("text",
+  label = "Guerra de Vietnam",
+  x = 1975, y = 920000, hjust = -0.05, vjust = 0.3, size = 9, 
+  color = "gray30", family="outfit") +
+  annotate("curve", 
+           x = 1953, y = 880000 , xend = 1957, yend = 1100300, 
+           color = "gray30", curvature = -0.3, 
+           arrow = arrow(length = unit(0.02, "npc"), angle = 20, type = "closed")) +
+  annotate("text",
+  label = "Guerra de Corea",
+  x = 1957, y = 1100300, hjust = -0.05, vjust = -0.3, size = 9, 
+  color = "gray30", family="outfit") +
+  coord_cartesian(xlim=c(1950, 2020), clip="off") +
+  annotate("text",
+           label="Soldados", 
+           x=1950, y=1150000, hjust = 1.3, size = 7, 
+           color = "gray30", family="outfit")
+
+
+combined.timeA
+
+```
+
+## Alternative visualization
+
+### Limitation of stacked areas
+
+Stacking is a process in which a chart is broken down into multiple categorical variables that constitute the whole set. Each element of the categorical variable is represented by a shaded area, and these areas are stacked on top of each other.
+
+Stacked charts are useful for studying the evolution and relative proportions of each group as a whole. In fact, the top of the areas allows for visualizing the overall behavior, similar to a classic area chart. However, they are not suitable for studying the evolution of each individual group, and this is due to two main reasons. Firstly, all groups, except those with a baseline, are challenging to read in terms of their values at each tile level.
+
+Therefore, as an alternative means of visualizing this dataset, I have opted to generate a line graph. This approach simplifies the information, facilitating a clearer observation of the individual evolution within each region.
+
+### Preparing data
+
+```{r}
+troopdata1 <- troopdata::troopdata |>  
+  filter(ccode != 2 & year >= 1950) |> 
+  mutate(ccode = ifelse(ccode == 260, 255, ccode),
+         ccode = ifelse(countryname == "Republic of Vietnam", 816, ccode),
+         iso3c = ifelse(countryname == "Republic of Vietnam", "VNM", iso3c),
+         region = countrycode::countrycode(iso3c, "iso3c", "region"),
+         region = case_when(
+           ccode == 1003 ~ "Afloat",
+           ccode == 70 ~ "North America",
+           region == "Latin America & Caribbean" ~ "Central & South America & Caribbean", 
+           TRUE ~ region), 
+         region = recode(region, 
+                         "Central & South America & Caribbean" = "Latinoamérica y Caribe", 
+                         "Europe & Central Asia" = "Europa y Asia Central", 
+                         "Middle East & North Africa" = "Oriente Próximo y Magreb", 
+                         "Sub-Saharan Africa" = "África Subsahariana", 
+                         "South Asia" = "Asia Meridional", 
+                         "East Asia & Pacific" = "Asia Oriental y Oceanía"))
+
+```
+
+Regarding the data frame, I have chosen to solely utilize the regional data. Including the highlighted countries as well would have resulted in an excessive amount of information. Additionally, with the aid of subsequent annotations, we can provide the viewer with specific details about the country and historical period being represented.
+
+```{r}
+regional.data1 <- troopdata1 |> 
+  group_by(region, year) |> 
+  dplyr::summarise(troopsum = sum(troops, na.rm = TRUE)) |> 
+  filter(region != 'Afloat') |>
+  filter(region != 'North America')
+regional.data1$region <- factor(regional.data1$region , 
+                                levels= c("Asia Oriental y Oceanía", 
+                                          "Europa y Asia Central", 
+                                          "Oriente Próximo y Magreb", 
+                                          "Asia Meridional", 
+                                          "Latinoamérica y Caribe", 
+                                          "África Subsahariana"))
+
+```
+
+#### Adapting the theme
+
+The changes made to the theme are minor, such as altering the font style. The most significant modification has been the repositioning of the legend. When designing a line graph, it is most appropriate to place the legend on the left margin. This ensures that the viewer, after reading the line (from right to left), encounters the corresponding color for that line.
+
+```{r}
+sysfonts::font_add_google("Merriweather", family="Merriweather")
+showtext::showtext_auto()
+
+theme_ok1 <- theme(text = element_text(family="Merriweather", 
+                                       size = 22),
+  plot.title = element_text(face = "bold", 
+                            size = 40),
+  plot.subtitle = element_text(face = "bold", 
+                               color = "gray30" ,
+                               size = 28),
+  plot.title.position = "plot",
+  plot.caption = ggtext::element_markdown(size = rel(1), 
+                                          lineheight = 0.9, 
+                                          hjust = 0, 
+                                          margin = margin(0, 0, 0, 0)),
+  plot.caption.position = "plot",
+  plot.margin = margin(t = 30, r = -150, b = 0, l = 2), 
+  strip.background = element_rect(fill = "gray80", 
+                                  color = "black"),
+  panel.background = element_rect(fill = "white"),
+  strip.text = element_text(color = "black", 
+                            face = "bold"),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  axis.line = element_line(color = "black",size = 0.9),
+  axis.title.y = element_text(size = 14, 
+                              color = "gray30", 
+                              angle = 90, 
+                              hjust = 0.5),
+  axis.text.x = element_text(angle = 45, hjust = 1),
+  legend.position = "right",
+  legend.direction = "vertical",
+  legend.title = element_blank(),  
+  legend.text = element_text(size = 20, 
+                             color = "gray20", 
+                             hjust = 0),
+  legend.background = element_blank(),  
+  legend.box = "none",  
+  legend.justification = c(-0.2, 0),  
+  legend.margin = margin(t = 0, r = 150, b = 5, l = -5),
+  legend.spacing.y = unit(0.5, "cm"),
+  legend.key = element_blank(),
+  legend.key.size = unit(0.6, "cm"), 
+  legend.key.height = unit(0.7, "cm"))
+
+```
+
+### Creating the alternative graph
+
+As mentioned earlier, the design of the graph will feature solid lines to facilitate the visualization of each region's evolution. Simple and clean.
+
+```{r,  fig.width = 11,  fig.height = 6}
+regional.time1 <- ggplot() +
+  geom_line(data = regional.data1, 
+            mapping = aes(x = year, 
+                          y = troopsum, 
+                          color = region, 
+                          linetype = region), 
+            linetype = "solid", 
+            size = 0.8) +  
+  scale_x_continuous(limits = c(1950, 2020), 
+                     breaks = seq(1950, 2020, 5), 
+                     expand = expansion(add = c(1.5, 0))) +
+  scale_y_continuous(labels = scales::number_format(big.mark = ".", 
+                                                    decimal.mark = ",", 
+                                                    accuracy = 1), breaks = seq(0, 
+                                                                                1000000, 
+                                                                                100000)) +
+  scale_color_manual(name = NULL, 
+                     values = c("Europa y Asia Central" = "#676B90", 
+                                "Asia Oriental y Oceanía" = "#DE5A3C", 
+                                "Asia Meridional" = "#70B3B5", 
+                                "Oriente Próximo y Magreb" = "#8BA629", 
+                                "África Subsahariana" = "#9E65A6", 
+                                "Latinoamérica y Caribe" = "#F2BE5C")) +
+  theme_ok1  +
+  labs(
+    x = "",
+    y = "Soldados",
+    title = "La evolución del despliegue militar de EE.UU.",
+    subtitle = "Presencia de tropas por regiones (1950-2020)", 
+    caption = 
+      paste("Fuente: Michael A. Allen, Michael E. Flynn y Carla Martínez Machain, Us global military deployments, 1950-2020 (2021)"))
+
+
+regional.time1
+```
+
+#### Annotations and alternative graph
+
+And finally, the annotations on the graph will assist us in overcoming the challenge of distinguishing the highlighted countries. Furthermore, these annotations provide a deeper understanding of the evolution of each country, especially with this line graph. We can observe, as mentioned at the beginning of this article, how the presence of U.S. military is sustained despite the conclusion of the conflict for which the U.S. troops were initially deployed.
+
+```{r,  fig.width = 11,  fig.height = 6}
+regional.time1 <- regional.time1 + annotate("text",
+  label = "11S",
+  x = 2001, y = 250000, hjust = 0.5, vjust = 0.6, size = 8, 
+  color = "gray30", family="Merriweather") +
+  annotate("text",
+  label = "Colapso de la URSS",
+  x = 1992, y = 360000, hjust = 0.05, vjust = -1, size = 8, 
+  color = "gray30", family="Merriweather") +
+  annotate("text",
+  label = "Caída del Muro de Berlín",
+  x = 1990, y = 470000, hjust = 0.5, vjust = 0, size = 8, 
+  color = "gray30", family="Merriweather") +
+  annotate("segment", 
+           x = 1990, xend = 1990, y = 0, yend = 450000, 
+           color = "gray50", linetype = "aa", size = 0.4) +
+  annotate("segment", 
+           x = 1992, xend = 1992, y = 0, yend = 365000, 
+           color = "gray50", linetype = "aa", size = 0.4) +
+  annotate("segment", 
+           x = 2001, xend = 2001, y = 0, yend = 220000, 
+           color = "gray50", linetype = "aa", size = 0.4) +
+  annotate("text",
+  label = "Guerra contra \nel terror",
+  x = 2013, y = 230000, hjust = 0.7, vjust = -0.7, size = 8, 
+  color = "gray30", lineheight = 0.4, family="Merriweather") +
+  annotate("curve", 
+           x = 2012, y = 50000 , xend = 2013, yend = 230000, 
+           color = "#70B3B5", curvature = 0.06, 
+           arrow = arrow(length = unit(0.02, "npc"), angle = 20, type = "closed")) +
+  annotate("curve", 
+           x = 2007, y = 150000 , xend = 2010, yend = 240000, 
+           color = "#8BA629", curvature = -0.1, 
+           arrow = arrow(length = unit(0.02, "npc"), angle = 20, type = "closed")) +
+  annotate("curve", 
+           x = 1968, y = 650000 , xend = 1971, yend = 710000, 
+           color = "#DE5A3C", curvature = -0.1, 
+           arrow = arrow(length = unit(0.02, "npc"), angle = 20, type = "closed")) +
+  annotate("text",
+  label = "Guerra de Vietnam",
+  x = 1972, y = 720000, hjust = 0, vjust = 0, size = 8, 
+  color = "gray30", family="Merriweather") +
+   annotate("curve", 
+            x = 1951, y = 500000 , xend = 1953, yend = 600000, 
+            color = "#DE5A3C", curvature = -0.1, 
+            arrow = arrow(length = unit(0.02, "npc"), angle = 20, type = "closed")) +
+  annotate("text",
+  label = "Guerra de Vietnam \ny \nOcupación de Japón",
+  x = 1956, y = 680099, hjust = 0.5, vjust = 0.5, size = 6, 
+  color = "gray30", lineheight = 0.4,family="Merriweather") 
+
+regional.time1
+
+```

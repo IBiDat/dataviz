@@ -1,0 +1,308 @@
+---
+title: "The Evolution of Working Hours in the World"
+description: |
+  This project consists in the replicaion and alternative representation of
+  graphs from Our World in Data called "Working Hours".
+categories: "2023"
+author: Miao Liao
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+The graph for this project was inspired by a Working Hours article in Our World in Data, which is  about a comparative analysis of average annual hours worked by countries between 1950 and 2019. The first part of the article discusses the average annual working hours of citizens in different countries during this period, depicted through line graphs and maps. We can clearly observe the trends in average annual working hours for each country, identifying which countries have the longest and shortest average annual working hours. Additionally, the variation in colors on the map represents changes in annual working hours. The second part utilizes data on the annual holidays in different countries during this period to depict trends in annual holidays. The third part includes data on population numbers and GDP of various countries, creating different charts to observe the relationships between population numbers, national GDP, and annual working hours in different countries. You can find the full article [here](https://ourworldindata.org/working-hours).
+
+
+### Graph to replicate
+
+The images I intend to replicate combine line graphs, maps, and bubble charts, each representing different data characteristics. The line graph is used to show the trend of annual working hours over the past 60 years. The maps provide a more macroscopic view of the changes in global working hours. The bubble chart, incorporating population and national GDP, adds complexity to the data and allows for the observation of more information. Finally, an evolutionary path is drawn based on annual working hours and GDP data. The original image depicted the evolutionary paths of all countries over time, dynamically represented across different regional segments. Here is a link to the original graph:
+
+![[Time series](https://ourworldindata.org/grapher/annual-working-hours-per-worker?time=1870..2017), 1870-2017](working-hours.png){.external}
+
+![[Map](https://ourworldindata.org/grapher/annual-working-hours-per-worker?tab=map&time=2005), 2005](working-hours-2005.png){.external}
+
+## First two graphs
+
+The first step was to load the libraries, in this case I used these: dplyr, ggplots, ggrepel, tidyr, ggokabeito, tmap and paletteer. The second step was to read the database which was on a csv file.
+
+The first image I replicated is a line graph(Figure 1), in which I selected the average annual working hours of over 60 different countries globally from 1950 to 2017. The original was a dynamic trend graph that changed with the slide of time, and I created the final overall line trend graph. However, due to the excessive number of countries, it appeared quite cluttered at first glance. Therefore, in the second image(Figure 2), I chose a few representative countries to make the chart clearer, whereas the original graph was actually an overlay of different countries' and regions' trend graphs. Subsequently, there are four map images(Figure 3-6). Each map depicts the state of annual working hours in different regions globally during various years of this period, using shades of color to represent the length of working hours
+
+
+The code for this visual representation can be divided into four parts:
+
+1. Modify column names after reading the corresponding data table
+2. Set the X-axis as the year, the Y-axis as the working time, and the colors are differentiated by region
+3. Modify the title to "Annual Working Hours per Country from 1950 to 2017"
+4. Modify the x-axis of the plot
+
+
+```{r}
+
+
+# Figure 1
+library(ggplot2)
+library(dplyr)
+library(ggrepel)
+library(tidyr)
+library(ggokabeito) # remotes::install_github("malcolmbarrett/ggokabeito")
+library(paletteer)
+working_hours<-read.csv(file = "./data/annual-working-hours-per-worker.csv")
+colnames(working_hours)<-c("Region","Code","Year","working_hours")
+p=ggplot(working_hours, aes(x = Year, y = working_hours, group = Region, color = Region)) +
+   geom_line() +
+    theme_minimal() +
+   labs(title = "Annual Working Hours per Country from 1950 to 2017",
+                  x = "Year",
+                  y = "working Hours",
+                  color = "Region") +
+     scale_x_continuous(breaks = seq(1950, 2017, by = 10)) 
+ 
+p
+```
+
+```{r}
+#Figure 2
+
+data <- read.csv(file = "./data/annual-working-hours-per-worker.csv")
+colnames(data)[4] <- "time"
+data1 <- dplyr::filter(data, grepl('Brazil|China|France|Germany|Hong Kong|India|
+                                   Singapore|Taiwan|United Kingdom|United States', Entity))
+
+p<-ggplot(data1,aes(Year,time,group=Entity,color=Entity))+
+  geom_line(position = position_dodge(0.1),cex=1)+
+  scale_x_continuous(breaks = seq(1870, 2020, 30))+
+  theme_bw()+
+  labs(x="Year",
+       y="Hours",
+       color="Country/Region")+
+  scale_color_manual(values=paletteer_d("ggthemes::Classic_20", n=9))+
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.major.y = element_line(linetype=2),
+        panel.grid.minor.y = element_blank(),
+        axis.text=element_text(size = 13), 
+        axis.title =element_text(size = 15),
+        plot.margin=unit(c(3,0,3,0),'cm'),
+        panel.border = element_blank(),
+        axis.line.x= element_line(colour = "black"))
+p
+
+
+```
+
+
+### Maps
+
+1. Select the data for the corresponding year and select the required column name (entity and time).
+2. Change the column name and merge data
+3. Modify the Settings of the map: set the title, control the title text size, scale size, map proportion, text color, etc
+
+
+```{r}
+#Figure 3 maps
+
+library(tmap)
+data("World")
+
+## The map in 1900
+
+## Using ggplot2
+
+library(ggplot2)
+library(sf)
+data_1900 <- data[data$Year==1900,]  |>  select("Entity","time")
+colnames(data_1900) <- c("sovereignt","Hours")
+world_1900 <- left_join(World,data_1900,by="sovereignt")
+ggplot(data = world_1900) +
+    geom_sf(aes(fill = Hours)) +
+    scale_fill_viridis_c() +
+    labs(
+        title = "Annual working hours per worker, 1900",
+        fill = "Working Hours"
+    )+
+  theme_minimal() +
+  theme(
+         plot.title = element_text(size = 14, hjust = 0.5, color = "orange"),
+        legend.position = c(0.1, 0.2),
+        legend.direction = "horizontal",
+        legend.box = "vertical",
+        legend.title = element_text(color = "#8B1C62", size = 10),
+        legend.text = element_text(color = "#008B8B", size = 8),
+        panel.border = element_rect(color = "black", size = 1, fill = NA)
+    )
+
+```
+
+
+```{r}
+
+##Figure 4 
+
+## The map in 1950
+
+## Using ggplot2
+data_1950 <- data[data$Year==1950,]  |>  select("Entity","time")
+colnames(data_1950) <- c("sovereignt","Hours")
+world_1950 <- left_join(World,data_1950,by="sovereignt")
+ggplot(data = world_1950) +
+    geom_sf(aes(fill = Hours)) +
+    scale_fill_viridis_c() +
+    labs(
+        title = "Annual working hours per worker, 1950",
+        fill = "Working Hours"
+    )+
+  theme_minimal() +
+  theme(
+         plot.title = element_text(size = 14, hjust = 0.5, color = "orange"),
+        legend.position = c(0.1, 0.2),
+        legend.direction = "horizontal",
+        legend.box = "vertical",
+        legend.title = element_text(color = "#8B1C62", size = 10),
+        legend.text = element_text(color = "#008B8B", size = 8),
+        panel.border = element_rect(color = "black", size = 1, fill = NA)
+    )
+
+```
+
+```{r}
+#Figure 5
+## The map in 1997
+
+data_97 <- data[data$Year==1997,]  |>  select("Entity","time")
+colnames(data_97) <- c("sovereignt","Hours")
+world_1997 <- left_join(World,data_97,by="sovereignt")
+
+ggplot(data = world_1997) +
+    geom_sf(aes(fill = Hours)) +
+    scale_fill_viridis_c() +
+    labs(
+        title = "Annual working hours per worker, 1997",
+        fill = "Working Hours"
+    )+
+  theme_minimal() +
+  theme(
+         plot.title = element_text(size = 14, hjust = 0.5, color = "orange"),
+        legend.position = c(0.1, 0.2),
+        legend.direction = "horizontal",
+        legend.box = "vertical",
+        legend.title = element_text(color = "#8B1C62", size = 10),
+        legend.text = element_text(color = "#008B8B", size = 8),
+        panel.border = element_rect(color = "black", size = 1, fill = NA)
+    )
+
+
+
+```
+
+```{r}
+#Figure 6
+
+## The map in 2017
+
+data_17 <- data[data$Year==2017,]  |>  select("Entity","time")
+colnames(data_17) <- c("sovereignt","Hours")
+world_17 <- left_join(World,data_17,by="sovereignt")
+ggplot(data = world_17) +
+    geom_sf(aes(fill = Hours)) +
+    scale_fill_viridis_c() +
+    labs(
+        title = "Annual working hours per worker, 2017",
+        fill = "Working Hours"
+    )+
+  theme_minimal() +
+  theme(
+         plot.title = element_text(size = 14, hjust = 0.5, color = "orange"),
+        legend.position = c(0.1, 0.2),
+        legend.direction = "horizontal",
+        legend.box = "vertical",
+        legend.title = element_text(color = "#8B1C62", size = 10),
+        legend.text = element_text(color = "#008B8B", size = 8),
+        panel.border = element_rect(color = "black", size = 1, fill = NA)
+    )
+
+```
+
+
+### Evolution path
+
+The original graph is the evolutionary path of the data of different countries superimposed, and then dynamic simulation is carried out. In this part, I select several regions to draw one of them. [Here is a link](https://ourworldindata.org/grapher/annual-working-hours-vs-gdp-per-capita-pwt?time=earliest..2019&country=BRA~USA~DEU~TWN%C2%AEion~PRT~ESP~AUS~NZL~ZAF) to the original graph
+
+
+```{r, preview=TRUE}
+
+data <- read.csv(file = "./data/annual-working-hours-vs-gdp-per-capita-pwt.csv")
+
+colnames(data)[c(4,5)] <- c("work_time","GDP")
+data1 <- data[-which(is.na(data$GDP)),]
+data2 <- data1[-which(is.na(data1$work_time)),]
+data3 <- dplyr::filter(data2, grepl('Brazil|China|France|Germany|Hong Kong|India|
+                                   Singapore|Taiwan|United Kingdom|United States', Entity))
+
+ggplot(data3,aes(GDP,work_time,color=Entity))+
+  geom_point(alpha=0.5)+
+  geom_line(alpha=0.5) +
+  scale_color_okabe_ito(name = "Country/Region")+
+  
+  labs(x = 'GDP per capita', y = 'Annual working hours per worker',color="Country/Region") +
+  scale_x_continuous(breaks = c(0,10000,20000,30000,40000,50000,60000,70000))+
+  theme_bw()+
+  theme(axis.text=element_text(size = 7),
+        axis.title.x =element_text(size = 10),
+        axis.title.y =element_text(size = 12))
+
+```
+
+
+## Alternative representations
+
+In this section, new data has been added, specifically the GDP and population numbers of different countries. Consequently, the next image I replicated is a bubble chart(Figure 7), used to compare the relationship between the average annual working hours, the population size, and the GDP of various countries. Due to the large number of countries, this chart primarily displays a selection of countries and regions, represented in different colors.
+
+1. Read file data
+2. Extract and modify column names
+3. Clean data: Remove blank data
+4. Extract the country I want to draw
+5. Use the log10 function to draw the bubble, and use the ggplot2 function to set the x axis, y axis, color, title
+
+
+```{r}
+
+colnames(data)[c(4,5)] <- c("work_time","GDP")
+data1 <- data[-which(is.na(data$GDP)),]
+data2 <- data1[-which(is.na(data1$work_time)),]
+data3 <- dplyr::filter(data2, grepl('Brazil|China|France|Germany|Hong Kong|India|
+                                   Singapore|Taiwan|United Kingdom|United States', Entity))
+
+data3_1 <- data3[data3$Year==2019,]
+data3_1$Population..historical.estimates. <- log10(data3_1$Population..historical.estimates.)
+rownames(data3_1) <- data3_1$Entity
+p<-ggplot(data = data3_1, aes(x = GDP, y = work_time)) +
+  geom_point(aes(size = Population..historical.estimates., fill = Entity), shape = 21, color = 'black', stroke = 1,alpha=0.5) +
+  geom_text(
+    label=rownames(data3_1), 
+    nudge_x = 0.25, nudge_y = -10, 
+    check_overlap = T
+  )+
+  xlim(0,80000)+
+  labs(x = 'GDP per capita', y = 'Annual working hours per worker') +
+  theme_bw()+
+  labs(fill = "Country/Region",
+       size = "log10(Circles sized by Population)")+
+  theme(legend.key.size=unit(0.5,"cm"))
+p
+
+
+```
+
+
+## Conclusion
+
+In the process of replicating these charts, I encountered two main problems. The first was the excessive number of countries; I attempted to draw them according to different continental plates, but this was unsuccessful. Therefore, I ultimately focused on depicting a selection of typical countries and regions. The second issue was that the original charts dynamically displayed the data from earlier to more recent years, a feature I couldn't replicate successfully. Thus, I produced a static version of the evolutionary path chart. In further elaboration, I added population data, enriching the information in the charts and allowing for potentially useful conclusions to be drawn through observation of the charts.

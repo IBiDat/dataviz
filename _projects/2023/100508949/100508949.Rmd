@@ -1,0 +1,362 @@
+---
+title: "Water Sanitation Visualization"
+description: |
+  Graph on the use of water and water sanitisation tools among the various
+  regions of the world.
+author: Nadia Napolano
+categories: "2023"
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+## Introduction
+
+The graph was found at [Visual Capitalist](https://www.visualcapitalist.com/world-water-access-visualization/), it consists of two semicircles facing each other. The data are in percentage form I was able to transcribe them by hand and insert them into the dataset.
+
+![Original graph.](water-access.jpg){.external}
+
+## Replication
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+library(gridExtra)
+```
+
+```{r, fig.height=6, fig.width=12}
+#| echo: false
+dati_grafico1 <- data.frame(
+  Region = c("South Asia", "East Asia and Pacific", "West and Central Africa",
+             "Eastern and Southern Africa", "Latin America and Caribbean",
+             "Middle East and North Africa", "Eastern Europe and central asia",
+             "Western Europe", "North America"),
+  Safely_Managed = c(0, 0, 0.23, 0.26, 0.65, 0.77, 0.84, 0.96, 0.99),
+  Basic = c(0.88, 0.94, 0.40, 0.28, 0.31, 0.16, 0.11, 0.3, 0),
+  Limited = c(0.4, 0.1, 0.10, 0.18, 0.1, 0.4, 0.2, 0, 0),
+  Unimproved = c(0.7, 0.4, 0.2, 0.16, 0.2, 0.2, 0.2, 0.1, 0.1),
+  surface_water = c(0.1, 0.1, 0.7, 0.12, 0.1, 0.1, 0.1, 0, 0)
+)
+dati_grafico1_long <- dati_grafico1 |> 
+  tidyr::pivot_longer(cols = -Region, names_to = "Category", values_to = "Percentage") |> 
+  dplyr::group_by(Region) |> 
+  dplyr::mutate(Percentage = Percentage / sum(Percentage))
+
+
+```
+
+The first step in the creation of this graph is the collection of data for the first semicircle: numerical values and information on world regions and water quality values are entered.
+
+The second step is to ensure that the values are structured as a percentage, and that their sum is equal to 1.
+
+```{r, fig.height=6, fig.width=12}
+graph <- ggplot(dati_grafico1_long, aes(x = Region, y = Percentage, fill = Category)) +
+  geom_bar(stat = "identity", position = "stack", color = "white", size = 0.1) +
+  ylim(c(0, 2)) +
+  scale_x_discrete(limits = c(letters[1:9], dati_grafico1$Region)) +
+  coord_polar(theta = "y", start = 0, direction = 1) +
+  theme_void() +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    plot.margin = margin(0, 200, 0, 0),
+    legend.key.size = unit(0.5, "cm"),
+    legend.key.width = unit(0.5, "cm")
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Safely_Managed" = "#7E8EF3", "Basic" = "#7DCA96",
+      "Limited" = "#CCC0F1", "surface_water" = "black",
+      "Unimproved" = "#CBF8C8"
+    )
+  ) +
+  annotate(
+    "segment",
+    x = 9,
+    xend = 20,
+    y = c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
+    yend = c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
+    colour = "white",
+    size = 0.2
+  ) +
+  annotate("point", x = 9, y = c(0.1, 0.2, 0.3), color = "black", size = 0.2, shape = 16) +
+  annotate("segment", x = 9, xend = 9, y = 0, yend = c(0.1, 0.2, 0.3), color = "black", size = 0.2) +
+  annotate("point", x = 9, y = c(0.8, 0.9, 1), color = "black", size = 0.2, shape = 16) +
+  annotate("segment", x = 9, xend = 9, y = 0.7, yend = c(0.8, 0.9, 1), color = "black", size = 0.2) +
+  annotate(
+    "text", x = 9, y = 0.65,
+    label = "Safe",
+    angle = 70,
+    hjust = 0.5,
+    vjust = 0.5,
+    color = "black",
+    size = 2.2
+  ) +  
+  annotate(
+    "text", x = 8.5, y = 0.52,
+    label = "drinking",
+    angle = 90,
+    hjust = 0.5,
+    vjust = 0.5,
+    color = "black",
+    size = 2.2
+  )+ 
+  annotate(
+    "text", x = 8.5, y = 0.37,
+    label = "water",
+    angle = 106,
+    hjust = 0.5,
+    vjust = 0.5,
+    color = "black",
+    size = 2.2
+  ) +
+  annotate("text", x = 20, y = 0, label = "0%", size = 3) +
+  annotate("text", x = 20, y = 0.1, label = "10%", size = 3) +
+  annotate("text", x = 20.8, y = 0.2, label = "20%", size = 3) +
+  annotate("text", x = 20.8, y = 0.3, label = "30%", size = 3) +
+  annotate("text", x = 20.8, y = 0.4, label = "40%", size = 3) +
+  annotate("text", x = 20.8, y = 0.5, label = "50%", size = 3) +
+  annotate("text", x = 20.8, y = 0.6, label = "60%", size = 3) +
+  annotate("text", x = 20, y = 0.7, label = "70%", size = 3) +
+  annotate("text", x = 20.8, y = 0.8, label = "80%", size = 3) +
+  annotate("text", x = 20, y = 0.9, label = "90%", size = 3) +
+  annotate("text", x = 20, y = 1, label = "100%", size = 3) +
+  guides(
+    fill = guide_legend(
+      title = "         Percentage of\n      Population Accessing\n         the Following",
+      ncol = 3, colour = guide_legend(override.aes = list(shape = 17))
+    )
+  )
+
+print(graph)
+theme_legend_title <- theme(
+  legend.title = element_text(size = 8, face = "bold", family = "Arial Black")
+)
+
+theme_legend_text <- theme(
+  legend.text = element_text(size = 5, family = "Arial")
+)
+theme2<- theme( legend.key.size = unit(0.3, "cm")
+)
+combined_graph <- graph + theme_legend_title + theme_legend_text + theme2
+legend <- get_legend(combined_graph)
+graph<- graph+ theme(legend.position="none")
+print(graph)
+
+```
+
+The code opens with the creation of the graph itself using ggplot. The 'Region', 'Percentage', and 'Category' columns play a key role in defining the axes and bars of the graph.
+
+The use of geom_bar allows bars representing the different categories to be added to the graph, with the possibility of stacking them for clear representation. Customisation continues with scale_x_discrete, limiting the x-axes to specific categories, and coord_polar, which sets the polar coordinate system for a more dynamic display.
+
+To make the graph even more appealing, various style changes were made, such as the use of custom colours with scale_fill_manual and the addition of segments, points and annotated text to highlight particular areas of the graph.
+
+In the continuation of the code, we refine the aesthetics of the graph. we create an object called combined_graph, to which we add the title and customise the size of the legend text to make it appropriate for the project. Finally, the original legend is hidden and a new customised legend is inserted that reflects all the changes made, bringing the graph closer to the original image.
+
+```{r}
+
+theme_legend_title <- theme(
+  legend.title = element_text(size = 8, face = "bold", family = "Arial Black")
+)
+
+theme_legend_text <- theme(
+  legend.text = element_text(size = 5, family = "Arial")
+)
+theme2<- theme( legend.key.size = unit(0.3, "cm")
+)
+combined_graph <- graph + theme_legend_title + theme_legend_text + theme2
+legend <- get_legend(combined_graph)
+
+
+graph<- graph+ theme(legend.position="none")
+print(graph)
+
+
+
+
+```
+
+In the code provided, the legend of a polar bar graph is being customised in R. A style was defined for the title of the legend, specifying the text size, bold and font. Next, the text of the legend was customised by setting the desired size and font type. The size of the legend keys was also adjusted.
+
+After combining these customisations with the original graph, a new graph called combined_graph was obtained. Next, the customised legend was extracted using the get_legend method.
+
+Finally, the original legend was hidden in the original graph and the final result was printed, incorporating the customised legend.
+
+```{r}
+dati_graficoper <- data.frame(
+  Region = c("South Asia", "East Asia and Pacific", "West and Central Africa",
+             "Eastern and Southern Africa", "Latin America and Caribbean",
+             "Middle East and North Africa", "Eastern Europe and central asia",
+             "Western Europe", "North America"),
+  Safely_Managed = c(0, 0.55, 0, 0, 0.22, 0.32, 0.33, 0.87, 0.80),
+  Basic = c(0.46, 0.22, 0.27, 0.30, 0.64, 0.56, 0.60, 0.13, 0.20),
+  Limited = c(0.13, 0.6, 0.23, 0.13, 0.05, 0.07, 0.01, 0, 0),
+  Unimproved = c(0.9, 0.14, 0.25, 0.36, 0.06, 0.03, 0.06, 0, 0),
+  surface_water = c(0.32, 0.03, 0.25, 0.21, 0.03, 0.02, 0, 0 , 0)
+)
+
+
+
+
+
+dati_graficoper_long <- dati_graficoper |> 
+  tidyr::pivot_longer(cols = -Region, names_to = "Category", values_to = "Percentage") |> 
+  dplyr::group_by(Region) |> 
+  dplyr::mutate(Percentage = Percentage / sum(Percentage))
+graphper <- ggplot(dati_graficoper_long, aes(x = Region, y = Percentage, fill = Category)) +
+  geom_bar(stat = "identity", position = "stack",color = "white", size = 0.1) +
+  ylim(c(0, 2)) +
+  scale_x_discrete(limits = c(letters[1:9], dati_grafico1$Region)) +
+  coord_polar(theta = "y", start = 0, direction = -1) +
+  theme_void() +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    plot.margin = margin(0, 0, 0, 200)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Basic" = "#7DCA96",
+      "Safely_Managed" = "#7E8EF3",
+      "Limited" = "#CCC0F1",
+      "Unimproved" = "#CBF8C8",
+      "surface_water" = "black"
+    )
+  ) +
+  annotate(
+    "segment",
+    x = 9,
+    xend = 20,
+    y = c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
+    yend = c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
+    colour = "white",
+    size = 0.2
+  ) +
+  annotate("point", x = 9, y = c(0.1, 0.2, 0.3), color = "black", size = 0.2, shape = 16) +
+  annotate("segment", x = 9, xend = 9, y = 0, yend = c(0.1, 0.2, 0.3), color = "black", size = 0.2) +
+  annotate("point", x = 9, y = c(0.8, 0.9, 1), color = "black", size = 0.2, shape = 16) +
+  annotate("segment", x = 9, xend = 9, y = 0.7, yend = c(0.8, 0.9, 1), color = "black", size = 0.2) +
+  annotate(
+    "text", x = 8.7, y = 0.60,
+    label = "Managed",
+    angle = 105,
+    hjust = 0.5,
+    vjust = 0.5,
+    color = "black",
+    size = 2.2
+  ) +  
+  annotate(
+    "text", x = 8.7, y = 0.40,
+    label = "sanitation",
+    angle = 75,
+    hjust = 0.5,
+    vjust = 0.5,
+    color = "black",
+    size = 2.2
+  )+
+  annotate("text", x = 20, y = 0, label = "0%", size = 3) +
+  annotate("text", x = 20, y = 0.1, label = "10%", size = 3) +
+  annotate("text", x = 20.8, y = 0.2, label = "20%", size = 3) +
+  annotate("text", x = 20.8, y = 0.3, label = "30%", size = 3) +
+  annotate("text", x = 20.8, y = 0.4, label = "40%", size = 3) +
+  annotate("text", x = 20.8, y = 0.5, label = "50%", size = 3) +
+  annotate("text", x = 20.8, y = 0.6, label = "60%", size = 3) +
+  annotate("text", x = 20, y = 0.7, label = "70%", size = 3) +
+  annotate("text", x = 20.8, y = 0.8, label = "80%", size = 3) +
+  annotate("text", x = 20, y = 0.9, label = "90%", size = 3) +
+  annotate("text", x = 20, y = 1, label = "100%", size = 3) +
+  theme(legend.position = "none")
+
+```
+
+In this case we carry out exactly the same procedures for the second data set of information, obtaining a similar result.
+
+```{r, fig.height=6, fig.width=12, preview=TRUE}
+doppiografico <- grid.arrange(graphper,legend, graph,  ncol = 3, widths = c(30, 0.01, 30)) 
+doppiografico2 <- cowplot::ggdraw(doppiografico) + 
+  theme(plot.background = element_rect(fill="#A6A6E2"))
+print(doppiografico2)
+
+```
+
+In this step, three graphic elements are combined using the grid.arrange function of gridExtra: graphper, legend, and graph. The layout is organised in three columns, with specific widths for each element. Next, an additional style is applied to the combined layout using cowplot::ggdraw, setting a plot background with a specific colour (#A6A6E2). Finally, the final result is printed.
+
+## Enhancement
+
+```{r}
+
+dati_grafico1 <- data.frame(
+  Region = c("South Asia", "East Asia and Pacific", "West and Central Africa",
+             "Eastern and Southern Africa", "Latin America and Caribbean",
+             "Middle East and North Africa", "Eastern Europe and central asia",
+             "Western Europe", "North America"),
+  Safely_Managed = c(0, 0, 0.23, 0.26, 0.65, 0.77, 0.84, 0.96, 0.99),
+  Basic = c(0.88, 0.94, 0.40, 0.28, 0.31, 0.16, 0.11, 0.3, 0),
+  Limited = c(0.4, 0.1, 0.10, 0.18, 0.1, 0.4, 0.2, 0, 0),
+  Unimproved = c(0.7, 0.4, 0.2, 0.16, 0.2, 0.2, 0.2, 0.1, 0.1),
+  surface_water = c(0.1, 0.1, 0.7, 0.12, 0.1, 0.1, 0.1, 0, 0)
+)
+
+dati_grafico1_long <- dati_grafico1 |> 
+  tidyr::pivot_longer(cols = -Region, names_to = "Category", values_to = "Percentage") |> 
+  dplyr::group_by(Region) |> 
+  dplyr::mutate(Percentage = Percentage / sum(Percentage))
+
+grafico1_best <- ggplot(dati_grafico1_long, aes(x = Percentage, y = Category, fill = Region)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  xlab("Percentage") +
+  ylab("Water Category") +
+  ggtitle("Water Sanitation in Different Regions") +
+  theme(axis.text.y = element_text(angle = 0, hjust = 0)) +
+  scale_fill_manual(values = c(
+    "South Asia" = "#98F5FF",
+    "East Asia and Pacific" = "#FFF68F",
+    "West and Central Africa" = "#FFA07A",
+    "Eastern and Southern Africa" = "red",
+    "Latin America and Caribbean" = "black",
+    "Middle East and North Africa" = "blue",
+    "Eastern Europe and central asia" = "green",
+    "Western Europe" = "purple",
+    "North America" = "orange"
+  )) +
+  guides(fill = guide_legend(title = "Region"))  # Change legend title
+
+print(grafico1_best)
+
+```
+
+I decided to improve this graph by simplifying, a simple bar plot makes the information clearer and less confusing. It conveys all the information without making it difficult for the reader to understand.
+
+Initially, the dataset data_graph1 is transformed from wide to long format using the function tidyr::pivot_longer. Next, the percentages are normalised for each region, ensuring that the total sum of each region is equal to 1.
+
+Next, using the ggplot2 library, a bar graph called graph1_best is created, which visually represents the distribution of the water supply categories in the different regions. The categories are positioned on the y-axis, while the percentages are represented on the x-axis. The bars are coloured according to the specific regions.
+
+The graph has been customised with titles for the axes and the main title, and the angle of the text on the y-axis has been changed for better readability. The colours of the bars were manually selected to distinctively represent each region. The legend was adapted to include the title 'Region'.
+
+```{r}
+graficomigliore_per <- ggplot(dati_graficoper_long, aes(x = Percentage, y = Category, fill = Region)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  xlab("Percentage") +
+  ylab("Sanitation Category") +
+  ggtitle("Managed Sanitation in Different Regions") +
+  theme(axis.text.y = element_text(angle = 0, hjust = 0)) +
+  scale_fill_manual(values = c(
+    "South Asia" = "#98F5FF",
+    "East Asia and Pacific" = "#FFF68F",
+    "West and Central Africa" = "#FFA07A",
+    "Eastern and Southern Africa" = "red",
+    "Latin America and Caribbean" = "black",
+    "Middle East and North Africa" = "blue",
+    "Eastern Europe and central asia" = "green",
+    "Western Europe" = "purple",
+    "North America" = "orange"
+  )) +
+  guides(fill = guide_legend(title = "Region"))  # Change legend title
+
+print(graficomigliore_per)
+```
+
+The same enhancement have been done for the second data set.

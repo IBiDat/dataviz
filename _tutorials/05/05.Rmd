@@ -1,0 +1,396 @@
+---
+title: "05. Themes"
+description: |
+  The final piece in the ggplot2 equation is theming. The powerful theme system
+  does not affect any perceptual properties of the plot, but it help us make
+  production-quality graphs through a fine control over things like fonts, ticks,
+  panel strips, backgrounds...
+categories: "Chapter 2"
+author:
+  - name: Iñaki Ucar
+    affiliation: Department of Statistics
+    orcid_id: 0000-0001-6403-5550
+date: 2022-10-05
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+preview: theme-elements.png
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, eval=FALSE)
+registerS3method("knit_print", "data.frame", function(x, ...) {
+  rmarkdown:::knit_print.data.frame(rmarkdown::paged_table(x))
+}, envir = asNamespace("knitr"))
+```
+
+Source: [`_tutorials/05/05.Rmd`](https://github.com/IBiDat/dataviz/blob/main/_tutorials/05/05.Rmd)
+
+## Introduction
+
+The central part of the theme system is the [`theme()`](https://ggplot2.tidyverse.org/reference/theme.html) function, which has 40+ configurable **elements** divided into 5 main categories: plot, axis, legend, panel and faceting elements. In those categories, individual elements are arranged in a hierarchical structure with self-explanatory names. For instance, `plot.title` controls the appearance of the plot title; `axis.ticks.x`, the ticks on the x axis, etc.
+
+Each of these elements can be **set** with one of three [basic types](https://ggplot2.tidyverse.org/reference/element.html): `element_text()`, for text elements; `element_line()`, for lines, and `element_rect()`, for borders and backgrounds. Additionally, elements can be **unset**, or removed, with `element_blank()`, which draws nothing.
+
+Themes can be built with a `+ theme(...)` invocation by specifying each one of these elements to the desired style via the corresponding element function. However, there are many predefined themes available, and oftentimes it is much simpler to specify the theme that best suits our needs and then change small details via the `theme()` function. For example, here we change the default theme to `theme_bw()` and then we tweak the legend so that is displayed inside the plot, on the top-right corner.
+
+```{r}
+library(ggplot2)
+
+p <- ggplot(mpg) +
+  aes(displ, hwy) +
+  geom_point(aes(color=factor(cyl)))
+
+p
+p +
+  theme_bw() +
+  theme(
+    legend.position = c(0.99, 0.99),
+    legend.justification = c(1, 1)
+  )
+```
+
+## Predefined themes
+
+ggplot2 comes with a number of built-in themes, and there are many ggplot2 extensions that are specifically dedicated to provide new themes. These themes can be set on a per-plot basis, as we did in the previous example, or you can set a **global theme** that replaces the default one.
+
+```{r}
+theme_set(theme_classic())
+
+p # now this uses the classic theme by default
+```
+
+This global theme can be tweaked too via the `theme_update()` function, which accepts the same arguments as `theme()`.
+
+```{r}
+theme_update(
+  legend.position = c(0.99, 0.99),
+  legend.justification = c(1, 1)
+)
+
+p # now the legend is inside the plot by default
+```
+
+### Built-in themes
+
+ggplot's characteristic visual signature (grey background with white grid lines) is defined in `theme_grey()`, which is applied by default to all plots unless replaced as done previously.
+
+```{r}
+theme_set(theme_grey())
+
+p # back to the default
+```
+
+There are seven other built-in themes:
+
+-   [`theme_bw()`](https://ggplot2.tidyverse.org/reference/ggtheme.html): a variation on [`theme_grey()`](https://ggplot2.tidyverse.org/reference/ggtheme.html) that uses a white background and thin grey grid lines.
+-   [`theme_linedraw()`](https://ggplot2.tidyverse.org/reference/ggtheme.html): A theme with only black lines of various widths on white backgrounds, reminiscent of a line drawing.
+-   [`theme_light()`](https://ggplot2.tidyverse.org/reference/ggtheme.html): similar to [`theme_linedraw()`](https://ggplot2.tidyverse.org/reference/ggtheme.html) but with light grey lines and axes, to direct more attention towards the data.
+-   [`theme_dark()`](https://ggplot2.tidyverse.org/reference/ggtheme.html): the dark cousin of [`theme_light()`](https://ggplot2.tidyverse.org/reference/ggtheme.html), with similar line sizes but a dark background. Useful to make thin coloured lines pop out.
+-   [`theme_minimal()`](https://ggplot2.tidyverse.org/reference/ggtheme.html): A minimalistic theme with no background annotations.
+-   [`theme_classic()`](https://ggplot2.tidyverse.org/reference/ggtheme.html): A classic-looking theme, with x and y axis lines and no gridlines.
+-   [`theme_void()`](https://ggplot2.tidyverse.org/reference/ggtheme.html): A completely empty theme.
+
+Internally, themes are just a call to `theme()` that sets the complete set of parameters available to the appropriate values, like `theme_grey`:
+
+```{r}
+# execute this line as is, without parentheses, to inspect the internals
+theme_grey
+```
+
+Others are based on some theme, and then perform some tweaks:
+
+```{r}
+theme_bw # based on theme_grey
+```
+
+#### Checkpoint 1
+
+1.  See the manual page for the [built-in set of themes](https://ggplot2.tidyverse.org/reference/ggtheme.html), and play with the examples to familiarize yourself with the different styles.
+
+2.  In which theme is based each one of the built-in themes?
+
+### More themes
+
+There are numerous packages that provide themes as part of their functionality, but also entire packages specifically dedicated to this. This is a non-comprehensive list that highlights some noteworthy themes:
+
+-   [cowplot](https://wilkelab.org/cowplot/articles/introduction.html): Provides some themes that are opinionated versions of built-in ones.
+-   [ggdark](https://github.com/nsgrantham/ggdark): Dark versions of built-in themes.
+-   [ggtech](https://github.com/ricardo-bion/ggtech): Classic-like themes in the style of several tech companies.
+-   [ggthemes](https://yutannihilation.github.io/allYourFigureAreBelongToUs/ggthemes/): Includes themes inspired by The Economist, The Wall Street Journal, FiveThirtyEight, and Tufte among others.
+-   [ggthemr](https://github.com/Mikata-Project/ggthemr): Themes with special care for color palettes.
+-   [hrbrthemes](https://cinc.rud.is/web/packages/hrbrthemes/): Nicely curated set of themes, with special care for the fonts, by Bob Rudis.
+-   [tvthemes](https://ryo-n7.github.io/tvthemes/): Collection of themes inspired by TV shows.
+
+## Modifying theme components
+
+Once we have set a predefined theme that is close enough to what we try to achieve, it is time for tweaking. To modify individual theme components, you use code like `plot + theme(element.name = element_type(...))`. Apart from `element_blank()`, which unsets an element,
+
+```{r}
+p <- ggplot(mpg) +
+  aes(displ, hwy) +
+  labs(title="This is a title")
+
+p
+p + theme(panel.grid.major = element_blank())
+```
+
+there are three basic types of elements (text, line, rect), and the setter function must match that type.
+
+### Text elements
+
+[`element_text()`](https://ggplot2.tidyverse.org/reference/element.html) draws labels and headings. You can control the font `family`, `face`, `colour`, `size` (in points), `hjust`, `vjust`, `angle` (in degrees) and `lineheight` (as ratio of `fontcase`). More details on the parameters can be found in [`vignette("ggplot2-specs")`](https://ggplot2.tidyverse.org/articles/ggplot2-specs.html).
+
+```{r}
+p + theme(plot.title = element_text(size = 30))
+p + theme(plot.title = element_text(face = "bold", color = "red"))
+p + theme(plot.title = element_text(hjust = 1))
+```
+
+### Line elements
+
+[`element_line()`](https://ggplot2.tidyverse.org/reference/element.html) draws lines parametrized by `color`, `size` and `linetype`.
+
+```{r}
+p + theme(panel.grid.major = element_line(color = "black"))
+p + theme(panel.grid.major = element_line(color = "black", size = 2))
+p + theme(panel.grid.major = element_line(color = "black", linetype = "dotted"))
+```
+
+### Rectangle elements
+
+[`element_rect()`](https://ggplot2.tidyverse.org/reference/element.html) draws rectangles, mostly used for backgrounds, parametrized by `fill` color and border `color`, `size` and `linetype`.
+
+```{r}
+p + theme(plot.background = element_rect(fill = "grey80", color = NA))
+p + theme(plot.background = element_rect(color = "red", size = 2))
+p + theme(panel.background = element_rect(fill = "linen"))
+```
+
+## Theme elements
+
+There are four general elements that affect all elements of their kind:
+
+::: l-body-outset
+| Element | Setter | Description |
+|---|---|------|
+| line | `element_line()` | Affects all line elements. |
+| rect | `element_rect()` | Affects all rectangular elements. |
+| text | `element_text()` | Affects all text elements. |
+| title | `element_text()` | Affects all title elements. |
+| plot.margin | `unit()` | Margin around the plot. |
+:::
+
+All individual elements that can be set with `element_line()` inherit from line, and so on and so forth. Then, individual elements can be fine-tuned via their specific configuration option, that can be subdivided into plot, axis, legend, panel and faceting elements. These individual elements have a hierarchical structure too, meaning that e.g. `axis.title.*.*`, if not specified, inherits from `axis.title`.
+
+::: l-page
+![Overview of theme elements. Figure from [ggplot2 Theme Elements Demonstration](https://henrywang.nl/ggplot2-theme-elements-demonstration/) by Henry Wang.](theme-elements.png){.external}
+:::
+
+### Plot elements
+
+Some elements affect the plot as a whole:
+
+::: l-body-outset
+| Element | Setter | Description |
+|---|---|------|
+| plot.background | `element_rect()` | Background for the entire plot. |
+| plot.title<br>plot.subtitle<br>plot.caption<br>plot.tag | `element_rect()` | Plot title, subtitle, caption and tag. Elements subtitle, caption and tag inherit from title by default, but can be set separately. |
+| plot.title.position<br>plot.caption.position | character | Alignment of title (affects subtitle too) and caption ("panel" and "plot", which align with and without margins respectively). |
+| plot.tag.position | character or numeric | Aligment of tag ("topleft", "top", "topright", "left", "right", "bottomleft", "bottom", "bottomright", or a coordinate). |
+| plot.margin | `unit()` | Margin around the plot. |
+:::
+
+By default, ggplot2 uses a white background to ensure that the plot can be read no matter where it is placed. Sometimes you may want to blend it with the background color of a document (e.g., a presentation), in which case it is useful to set a transparent background with `fill=NA`. In a similar way, if the destination document already defines margins around the plot, you may want to eliminate those.
+
+```{r}
+p + theme(
+  plot.background = element_rect(fill="blue", color="red", size=3),
+  plot.title = element_text(size = 30),
+  plot.margin = margin(50, 10, 10, 10)
+)
+```
+
+### Axis elements
+
+The axis elements control the appearance of the axes:
+
+::: l-body-outset
+| Element | Setter | Description |
+|---|---|------|
+| axis.title<br>axis.title.x<br>axis.title.x.top<br>axis.title.x.bottom<br>axis.title.y<br>axis.title.y.left<br>axis.title.y.right | `element_text()` | Axis titles. |
+| axis.text<br>axis.text.x<br>axis.text.x.top<br>axis.text.x.bottom<br>axis.text.y<br>axis.text.y.left<br>axis.text.y.right | `element_text()` | Axis tick labels. |
+| axis.ticks<br>axis.ticks.x<br>axis.ticks.x.top<br>axis.ticks.x.bottom<br>axis.ticks.y<br>axis.ticks.y.left<br>axis.ticks.y.right | `element_line()` | Axis tick marks. |
+| axis.ticks.length<br>axis.ticks.length.x<br>axis.ticks.length.x.top<br>axis.ticks.length.x.bottom<br>axis.ticks.length.y<br>axis.ticks.length.y.left<br>axis.ticks.length.y.right | `unit()` | Length of tick marks. |
+| axis.line<br>axis.line.x<br>axis.line.x.top<br>axis.line.x.bottom<br>axis.line.y<br>axis.line.y.left<br>axis.line.y.right | `element_line()` | Line parallel to axis (hidden in default theme). |
+:::
+
+Note that anything set for `axis.line` is inherited by `axis.line.x` and `axis.line.y`.
+
+```{r}
+p + theme(
+  axis.line = element_line(size=5),
+  axis.line.y = element_line(color="red"),
+)
+```
+
+A common task is to rotate labels to avoid overlap of very long labels.
+
+```{r}
+p +
+  scale_x_continuous(labels=scales::label_number(prefix="a very long label ")) +
+  theme(axis.text.x = element_text(angle=45, vjust=1, hjust=1))
+```
+
+### Legend elements
+
+The legend elements control the appearance of all legends. You can also modify the appearance of individual legends by modifying the same elements in `guide_legend()` or `guide_colourbar()`.
+
+::: l-body-outset
+| Element | Setter | Description |
+|---|---|------|
+| legend.background | `element_rect()` | Background of legend. |
+| legend.margin | `margin()` | Margin around each legend. |
+| legend.spacing<br>legend.spacing.x<br>legend.spacing.y | `unit()` | Spacing between legends. |
+| legend.key | `element_rect()` | Background of legend keys. |
+| legend.key.size<br>legend.key.height<br>legend.key.width | `unit()` | Legend key size. Height and width inherit from size unless specified separately. |
+| legend.text | `element_text()` | Legend item labels. |
+| legend.text.align | 0--1 | Legend label alignment (0 = right, 1 = left). |
+| legend.title | `element_text()` | Title of legend. |
+| legend.title.align | 0--1 | Legend title alignment (0 = right, 1 = left). |
+| legend.position | character or numeric | Position of legends ("none", "left", "right", "bottom", "top" for outside placement; two-element numeric vector for inside placement: 0 = bottom/left, 1 = top/right). |
+| legend.direction | character | Layout of items in legends ("horizontal" or "vertical"). |
+| legend.justification | character or numeric | Anchor point for legend positioning ("center" or two-element numeric vector: 0 = bottom/left, 1 = top/right). |
+| legend.box | character | Arrangement of multiple legends ("horizontal" or "vertical"). |
+| legend.box.just | character | Justification of each legend ("top", "bottom", "left", "right"). |
+| legend.box.margin | `margin()` | Margin around full legend area. |
+| legend.box.background | `element_rect()` | Background of legend area. |
+| legend.box.spacing | `unit()` | Spacing between plotting area and legend box. |
+:::
+
+A common task is to modify legend placement.
+
+```{r}
+p1 <- p + geom_point(aes(color=factor(cyl)))
+
+p1
+p1 + theme(
+  legend.position = "top",
+  legend.justification = "right"
+)
+p1 + theme(
+  legend.position = c(1, 1),
+  legend.justification = c(1, 1)
+)
+p1 + theme(
+  legend.position = c(1, 1),
+  legend.justification = c(1, 1),
+  legend.background = element_rect(fill=NA)
+)
+```
+
+### Panel elements
+
+Panel elements control the appearance of the plotting panels:
+
+::: l-body-outset
+| Element | Setter | Description |
+|---|---|------|
+| aspect.ratio | numeric | Aspect ratio of the panel. |
+| panel.background | `element_rect()` | Background of plotting area (under data). |
+| panel.border | `element_rect()` | Border around plotting area (over data). |
+| panel.grid<br>panel.grid.major<br>panel.grid.major.x<br>panel.grid.major.y<br>panel.grid.minor<br>panel.grid.minor.x<br>panel.grid.minor.y | `element_line()` | Grid lines. Major and minor grid lines, as well as individual ones for axis x and y, can be specified separately. |
+| panel.ontop | logical | Option to place the panel over the data layers (usually used with a transparent or blank panel.background). |
+:::
+
+Note that `aspect.ratio` fixes the aspect ratio of just the *panel*, but not the plot.
+
+```{r}
+p + theme(aspect.ratio = 2/1)
+```
+
+### Faceting elements
+
+The following theme elements are associated with faceted ggplots:
+
+::: l-body-outset
+| Element | Setter | Description |
+|---|---|------|
+| panel.spacing<br>panel.spacing.x<br>panel.spacing.y | `unit()` | Spacing between facets. |
+| strip.background<br>strip.background.x<br>strip.background.y | `element_rect()` | Background of facet labels. |
+| strip.placement | character | Placement of facet labels with respect to axes ("inside" or "outside"). |
+| strip.text<br>strip.text.x<br>strip.text.y | `element_text()` | Facet labels. |
+| strip.switch.pad.grid<br>strip.switch.pad.wrap | `unit()` | Space between facet labels and axes when strips are switched. |
+:::
+
+Note that `strip.text.x` affects both `facet_wrap()` and `facet_grid()`, but `strip.text.y` only affects `facet_grid()`.
+
+#### Checkpoint 2
+
+1.  `theme_dark()` makes the inside of the plot dark, but not the outside. Change the plot background to black, and then update the text settings so you can still read the labels.
+
+## Advanced font usage
+
+Setting fonts is a tricky issue. The reason is that we have to rely on the few fonts available to R by default. If a font is not available, a default one will be used instead. For example, compare this to [Futura](https://en.wikipedia.org/wiki/Futura_(typeface)):
+
+```{r}
+p + 
+  theme(text = element_text(family="Futura")) +
+  labs(subtitle="This is not Futura")
+```
+
+Even if this font is installed in your system (which most probably will not, because it is a non-free font), it is not available to R by default. There are packages, such as [`extrafont`](https://CRAN.R-project.org/package=extrafont), that makes it easier to use your system fonts, or arbitrary font files, in R. But there is a better way.
+
+The easiest way of ensuring reproducible results across platforms is to select a free font available in [Google Fonts](https://fonts.google.com/), and then apply it to your theme. For this, we need to install the [`showtext`](https://cran.r-project.org/package=showtext) package, and a couple of additional commands. In this example, we apply the nice handwritten font [Caveat](https://fonts.google.com/specimen/Caveat?query=caveat):
+
+```{r, fig.showtext=TRUE}
+sysfonts::font_add_google("Caveat", family="caveat")
+showtext::showtext_auto()
+
+p + theme(text = element_text(family="caveat"))
+```
+
+Note also that font selection is so important for the look and feel of a graphic that many predefined themes provide specific arguments to change the font family and size.
+
+```{r, fig.showtext=TRUE}
+p + theme_bw(base_family="caveat")
+```
+
+### Setting the DPI
+
+The DPI, or _Dots Per Inch_, is a measure of image resolution. RStudio's _Plot_ pane uses a resolution of only 96 DPI for speed reasons, but `ggsave()` uses a default of 300 DPI, which is the standard quality for printing. The issue with `showtext` is that DPI is not automatically detected. It works well for 96 DPI (so plots in the panel look fine), but it needs to be set manually for higher DPIs. E.g., the font here will look too small:
+
+```{r}
+ggsave("test_96.png", p + theme_bw(base_family="caveat"))
+```
+
+Therefore, you must set the proper DPI beforehand:
+
+```{r}
+showtext::showtext_opts(dpi=300)
+ggsave("test_300.png", p + theme_bw(base_family="caveat"))
+showtext::showtext_opts(dpi=96) # reset default
+```
+
+For R Markdown documents, there is a special chunk option, `fig.showtext=TRUE`, that performs this for you:
+
+````{r}
+```{r, fig.showtext=TRUE}
+p + theme_bw(base_family="caveat")
+```
+````
+
+See [this issue](https://github.com/yixuan/showtext/issues/51) for further discussion.
+
+#### Checkpoint 3
+
+1.  Find two fonts of your liking in Google Fonts. Apply one of them to all text elements except for the subtitle, that should use the second font.
+
+### Figuring out a font
+
+Sometimes we find a nice font that we would like to use in a graph (or, in general, in any document). How to figure out which font it is?, or, at least, a similar one... There are two levels of difficulty here depending on the source medium:
+
+1. **A webpage**: If the intended font is included in some webpage, you are in luck, because these are the easiest to figure out. One way is to manually search in the source code of the webpage: with a right-click on the text, you need to choose the menu item that opens the page's code (_Inspect_ in Chrome), then you can look for a CSS property called `font-family` in the _Styles_ tab. An even easier way is to just copy the text and paste it in a document (e.g. a Google Docs). The font family will be automatically recognized.
+
+2. **An image**: (Or anything that can be saved as an image). There are multiple online services dedicated to identifying fonts in images. A popular one is [What The Font](https://www.myfonts.com/pages/whatthefont).

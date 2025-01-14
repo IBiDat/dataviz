@@ -1,0 +1,249 @@
+---
+title: "What Future for Amazon - Some Lessons from the Past"
+description: |
+  Evolution of Amazon Deforestation (1988 - 2021) with Basis on Inpe - Sistema PRODES Data.
+categories: "2022"
+author: Artem Urlapov
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.align="center", out.width="100%")
+```
+
+## Introduction
+
+Shortly after 2022 Brazilian General Election, which was transcendental for a whole series of reasons: namely, Luiz Inácio Lula da Silva had not only promised [‘to unite a divided Brazil and to seek fair global trade’](www.reuters.com/world/americas/lula-promises-unite-divided-brazil-seek-fair-global-trade-2022-10-31)---turning away from Jair Bolsonaro’s divisive and populist rhetoric---, but he was also fairly adamant in his pledge to protect the Amazon, vowing [‘to crack down on illegal deforestation and rebuild relationships with countries financing the protection of the rainforest’](www.lemonde.fr/en/international/article/2022/11/16/cop27-lula-promises-to-protect-the-amazon_6004551_4.html). 
+
+Thus, observing closely the election---not least because of my own sense of concern about the environment---, [I came across the following article (in Portuguese) published by BBC on November the 18th of 2021](https://www.bbc.com/portuguese/brasil-59341478.amp), which outlines the fact that the government of Jair Bolsonaro had registered in 2021 the largest rate of Amazon deforestation since 2006, as can be seen in the aforementioned article.
+
+![Amazon deforestation since 2006. Source: [BBC](https://www.bbc.com/portuguese/brasil-59341478.amp).](original.png){.external width="100%"}
+
+
+## Replica
+
+
+In what follows, I will provide the R code in its entirety and will also comment on some of the challenges that I came across when trying to reproduce [the BBC graph](https://www.bbc.com/portuguese/brasil-59341478.amp).
+
+It must be remarked that all data needed for this task is available [here](http://www.obt.inpe.br/OBT/assuntos/programas/amazonia/prodes).
+
+
+
+As such, the full code for the replication part is, as follows:
+
+
+```{r}
+
+library(readr)
+library(ggplot2)
+
+AmazoniaDeforestation <- read_delim("AmazoniaDeforestation.csv", delim = ";", show_col_types = FALSE)
+
+AmazoniaDeforestation <- as.data.frame(AmazoniaDeforestation)
+
+text <- paste("O governo Bolsonaro", "registrou o maior", "desmatamento", "desde 2006", sep="\n")
+
+Amazonia <- ggplot(AmazoniaDeforestation, aes(x = Year, y = Total)) +
+  geom_histogram(stat = "identity", fill = "turquoise4", width = 0.5, position = position_dodge(2.5)) +
+  scale_x_continuous(breaks = c(1988, 1992, 1996, 2000, 2004, 2008, 2012, 2016, 2021)) +
+  scale_y_continuous(breaks = c(0, 5000, 10000, 15000, 20000, 25000, 30000)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle ("Desmatamento Anual da Amazônia em km2") +
+  theme(plot.background = element_rect(fill = "white"), panel.background = element_rect(fill = "white")) +
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank()) +
+  geom_hline(yintercept=c(5000, 10000, 15000, 20000, 25000, 30000), linetype="dotted") +
+  geom_hline(yintercept = 0) +
+  annotate("text", x = 2008, y = 20500, label = text, hjust=0, lineheight=1) +
+  geom_rect(aes(xmin = 2018.6, xmax = 2022, ymin = 0, ymax = 35000), fill = "navajowhite2", alpha = 0.01) +
+  geom_curve(aes(x = 2018, y = 17000, xend = 2021, yend = 13500), colour = "black",
+             arrow = arrow(length = unit(0.02, "npc"), type = "open"), curvature = -0.6) +
+  labs(caption = c("BBC", "Fonte: Inpe/Sistema PRODES")) +
+  theme(plot.caption = element_text(hjust=c(1, 0)))
+
+Amazonia
+
+```
+
+While I must certainly say that it has not been exceedingly hard for me to replicate the original graph, there have been some caveats here and there, nevertheless.
+
+
+In first place, I had to address with utmost care the following line of code: 
+
+```{r, eval=FALSE}
+geom_rect(aes(xmin = 2018.6, xmax = 2022, ymin = 0, ymax = 35000), fill = "navajowhite2", alpha = 0.01)
+
+```
+
+This is because there was a risk that the chosen colour could possibly "eclipse" the colour of the bars.
+
+
+In second place, having mentioned the colour of the bars, it took me quite a lot of time to find out which colour could most faithfully represent the bars. In the end, I ended up settling for 'turquoise4', as illustrated in the piece of code below:
+
+```{r, eval=FALSE}
+geom_histogram(stat = "identity", fill = "turquoise4", width = 0.5, position = position_dodge(2.5))
+
+```
+
+
+In third place, while this may be deemed a rather inconsequential issue (though I believe that it is certainly not), I had to rigourously add the lines of text in exactly the right place---as they appear in the original graph:
+
+```{r, eval=FALSE}
+geom_text(aes(x = 2012, y = 20500, label = "O governo Bolsonaro"), colour = "black") +
+geom_text(aes(x = 2011.25, y = 19000, label = "registrou o maior"), colour = "black") +
+geom_text(aes(x = 2010.9, y = 17500, label = "desmatamento"), colour = "black") +
+geom_text(aes(x = 2010.25, y = 16000, label = "desde 2006"), colour = "black")
+
+```
+
+Please, note that I had to be very meticulous indeed in what to the choice of 'x' and 'y' coordinates it concerns.
+
+With regard to this approach, I must say that---following Professor Iñaki Ucar's kind suggestion---I ended up introducing a much more elegant 'workaround'.
+
+Thus, I first proceeded to define the text that I was going to use for the annotation, and after that I used the 'annotate' function:
+
+```{r, eval=FALSE}
+text <- paste("O governo Bolsonaro", "registrou o maior", "desmatamento", "desde 2006", sep="\n")
+
+```
+
+```{r, eval=FALSE}
+annotate("text", x = 2008, y = 20500, label = text, hjust=0, lineheight=1)
+
+```
+
+In fourth and final place, as trivial as it could possibly seem to some, I actually invested a lot of time in "getting the arrow right" in the following line of code:
+
+```{r, eval=FALSE}
+geom_curve(aes(x = 2018, y = 17000, xend = 2021, yend = 13500), colour = "black",
+           arrow = arrow(length = unit(0.02, "npc"), type = "open"), curvature = -0.6)
+
+```
+
+Here, especially, I had to be very attentive in what to "unit", "type", and "curvature" it refers, so that once again the obtained result could perfectly resemble the original graph.
+
+
+## Enhancement
+
+
+Regarding the enhancement part, truth be told, I had a number of possible ideas in mind. On purpose of this, all credit is due to Professor Iñaki Ucar for his kind suggestions, meaningful reflections, and the time he took to discuss with me what the best outcome could be.
+
+As such, I could have opted, for instance, to maintain the 'bar structure', while differentiating distinct time periods by means of a number of colours with basis on the colour of the ruling government at each point in time, in order to see under which government/-s deforestation was more or less prevalent.
+
+But, in the end, I decided to elaborate a dynamic map of the evolution of deforestation for 1988 - 2021 period. This choice was made primarily for 2 reasons:
+
+1. Not all 9 Brazilian States have been impacted in equal measure; hence, it was---I much believe---interesting to see which ones bore more impact and which ones bore less (and also when---in time---).
+2. Since I had already replicated a piece of time series, I thought that it would be more challenging; hence, I would be able to learn more about Data Visualisation in R by settling for a map.
+
+
+The code in question for the enhancement part is, as follows:
+
+```{r}
+
+library(tidyverse) 
+library(gganimate)
+library(sf)
+library(geobr)
+
+Deforestation_Long <- 
+  AmazoniaDeforestation %>%
+  select(-Total) %>%
+  pivot_longer(-Year, names_to = "name_state", values_to = "Deforestated Area") %>%
+  mutate(name_state = trimws(name_state))
+  
+Amazon <- read_amazon(showProgress = FALSE)
+
+States <- read_state(showProgress = FALSE) %>% 
+  mutate(name_state = stringi::stri_trans_general(str = name_state, id = "Latin-ASCII"))
+
+States_Deforestation <- left_join(States, Deforestation_Long, by = "name_state") %>% 
+  drop_na()
+
+Deforestation_Cumulative <- States_Deforestation %>% 
+  group_by(name_state) %>% 
+  mutate("Desmatamento Acumulado" = cumsum(`Deforestated Area`)) %>% 
+  mutate("Desmatamento Acumulado (%)" = `Desmatamento Acumulado` / as.numeric(sf::st_area(geom)) * 1e6)
+
+AmazoniaStateDeforestation <- ggplot() +
+  labs(caption = "\n Fonte: Sistema PRODES") +
+  geom_sf(data = st_simplify(States), colour = "darkgrey") +
+  geom_sf(data = st_simplify(Deforestation_Cumulative),
+          aes(fill = `Desmatamento Acumulado`, group = interaction(`Desmatamento Acumulado`, Year))) +
+  geom_sf(data = st_simplify(Amazon), colour = "darkred", size = 6, fill = NA) +
+  ggtitle("\n Desmatamento Anual da Amazônia em km2: \n Ano {round(frame_time)}") +
+  scale_fill_viridis_c(option = "D")
+
+AnimatedMap <- AmazoniaStateDeforestation + transition_time(Year)
+
+animate(AnimatedMap, fps = 10, nframes = 100, duration = 10)
+
+```
+
+Needless to say, the enhancement part proved to be quite more difficult for me rather than the replication part.
+
+Next, I will proceed to illustrate some of the challenges that I faced:
+
+
+First of all, it took me a while (and several attempts in the meantime) to find the right 'library' for Brazil. For instance, I had initially intended to visualise the 9 Brazilian States that belong to the Amazon by means of a 'library' called 'brazilmaps'. Much unfortunately, I discovered that this 'library' in question is very much outdated, and has a very limited number of functions. But, luckily, after some rather extensive search, I managed to find a really great 'library' called 'geobr', which suited my requirements just fine.
+
+
+In second place, as it stems quite naturally from what has been mentioned above, I had to study all the commands that are provided in this 'library' before proceeding to start elaborating the map: these include, for instance, 'read_amazon', 'read_meso_region' or 'read_states'.
+
+
+In third place, I made a mistake when it came to the function 'trimws()'. Thus, what I did initially was to add 'drop_na' after 'left_join' in order to discard NAs. However, the correct version is, as follows:
+
+```{r, eval=FALSE}
+mutate(name_state = trimws(name_state))
+
+```
+
+
+In fourth place, I had initially used the command 'read_meso_region', which turned out to not be the right one; since I was very much interested in States and not Regions. Consequently, the right piece of code is this one:
+
+```{r, eval=FALSE}
+Deforestation_Cumulative <- States_Deforestation %>% 
+group_by(name_state)
+
+```
+
+
+In fifth place, something that I did not know was that I had to use `...` ('backticks') instead of "..." or '...' in order for R to be able to recognise that I was referring to a variable. This is very much what happened to me in the two following lines of code:
+
+```{r, eval=FALSE}
+Deforestation_Cumulative <- States_Deforestation %>% 
+  group_by(name_state) %>% 
+  mutate("Desmatamento Acumulado" = cumsum(`Deforestated Area`)) %>% 
+  mutate("Desmatamento Acumulado (%)" = `Desmatamento Acumulado` / as.numeric(sf::st_area(geom)) * 1e6)
+  
+```
+
+```{r, eval=FALSE}
+AmazoniaStateDeforestation <- ggplot() +
+  labs(caption = "\n Fonte: Sistema PRODES") +
+  geom_sf(data = st_simplify(States), colour = "darkgrey") +
+  geom_sf(data = st_simplify(Deforestation_Cumulative),
+          aes(fill = `Desmatamento Acumulado`, group = interaction(`Desmatamento Acumulado`, Year)))
+  
+```
+
+As such, when I had initially put "Desmatamento Acumulado", R was not able to recognise that what I had in my mind was a variale; but it did perfectly recognise `Desmatamento Acumulado`, of course.
+
+
+In sixth place, an additional problem that I encountered was that due to the update of 'sf' R 'library', the animated map was not loading, due to some incompatibility between 'sf' and 'transformr' R libraries. On purpose of this, I did manage [to find a temporary workaround at the end of this GitHub post](https://github.com/thomasp85/gganimate/issues/479). Also, as I discovered after some rather extensive search, in order to use the previous version of 'transformr', it was necessary to install 'RTools' in first place.
+
+
+In seventh and final place, I must say that I did somewhat struggle insofar that I intended to reach the final goal (a dynamic visualisation) instead of pausing to pay more attention to the intermediate step (making sure that I had a good static visualisation in first place). In this sense, had I done that from the beginning, I much believe that some of the aforementioned mistakes could have been avoided. But I am here to learn, after all... so, no regrets!
+
+
+## Conclusion
+
+
+All in all, I am very happy with what I managed to achieve: the first (replica) part is quite faithful indeed to the original BBC graph, while the second (enhancement) part does clearly show exactly what I had intended to illustrate---the unequal impact of deforestation, namely how some Amazon States were more affected than the others in time.
+
+This leads me to the logical reasoning that, if I were to give a sound economic and environmental piece of advice, then I am quite convinced that Brazil would certainly be better off by enhancing its governance (concretely, its environment protection laws) on a State---rather than Nation---level.
+This is much because, as can be seen from the map that I elaborated, while we tend to speak of the issue of deforestation of the Amazon in general terms, the root of the problem actually lies in the fact that deforestation is---and has historically been---very much concentrated in only a handful of States out of the total number of 9 States that comprise the Amazon.
+
+Last but not least, I am deeply grateful to Professor Iñaki Ucar for having led me in the way of acquisition of knowledge in the sphere of Data Visualisation in R.
