@@ -9,16 +9,14 @@ output:
   distill::distill_article:
     self_contained: false
     toc: true
-    toc_float: true
-    code_folding: true
 ---
 
-# About the graph
+## About the graph
 
 I have recreated the following graph from [this February 2024 article by ABC news Australia](https://www.abc.net.au/news/2024-02-02/biggest-winners-and-losers-of-revised-stage-3-tax-cuts/103415830).
 
-```{r original-plot, echo=FALSE, fig.cap="Original graph from ABC article", layout="l-body-outset"}
-knitr::include_graphics("~/Documents/UC3M - coursework/Data Vizualisation/dataviz/ABC_tax_income_plot.png")
+```{r original-plot, echo=FALSE, fig.cap="Original graph from ABC article", layout="l-body-outset", out.extra="class=external"}
+knitr::include_graphics("ABC_tax_income_plot.png")
 ```
 
 The graph shows the median income of Australians by occupation compared to who would benefit from proposed tax changes. The graph highlights those who will benefit under the changes and those who will be worse off. To distinguish the two groups, the authors use a horizontal line from the y-axis at the benefit cutoff point, \$146,486, and background shading.
@@ -27,7 +25,7 @@ The purpose of the graph is to highlight that most people are expected to be bet
 
 The graph is effective because you can easily conclude that the majority of people will be better off under the changes, regardless of sex or occupation. The use of a linear y-axis to show income is effective in isolating the very high income occupations which are outliers to the data. It creates a white space which contrasts against the concentrated grouping of occupations below the cutoff point.
 
-# Setup
+## Setup
 
 Load packages, set global and local parameters, and read in our dataset.
 
@@ -57,7 +55,7 @@ knitr::opts_chunk$set(echo = TRUE,
                       fig.showtext=TRUE)
 ```
 
-### Load data in from web
+### Load data 
 
 Now we load the data from the `data.gov.au` page. The data comes from Table 15B of the 2020-21 Australian Tax Office individual statistics.
 
@@ -72,16 +70,21 @@ This is some of the most granular tax data available. This choice of data allows
 -   Splits by gender
 
 ```{r raw_data}
-library(httr)
-url <- "https://data.gov.au/data/dataset/07b51b39-254a-4177-8b4c-497f17eddb80/resource/1535c9eb-8385-41af-ae65-f71b2be77d6d/download/ts21individual15occupationsex.xlsx"
-response <- GET(url)
-file_path <- tempfile(fileext = ".xlsx")
-writeBin(content(response, "raw"), file_path)
+## if reading from web
+# library(httr)
+# url <- "https://data.gov.au/data/dataset/07b51b39-254a-4177-8b4c-497f17eddb80/resource/1535c9eb-8385-41af-ae65-f71b2be77d6d/download/ts21individual15occupationsex.xlsx"
+# response <- GET(url)
+# file_path <- tempfile(fileext = ".xlsx")
+# writeBin(content(response, "raw"), file_path)
+# 
+# data <- read_excel(file_path,
+#                    sheet="Table 15B",
+#                    skip=1) # Initial clean step to remove unused row
 
-data <- read_excel(file_path,
-                   sheet="Table 15B",
-                   skip=1) # Initial clean step to remove unused row
 
+data <- read_excel("ts21individual15occupationsex.xlsx",
+                   sheet = "Table 15B",
+                   skip = 1)
 head(data, 5)
 
 ```
@@ -105,7 +108,7 @@ colour_male <- "#ca555d"
 
 ```
 
-# Data cleaning
+## Data cleaning
 
 First, remove unused columns, clean column names and also filter rows to only have the groups by gender we are interested in (remove totals).
 
@@ -137,7 +140,7 @@ clean_data <- clean_data |>
 
 The authors make their calculations of total % of workers including the "0000 Occupation blank" variable, but then remove it from all of the visualisations.
 
-# Basic plotting to check variable functionality.
+### Basic plotting to check variable functionality
 
 Now, to check all the required variables are available, I create a very basic version of the graph to check our data completeness. Some parameters for axis are included for comparison purposes.
 
@@ -179,7 +182,7 @@ There is no option to do this manually within one ggplot. Instead, I will create
 
 This is a source of repetition in the next few steps to create almost identical but symmetrical plots.
 
-# Replication
+## Replication
 
 Primarily because I cannot impute the gap around x=0, individual graphs by gender are created. To start, I split the data by gender to work with on each graph.
 
@@ -189,7 +192,7 @@ data_female <- clean_data |> filter(sex == "Female")
 
 ```
 
-# Create male plot
+### Create male plot
 
 First, create the basic male plot, these are all positive values and easier to work with.
 
@@ -222,7 +225,7 @@ plot_male
 
 ```
 
-## Specify male plot axis and theme settings
+#### Specify male plot axis and theme settings
 
 Now, I update some of the presentation and layout of the male graph. This includes things such as updating the x and y axis scales, manipulating the size of the plot points, setting limits and updating different theme settings.
 
@@ -289,7 +292,7 @@ plot_male2 <- plot_male +
 plot_male2
 ```
 
-# Create basic female plot
+### Create basic female plot
 
 This is similar to the initial male plot development. All of the conditions around borders, shading and axis have to be identical, so the two plots can be combined and give the impression of being a single plot.
 
@@ -319,7 +322,7 @@ plot_female
 
 ```
 
-## Specify female plot axis and theme settings
+#### Specify female plot axis and theme settings
 
 Now I refine the left hand side plot. It is very similar to the male updates, where we add in the scale and conditions. This plot is a positive axis left of the y-axis. To create this effect, negative values are used, but their absolute values are displayed on the x-axis.
 
@@ -391,7 +394,7 @@ plot_female2
 
 ```
 
-# Initial combining of plots
+### Initial combining of plots
 
 Here, I test the join of the plots using patchwork. As our plot axis and design are built to be very similar, they do join together well. The key settings that create the impression of a single plot are:
 
@@ -427,7 +430,7 @@ combined_plot
 
 This is getting closer to a nice replication of the original. There is one major piece missing however, the legend.
 
-# Create the legend for the plot
+### Create the legend for the plot
 
 One of the biggest challenges for the replication has been the legend. The legend uses concentric circles that are outside of the plot area, have different colours to the actual plot and use specific call out labels.
 
@@ -470,10 +473,10 @@ concentric_plot <- ggplot() +
 concentric_plot
 ```
 
-We now save the plot created above as a .png to preserve our sizing ratios. If we overlay the raw grob, it distorts when joined to the plots.
+We now save the plot created above as a .png to preserve our sizing ratios. If we overlay the raw grob, it distorts when joined to the plots. Commented allow to allow direct reading from the git folder 
 
 ```{r save-legendpng, message = FALSE}
-png(file="~/Documents/UC3M - coursework/Data Vizualisation/dataviz/legend_test1.png",
+png(file="legend_test1.png",
 width=600, height=250)
 concentric_plot
 dev.off()
@@ -483,7 +486,7 @@ dev.off()
 Now we read in the image and adjust and paste on our graph with inset_element.
 
 ```{r read-image}
-img_path <- "~/Documents/UC3M - coursework/Data Vizualisation/dataviz/legend_test1.png"
+img_path <- "legend_test1.png"
 img <- magick::image_read(img_path)
 # Trim the image to remove unnecessary whitespace 
 img_trimmed <- magick::image_trim(img)
@@ -491,15 +494,17 @@ img_trimmed <- magick::image_trim(img)
 img_transparent <- magick::image_transparent(img_trimmed, "white")
 
 img_grob <- rasterGrob(as.raster(img_transparent), interpolate = TRUE)
+
+
 ```
 
-# Final replication
+## Final replication
 
 To include the legend, I re-build our combined plot with the order of 1) set female plot, 2) join on legend and position, and 3) join onto the male plot as above. The plot is layered in this way because of issues when trying to combined the to initial plots then add on the legend. When creating the combined plot first, the legend would obscure parts of the female plot. With this layering, the inset_element does not disturb the female plot.
 
 This is the final version of the replication!
 
-```{r female-legend-joinplot,layout="l-body-outset", fig.width=12, fig.height=8}
+```{r final-legend-joinplot,layout="l-body-outset", fig.width=12, fig.height=8, preview=TRUE}
 
 final_plot <- 
   # first layer of female plot
@@ -534,13 +539,13 @@ final_plot <-
 final_plot
 ```
 
-## Compare to the original
+### Compare to the original
 
 ```{r plot_compare, echo=FALSE, layout="l-body-outset"}
-knitr::include_graphics("~/Documents/UC3M - coursework/Data Vizualisation/dataviz/ABC_tax_income_plot.png")
+knitr::include_graphics("ABC_tax_income_plot.png")
 ```
 
-# Alternative plots
+## Alternative plots
 
 Here I have created alternatives of the original plot. The focus of the alternatives is conveying the message that *most people will be better off under the tax changes*. To do this, I attempted to make more simple plots with fewer dimensions. Three alternative plots have been created:
 
@@ -563,7 +568,7 @@ improv <- improv |>
 
 ```
 
-## Violin plot
+### Violin plot
 
 In this plot, we will only drop one dimension; number of workers by occupation. In the original plot, this % of workers shown twice, as the size of circles and the x-axis. However, neither add much value because the overall message is that most occupations are better off.
 
@@ -617,7 +622,7 @@ improv |>
 
 ```
 
-## Beeswarm graph
+### Beeswarm graph
 
 To try and update the individual to a plot that also uses one individual plot point for each occupation, I have created a beeswarm graph. I have also re-included the number of workers as the size of the plot points here. This is to try and reduce data loss from the original plot. However only those with over 1000 workers are included to reduce clutter and overlapping, which I don't like in the original plot around the two y-axes.
 
@@ -688,7 +693,7 @@ ggplot(improv_small, aes(x = sex,
   theme(legend.position = "none")
 ```
 
-# Additional option - using percentile data
+### Additional option - using percentile data
 
 The primary purpose of this data is to show that most people are better off under the changes rather than worse off. The ideal plot to convey the message would be showing a ridge or density plot of each individual's income level and have that compared to the benefit cutoff line. We cannot access data this granular. But using slightly different data, we can try to convey this message more clearly.
 
@@ -698,16 +703,25 @@ First, we read in the new data table and do basic cleaning:
 
 ```{r read_percentiledata}
 ### read in table 16B first
-url <- "https://data.gov.au/data/dataset/07b51b39-254a-4177-8b4c-497f17eddb80/resource/d902104e-a9c1-4d14-8d21-f4538bda037a/download/ts21individual16percentiledistributionontaxableincomebysex.xlsx"
-response <- GET(url)
-file_path <- tempfile(fileext = ".xlsx")
-writeBin(content(response, "raw"), file_path)
+    # url <- "https://data.gov.au/data/dataset/07b51b39-254a-4177-8b4c-497f17eddb80/resource/d902104e-a9c1-4d14-8d21-f4538bda037a/download/ts21individual16percentiledistributionontaxableincomebysex.xlsx"
+    # response <- GET(url)
+    # file_path <- tempfile(fileext = ".xlsx")
+    # writeBin(content(response, "raw"), file_path)
+    # 
+    # data <- read_excel(file_path,
+    #                    sheet="Table 16B",
+    #                    skip=1)
+    # 
+    # percentile_counts <- read_excel(file_path,
+    #            sheet="Table 16A",
+    #            skip=1)
 
-data <- read_excel(file_path,
+#read from file:
+data <- read_excel("ts21individual16percentiledistributionontaxableincomebysex.xlsx",
                    sheet="Table 16B",
                    skip=1)
 
-percentile_counts <- read_excel(file_path,
+percentile_counts <- read_excel("ts21individual16percentiledistributionontaxableincomebysex.xlsx",
            sheet="Table 16A",
            skip=1)
 
