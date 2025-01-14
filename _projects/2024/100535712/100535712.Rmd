@@ -41,6 +41,9 @@ library(ggrepel)
 library(ggnewscale)
 library(ggthemes)
 library(ggiraph)
+library(grid)
+library(patchwork)
+library(glue)
 
 ```
 
@@ -189,7 +192,7 @@ p <- p + theme_minimal() +
                                         linetype = "dashed",
                                         linewidth = 0.3
                                         ),
-        plot.margin = margin(7,7,7,7),
+        plot.margin = margin(7,2,7,7),
         plot.background = element_rect(fill = "white", color = NA)
         )
 
@@ -199,22 +202,34 @@ p
 
 ### Diagonal lines
 
-The next step will be to add the diagonal lines that indicate the level of reduction of the Gini coefficient. This one was a problem during the replication process. Initially, the lines were added with `geom_abline` and to include the text we were going to use `annotate` changing the angle argument, but the text did not correctly match the line. After some research, we found a package called `geom_textpath` that include the function `geom_textabline`, this function include both the text and the line, but because of the different colors between the text and the line we have to include both functions, `geom_abline` and `geom_textabline` to obtain a better result.
+The next step will be to add the diagonal lines that indicate the level of reduction of the Gini coefficient. This one was a problem during the replication process. Initially, the lines were added with `geom_abline` and to include the text we were going to use `annotate` changing the angle argument, but the text did not correctly match the line. After some research, we found a package called `geom_textpath` that include the function `geom_textabline`, this function includes both the text and the line, but because of the different colors between the text and the line we have to include both functions, `geom_abline` and `geom_textabline` to obtain a better result. However, by using `geom_abline` we could not set clip = "off" in `coord_cartesian` to include the logo and the population legend, so, at the end we used `annotate` to create a finite segment and `geaom_textabline`.
 
 ```{r, fig.width= 7, fig.asp= 0.65}
-p <- p + 
-  geom_abline(slope = 1, intercept = 0, 
-              color = "#dddddd", 
-              linetype = "dashed",
-              linewidth = 0.3) +
-  geom_abline(slope = 2/3, intercept = 0, 
-              color = "#dddddd", 
-              linetype = "dashed", 
-              linewidth = 0.3) +
-  geom_abline(slope = 1/2, intercept = 0, 
-              color = "#dddddd",
-              linetype = "dashed", 
-              linewidth = 0.3) +
+xmax <- 0.749
+ymax <- 0.660
+
+p <- p  + 
+  annotate("segment", 
+           x = 0.2, y = 0.2, 
+           xend = min(xmax, 0.2 + (ymax - 0.2)), 
+           yend = min(ymax, 0.2 + (xmax - 0.2)), 
+           color = "#dddddd", 
+           linetype = "dashed", 
+           linewidth = 0.3) +
+  annotate("segment", 
+           x = 0.3, y = 0.2, 
+           xend = min(xmax, 0.3 + (ymax - 0.2) / (2/3)), 
+           yend = min(ymax, 0.2 + (xmax - 0.3) * (2/3)), 
+           color = "#dddddd", 
+           linetype = "dashed", 
+           linewidth = 0.3) +
+  annotate("segment", 
+           x = 0.4, y = 0.2, 
+           xend = min(xmax, 0.4 + (ymax - 0.2) / (1/2)), 
+           yend = min(ymax, 0.2 + (xmax - 0.4) * (1/2)), 
+           color = "#dddddd", 
+           linetype = "dashed", 
+           linewidth = 0.3) + 
   geom_textabline(slope = 1, intercept = 0,
                   label = "No reduction",
                   linetype = "blank",
@@ -227,14 +242,14 @@ p <- p +
                   linetype = "blank",
                   size = 2.5, 
                   family = "sans",
-                  hjust = 0.75,
+                  hjust = 0.82,
                   color = "grey70") +
   geom_textabline(slope = 2 / 3, intercept = 0,
                   label = "Reduce by a third",
                   linetype = "blank",
                   size = 2.5, 
                   family = "sans",
-                  hjust = 0.81,
+                  hjust = 0.86,
                   color = "grey70") 
 
 p
@@ -254,15 +269,15 @@ con_colors <- c("#a2559c", "#00847e",
 
 p <- p + geom_point(aes(size = population,
                         fill = continent),
-                        alpha = 0.85,
-                        shape = 21)  +
+                        alpha = 0.75,
+                        shape = 21, stroke = 0.5)  +
   scale_fill_manual(values = con_colors) 
 
 p
 
 ```
 
-To change the format of the two legends we have to use the function `guides` in combination with the argument override.aes, by doing so we are able to change both legends independently. In this step, besides changing the legends, we are also adjusting the size of the points to better fit the original one.
+To change the format of the two legends we have to use the function `guides` in combination with the argument override.aes, by doing so we are able to change both legends independently. We deleted the size legend to later add the custom population legend. In this step, besides changing the legends, we are also adjusting the size of the points to better fit the original one.
 
 ```{r, fig.width= 7, fig.asp= 0.65}
 p <- p + guides(fill = guide_legend(order = 1, 
@@ -270,44 +285,33 @@ p <- p + guides(fill = guide_legend(order = 1,
         legend.title = element_blank(),
         legend.key.height = unit(0.3, "cm"),
         legend.text = element_text(family = "lato",
-                                   size = 8)),
+                                   size = 8, 
+                                   margin = margin(l = 0))),
         override.aes = list(shape = 15, 
                             size = 2,
                             color = con_colors
                             )),
-        size = guide_legend(title = 
-        "Circles sized by<br> **Population**", 
-                          reverse = TRUE, # Reverse change the 
-        #order of the legends notonly of the labels
-                          order = 2, # That is why we used order to correct it
-                          theme = theme(
-        legend.title = ggtext::element_markdown(family = "lato",
-                                                size = 8,
-                                                hjust = 0.5,
-                                                color = "#636363" ),
-        legend.text = element_text(family = "lato",
-                                   size = 8),
-        legend.title.position = "bottom"))) + 
+        size = "none") + 
   theme(legend.justification = c("right", "top"),
         legend.box = "vertical",
         legend.spacing.y = unit(0.1, "cm")) +
   scale_size(breaks = c(1e08, 3e08), 
              labels = label_number(scale = 1e-6, suffix = "M"), 
-             range = c(1, 9))
+             range = c(0.5, 9))
         
 p
 ```
 
 ### Labels
 
-TO add the country labels, we are going to create an additional table in which we will reduce the number of countries per continent to minimize the overlaps. If we do not add this step, we will not see any names in the middle part of the graph since there are a lot of European countries and because of the huge amount of overlaps those labels will not appear.
+To add the country labels, we are going to create an additional table in which we will reduce the number of countries per continent to minimize the overlaps. If we do not add this step, we will not see any names in the middle part of the graph since there are a lot of European countries and because of the huge amount of overlaps those labels will not appear.
 
 ```{r}
 gini_labels <- gini_tidy_2020 |>
   slice_sample(prop = -0.5, by = continent) 
 ```
 
-In the original chart the labels also vary their size depending on the population, so, since we have already set an scale for the size before, we will be using the function `new_scale` from the package `ggnewscale` that allow us to introduce new values for the labels' scale. In addition, to better control the overlapping we have to use `geom_text_repel`, the segment.color argument let us erase the segment between the label and the point.
+In the original chart the labels also vary their size depending on the population, so, since we have already set an scale for the size before, we will be using the function `new_scale` from the package `ggnewscale` that allow us to introduce new values for the labels' scale. In addition, to better control the overlapping we have to use `geom_text_repel`, the segment.color argument let us erase the segment between the label and the point and the bg.color and the bg.r arguments allow us to add some white padding behind the letters.
 
 ```{r,fig.width=7, fig.asp= 0.65}
 p <- p + 
@@ -317,14 +321,70 @@ p <- p +
                               size = population),
                           segment.color = NA,
                           max.overlaps = 7,
-                          show.legend = FALSE,
+                          show.legend = FALSE, 
+                          nudge_x = 0.01,
+                          bg.color = "white",
+                          bg.r = 0.15,
                           data = gini_labels) +
-  scale_size(range = c(3, 4)) +
+  scale_size(range = c(2.5, 3.5)) +
   scale_color_manual(values = con_colors)
 
 p
 
 ```
+
+### Population legend, line and logo
+
+If we check the original plot we can observe that there are a line, that is between the two legends, the logo of Our World in Data and a particular legend for the population. For the line and the logo, we combine some functions of the `grid` package such as `rasterGrob` and `linesGrob` with `annotation_custom` and for the population legend, we created an additional graph and we used `inset_element` from `patchwork` to include it. The legend will be included in the last step.
+
+```{r, fig.width= 7, fig.asp= 0.65}
+image_grob <- rasterGrob(png::readPNG("Our_World_in_Data_logo.png"), 
+                         x = 1, y = 1,  
+                         hjust = 1, vjust = 1, 
+                         width = unit(0.2, "npc"))
+legend <- ggplot() +
+  lims(y = c(0.9, 1)) +
+  annotate("point", x = 1, y = 0.95, 
+           size = 10, color = "grey80", 
+           shape = 21) +
+  annotate("point", x = 1, y = 0.9561,
+           size = 5, color = "grey80",
+           shape = 21) +
+  annotate("text",  
+           x = 1, y = 0.94, size = 2.5,
+           color = "grey30",
+           family = "sans",
+           label="300M") + 
+  annotate("text",  
+           x = 1, y = 0.95, size = 2,
+           color = "grey30",
+           family = "sans",
+           label="100M") + 
+  annotate("richtext",
+           x = 1, y = 0.962, 
+           label = "Circles sized by <br>**Population**",
+           hjust = 0.5, 
+           vjust = 1, 
+           family = "lato",
+           size = 2.5, 
+           color = "#636363",
+           fill = NA, 
+           label.color = NA) +
+  theme_void() +
+  theme(plot.margin = margin(50, 50, 50, 50)) 
+
+p <- p + 
+  annotation_custom(image_grob, 
+                      xmin = 0.59, xmax = 0.89,
+                      ymin = 0.62, ymax = 0.74) +
+  annotation_custom(grob = linesGrob(gp = gpar(col = "grey90", lwd = 1)),  
+    xmin = 0.785, xmax = 0.89, 
+    ymin = 0.53, ymax = 0.53) + 
+  coord_cartesian(clip = "off") 
+p
+
+```
+
 
 ### Title and annotations
 
@@ -351,10 +411,10 @@ p <- p + labs(title = title_rep,
               y = "After tax") +
   theme(plot.title = element_text(face = "bold",
                                   family = "playfair",
-                                  size = 14.5,
+                                  size = 14,
                                   color = "#636363"),
         plot.title.position = "plot",
-        plot.subtitle = element_markdown(size = 9,
+        plot.subtitle = element_markdown(size = 8.5,
                                                  color = "#636363",
                                                  family = "lato"),
         axis.title = element_text(size = 7.5,
@@ -372,7 +432,10 @@ p <- p + labs(title = title_rep,
                                     color = "#636363",
                                     hjust = 1,
                                     family = "lato"),
-        plot.tag.position = c(1,0.012))
+        plot.tag.position = c(1,0.012)) +
+  inset_element(legend, align_to = "plot", left = 1.15, bottom = 0.66,
+                  right = 1.15, top = 0.66)
+
 ```
 
 ### Final result
@@ -381,14 +444,9 @@ Here we can observe the final result of the replication.
 
 ```{r, fig.width= 7, fig.asp= 0.65, echo=FALSE, preview=TRUE}
 p
+
 ```
 
-### Missing features
-
-Although this tutorial helps us accurately reconstruct the main features of the original graph, we were unable to replicate two elements using `ggplot2`:
-
--   Adding the overlapped circles in the population legend.
--   Placing white padding around the letters of the country labels.
 
 ## Alternative version
 
@@ -398,12 +456,16 @@ The original graph provides a good visualization of the differences in the Gini 
 
 For these reasons, a lollipop chart offers a clearer way to visualize differences across countries. It also allows us to observe each country’s position after tax redistribution.
 
-In this alternative version, we have labeled the thirty countries with the most significant reductions in their Gini coefficients to emphasize that tax redistribution has a substantial impact on reducing inequality in Europe. Additionally, by leveraging the `ggiraph` package, we have added an interactive feature to this graph. This allows users to explore and identify the names of other countries displayed.
+In this alternative version, we have labeled the thirty countries with the most significant reductions in their Gini coefficients to emphasize that tax redistribution has a substantial impact on reducing inequality in Europe. Additionally, by leveraging the `ggiraph` package, we have added an interactive feature to this graph. This allows users to explore and identify the names, the population and the Gini reduction of other countries displayed.
 
 ```{r}
 gini_lollipop <- gini_tidy_2020 |> 
   mutate(entity = fct_reorder(entity, desc(post_tax_gini))) |> 
-  mutate(difference = pre_tax_gini - post_tax_gini)
+  mutate(difference = pre_tax_gini - post_tax_gini) |> 
+  mutate(tooltip = glue(
+      "Country: {entity}<br>
+      Population: {population}<br>
+      Gini reduction: {round(difference, 4)}"))
 
 high_difference <- gini_lollipop |> 
   slice_max(difference, n = 30)
@@ -417,7 +479,7 @@ subtitle_alt <-
         "Asia</span>, <span style='color:#000000'>Africa</span>,",
         "<span style='color:#56B4E9'>Europe</span>,",
         "<span style='color:#009E73'>North America</span>,",
-        "<span style='color:#F0E442'>Oceania</span>,",
+        "<span style='color:#CC79A7'>Oceania</span>,",
         "and <span style='color:#0072B2'>South America</span>", 
         "<br>shows that taxes reduce the Gini coefficient in all of them.")
 y_alt <- paste("Gini coefficient <span style='color:#7570B3'>",
@@ -433,16 +495,17 @@ label_alt <- paste("Labeled points show <br>the 30 countries",
 ```
 
 ```{r, fig.height= 9, fig.asp= 1.5}
+
 lolli <- gini_lollipop |> 
   ggplot() + 
   geom_segment_interactive( aes(x = entity, xend = entity,y = post_tax_gini,
-                      yend = pre_tax_gini, color = continent, tooltip = entity), 
+                      yend = pre_tax_gini, color = continent, tooltip = tooltip), 
                 linewidth  = 1.5,
                 alpha = 0.6) +
-  geom_point_interactive(aes(x=entity, y=pre_tax_gini, tooltip = entity), 
+  geom_point_interactive(aes(x=entity, y=pre_tax_gini, tooltip = tooltip), 
              size=2, 
              color="#aeb370") +
-  geom_point_interactive(aes(x=entity, y=post_tax_gini, tooltip = entity), 
+  geom_point_interactive(aes(x=entity, y=post_tax_gini, tooltip = tooltip), 
              size=2, 
              color="#7570B3") +
   coord_flip() +
@@ -462,7 +525,14 @@ lolli <- gini_lollipop |>
   geom_hline(yintercept = 0,
              linetype = "dotted",
              alpha = 0.6) +
-  scale_color_colorblind() + 
+  scale_color_manual(values = c(
+    "Asia" = "#E69F00",
+    "Africa" = "#000000",
+    "Europe" = "#56B4E9",
+    "North America" = "#009E73",
+    "Oceania" = "#CC79A7",  
+    "South America" = "#0072B2"
+  )) + 
   annotate("text",  
            x = 8, y = global_mean_post - 0.01, angle = 90, 
            size = 3, family = "sans",
@@ -530,5 +600,22 @@ lolli <- gini_lollipop |>
         plot.caption.position = "plot",
         legend.position = "none")
 
-girafe(ggobj = lolli, height_svg = 10)
+interactive_plot <- girafe(ggobj = lolli, height_svg = 10)
+
+tooltip_css <- glue("background-color: #2C3E50;
+  color: #ECF0F1;
+  padding: 10px;
+  border-radius: 5px;
+  font-family: 'Arial', sans-serif;
+  font-size: 14px;
+  box-shadow: 0px 0px 10px rgba(0,0,0,0.5);")
+
+interactive_plot <- girafe_options(
+  interactive_plot,
+  opts_tooltip(css = tooltip_css, use_fill = FALSE),
+  opts_selection(type = "multiple", only_shiny = FALSE),
+  opts_zoom(min = 0.5, max = 2),
+  opts_sizing(rescale = TRUE))
+
+interactive_plot
 ```
