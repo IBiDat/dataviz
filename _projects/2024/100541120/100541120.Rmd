@@ -12,16 +12,30 @@ output:
     toc: true
 ---
 
+These are two charts created by the team at El Orden Mundial. As can be seen, they are both very interesting and distinct representations, showcasing the great visualization work of this platform. On one side, we have a map displaying the main cocaine import routes in Europe. On the other, there is a stacked area chart showing the ideological composition of the U.S. Supreme Court. These charts, in addition to being clear and relatively easy to read, use appropriate chart types for each issue and also feature a well-thought-out color scheme.
+
+![Rutas de Cocaína hacia Europa](https://elordenmundial.com/wp-content/webp-express/webp-images/doc-root/wp-content/uploads/2024/02/mapa-trafico-cocaina-europa-ordenador-def.png.webp)
+
+
+![Corte Suprema EEUU](https://elordenmundial.com/wp-content/webp-express/webp-images/doc-root/wp-content/uploads/2024/11/corte-suprema-eeuu-ordenador.png.webp)
+
+The next one, is the original plot that I want to reproduce:
+![Original Plot](https://elordenmundial.com/wp-content/webp-express/webp-images/doc-root/wp-content/uploads/2019/03/Mundo-Econom%C3%ADa-Sociedad-Salud-Droga-Consumo-de-coca%C3%ADna-1310x926.png.webp)
+
+This is my final replica which I am going to create in the following steps:
+```{r preview, echo=FALSE, out.width="100%"}
+knitr::include_graphics("plot_logo.png")
+```
+
+
+
+# First Steps
+
 First I load the libraries that I will need to make the plot:
 
 ```{r}
 library(ggplot2)
 library(sf)
-library(ggspatial)
-library(rnaturalearth)
-library(rnaturalearthdata)
-library(tibble)
-library(ggimage)
 library(tibble)
 library(grid)
 library(png)
@@ -29,13 +43,17 @@ library(ggtext)
 library(tidyverse)
 library(showtext)
 library(extrafont)
-library(png)
-library(devtools)
 library(flagon)
+library(ggrepel)
+library(patchwork)
+library(magick)
+library(ggstream)
+library(scales)  
 ```
 
-Now, I can start with the data i need to make the graph. In the original plot from El Orden Mundial there is one papers where they extract the information. These are: UNODC (2018): World Drug Report 2018: opioid crisis, prescription drug abuse expands; cocaine and opium hit record highs.
+Now, I can start with the data I need to make the graph. In the original plot from El Orden Mundial there is one papers where they extract the information. These are: UNODC (2018): World Drug Report 2018: opioid crisis, prescription drug abuse expands; cocaine and opium hit record highs.
 
+## Data
 Unfortunately, I couldn't find an available database with this data. I found in UNODC page other databases with the information of cocaine use, but none of them coincide with the consumption percentage of 2018 presented in the plot. 
 
 Due to this, I will try to make my own database with the information in order to make the representation later.
@@ -58,11 +76,11 @@ cocaine_data$País <- factor(cocaine_data$País, levels = rev(cocaine_data$País
 
 ```
 
+
 Now, I am going to choose the font I am going to use for the text in the plot.
 
 ```{r, fig.width= 7.5, fig.height= 6}
 
-library(showtext)
 font_add_google("Mulish", "mulish")
 
 showtext_auto()
@@ -71,6 +89,8 @@ showtext_auto()
 
 I needed to change the original font as it wasn't open-source. I selected a font from Google Fonts that is slightly similar, ensuring the visual appearance aligns with the authentic bar plot. 
 
+# Replica
+## 1. Bar plot
 Now, I can start with the plot. I am going to do this by layers, I consider it will make the code more readable and organized, ensuring each part of the plot is built in a modular way.
 
 
@@ -162,6 +182,7 @@ barchart_coc1
 ```
 
 
+## 2. Flags:
 
 Now I can continue with the flags, which have been one of the main challenges. First, it was difficult to find the right package for this task. Second, the issue was with the images themselves, as I initially had to download them, which added to the complexity.
 
@@ -171,22 +192,38 @@ But there is also a particularity, some of the flags of the original plot are no
 
 
 ```{r, fig.width= 8.5, fig.height= 6}
-#Install the package:
-library(devtools)
-install_local("C:/Users/jorge/Desktop/CSS/Data-Visualization/Cocaine in Europe - Datavis/flagon-master")
 
-
-library(png)
-library(flagon)
+# I needed to convert the archives
+tryCatch({
+    image <- image_read("Scotland.png")
+    image_write(image, "Scotland_fixed.png", format = "png")
+    print("Archivo convertido exitosamente a PNG válido: Scotland_fixed.png")
+}, error = function(e) {
+    print(paste("No se pudo convertir el archivo: ", e$message))
+})
+tryCatch({
+    image <- image_read("England and Wales.png")
+    image_write(image, "England and Wales_fixed.png", format = "png")
+    print("Archivo convertido exitosamente a PNG válido: Scotland_fixed.png")
+}, error = function(e) {
+    print(paste("No se pudo convertir el archivo: ", e$message))
+})
+tryCatch({
+    image <- image_read("Northern Ireland.png")
+    image_write(image, "Northern Ireland.png", format = "png")
+    print("Archivo convertido exitosamente a PNG válido: Scotland_fixed.png")
+}, error = function(e) {
+    print(paste("No se pudo convertir el archivo: ", e$message))
+})
 # Read PNG images for flags
 Australia <- readPNG(flagon::flags("au"))
 Albania <- readPNG(flagon::flags("al"))
 Estados_Unidos <- readPNG(flagon::flags("us"))
-Escocia <- readPNG("C:/Users/jorge/Desktop/CSS/Data-Visualization/Cocaine in Europe - Datavis/flagon-master/inst/png/sct.png")
-Inglaterra <- readPNG("C:/Users/jorge/Desktop/CSS/Data-Visualization/Cocaine in Europe - Datavis/Images/England and Wales.png")
+Escocia <- png::readPNG("Scotland_fixed.png")
+Inglaterra <- png::readPNG("England and Wales_fixed.png")
 España <-  readPNG(flagon::flags("es"))
 Paises_Bajos <- readPNG(flagon::flags("nl"))
-Irlanda_norte <- readPNG("C:/Users/jorge/Desktop/CSS/Data-Visualization/Cocaine in Europe - Datavis/Images/Northern Ireland.png")
+Irlanda_norte <- png::readPNG("Northern Ireland.png")
 Uruguay <- readPNG(flagon::flags("uy"))
 Argentina <- readPNG(flagon::flags("ar"))
 Irlanda <- readPNG(flagon::flags("ie"))
@@ -221,22 +258,16 @@ flag_plot
 
 
 As we can see, one problem I encountered was with the quality of the flags in the graph. Despite using the annotation_raster() function to add them, the quality of the flags appeared quite poor.
-For the shades that has the authentic graph, I tried to introduce grey rectangles on the back of the flags but it wasn't a good option. Also I tried to edit the images of the packages but then when I tried to introduce those flags in the graph they dissappeared. 
+For the shades that has the authentic graph, I tried to introduce grey rectangles on the back of the flags but it wasn't a good option. Also I tried to edit the images of the packages but then when I tried to introduce those flags in the graph they disappeared. 
 
-
+## 3. Logos
 The next step is to introduce the logos. These original figures were difficult to find, so I decided to made a screenshot of the original plot and introduce the pictures with patchwork package. 
 
-```{r, fig.width= 8.5, fig.height= 6}
-
-
-#logos
-library(patchwork)  
-library(grid)  
-library(png)  
+```{r, fig.width= 8.5, fig.height= 6, preview = TRUE}
 
 # Read the PNG images for the logos
-logo1 <- readPNG("C:/Users/jorge/Desktop/CSS/Data-Visualization/Cocaine in Europe - Datavis/eom.png")
-logo2 <- readPNG("C:/Users/jorge/Desktop/CSS/Data-Visualization/Cocaine in Europe - Datavis/cuch.png")  
+logo1 <- readPNG("eom.png")
+logo2 <- readPNG("cuch.png")  
 
 #Convert images into raster objects to be used in the plot
 logo1_grob <- rasterGrob(logo1, interpolate = TRUE)  #Convert the first logo into a graphical object
@@ -262,22 +293,26 @@ plot_logo <- flag_plot +
 #The final plot
 plot_logo
 
-
-
+#Save this graph as an image to show in the introduction 
+ggsave("plot_logo.png", plot_logo, width = 8.5, height = 6)
 ```
 
-CRITICISM OF THE ORIGINAL GRAPH:
+## CRITICS TO THE ORIGINAL GRAPH:
 
 1. Although it is titled Main Cocaine Consumers, all the observations are countries except for Scotland, England and Wales, and Northern Ireland. Two issues can be identified here: first, while these territories are divided, England and Wales are kept together, meaning these observations do not correspond to an administrative area of the United Kingdom. Second, I believe these observations should have been grouped into a single one, United Kingdom, to allow for a better comparison.
 
-2. It’s important to acknowledge that this is a sensitive topic, as it touches on drug consumption, which involves complex social, economic, and cultural factors. Additionally, gathering reliable data on cocaine use poses significant challenges. Drug use is often underreported due to stigma, illegality, and variations in how surveys or studies are conducted across different regions or countries.
+2. It’s important to acknowledge that this is a sensitive topic, as it touches on drug consumption, which involves complex social, economic, and cultural factors. Additionally, gathering reliable data on cocaine use poses significant challenges. Drug use is often under reported due to stigma, illegality, and variations in how surveys or studies are conducted across different regions or countries.
 
 
 This previous part have been my replica to the graph. As you can see, there are some differences. First, there are some adjustment issues, such as with the size of the figures, text, and positioning. I’ve tried to make it as similar as possible, but there are still some aspects that could be improved. Second, the flag images, as in the original, the quality of these is much higher than what I’ve managed to achieve, as well as the shading behind them.
 
 
+# Imporvements:
+
 Considering the points mentioned, I can now move forward with improving the graph. Despite the challenges, I believe the original graph is a strong representation of the data. It effectively conveys the information in a clear and straightforward manner. The simplicity of the design makes it easy to understand, and the choice of a bar plot is particularly appropriate for visualizing this type of comparative data.
 
+## 1. Bar plot:
+### Aesthetics
 First, I will proceed to address some aesthetic aspects that, in my opinion, will improve the overall quality of the graphic:
 
 1.Aligning positions: Adjusting the positioning number to ensure they are visually balanced and aligned properly.
@@ -367,7 +402,7 @@ upgrade <- ggplot(cocaine_data, aes(x = reorder(País, `Porcentaje de consumo (%
 upgrade
 
 ```
-
+### New info
 My aim is to make the graph more informative, so I decided to introduce the continent information in the graph.Therefore, I introduce the Continent values in a new variable.
 
 ```{r, fig.width= 8.5, fig.height= 6}
@@ -385,17 +420,17 @@ upgrade_color <- ggplot(cocaine_data, aes(x = País,
                                    y = `Porcentaje de consumo (%)`,
                                    fill = Continente), family = "mulish", font.main = 2) +
   geom_bar(stat = "identity", width = 0.7) +
-  coord_flip() +  # Para girar
-  # Línea vertical en el eje y, conectando el inicio de las barras
+  coord_flip() +  # To rotate the chart
+  # Vertical line on the y-axis, connecting the start of the bars
   geom_segment(aes(x = 0.6, xend = 15.4, y = 0, yend = 0), 
                color = "black", 
                linewidth = 0.8) +
-  # Agregar las posiciones al lado del eje Y
+  # Add positions next to the Y axis
   geom_text(aes(label = Posición, y = -0.2), 
             hjust = 0.5, 
             color = "#0A0A0A", 
             size = 4.3, family = "mulish", font.main = 2) +
-  # Agregar los porcentajes de consumo al final de cada barra
+  # Add consumption percentages at the end of each bar
   geom_text(aes(label = paste0(gsub("\\.", ",", formatC(`Porcentaje de consumo (%)`, format = "f", digits = 2, drop0trailing = TRUE)), "%"), 
                 y = `Porcentaje de consumo (%)`), 
             hjust = -0.4, 
@@ -403,24 +438,24 @@ upgrade_color <- ggplot(cocaine_data, aes(x = País,
             color = "#0A0A0A", 
             size = 4.25, 
             family = "mulish", font.main = 2) +
-    # Ajustar la expansión del eje Y
+    # Adjust the expansion of the Y axis
  scale_y_continuous(expand = expansion(add = c(0.6, 1.5))) +
   expand_limits(x = 16.4)  +
-  annotate(geom = "text", label = "Posición",
+  annotate(geom = "text", label = "Position",
            x = 15.85, y = -0.2, size = 4.4, vjust = 0, color = "#353939", family = "mulish") + 
-   # Añadir la paleta de colores manualmente para la variable Continente
+   # Add a manual color palette for the variable Continent
   scale_fill_manual(values = c("Oceanía" = "#2C3E50", 
                                "Europa" = "#FFA500", 
                                "América" = "#84a528")) +
-  labs(title = "Principales consumidores de cocaína", 
-       subtitle = "Porcentaje de adultos que han consumido en el último año*", 
+  labs(title = "Top Cocaine Consumers", 
+       subtitle = "Percentage of adults who have consumed in the last year*", 
        caption = paste0(
-         "Último  año con datos disponibles*<br>",
-         "**Cartografía:**<br>",
+         "Latest available year*<br>",
+         "**Cartography:**<br>",
          "Abel Gil Lobo (2019)<br>", 
-         "**Fuente:**<br>",
+         "**Source:**<br>",
          "UNODC (2018)"),
-       y = "Porcentaje de consumo (%)", 
+       y = "Percentage of consumption (%)", 
        x = NULL) +
   theme_minimal() +
   theme(
@@ -436,10 +471,10 @@ upgrade_color <- ggplot(cocaine_data, aes(x = País,
     panel.background = element_blank(), 
     plot.background = element_blank(),
     plot.caption = element_markdown(hjust = 0, vjust = 1, face = "plain", size = 8, family = "mulish", margin = margin(t = 0, r = 0, b = 0, l = 11)),
-    plot.title = element_text(hjust = 0.07, vjust = 0, size = 29, family = "mulish"),  # Ajuste margen inferior del título
-    plot.subtitle = element_text(hjust = 0.12, vjust = 0, size = 22, color = "#353939", family = "mulish"),  # Ajuste margen inferior del subtítulo
-    plot.title.position = "plot",  # Título dentro del panel
-    plot.subtitle.position = "plot"  # Subtítulo dentro del panel
+    plot.title = element_text(hjust = 0.07, vjust = 0, size = 29, family = "mulish"),  # Adjust bottom margin of the title
+    plot.subtitle = element_text(hjust = 0.12, vjust = 0, size = 22, color = "#353939", family = "mulish"),  # Adjust bottom margin of the subtitle
+    plot.title.position = "plot",  # Title inside the panel
+    plot.subtitle.position = "plot"  # Subtitle inside the panel
   )
 
 
@@ -451,8 +486,8 @@ With these aesthetic improvements, the graph now allows us to visually capture m
 
 This color coding reveals that, while the top consumer is from Oceania, the majority of the remaining consumers are from Europe and America. Notably, most of these countries and regions are developed nations.
 
+## 2. Flags:
 Now that I have modified the aesthetics of the graph, I can proceed with the steps I followed in the replication process. 
-
 
 ```{r, fig.width= 8.5, fig.height= 6}
 #Add flags to the bar chart:
@@ -480,13 +515,11 @@ upgrade_flag
 ```
 I followed the previous steps, so the problems of quality remain here. 
 
+## 3. Logos
 
 Finally, I reintroduce the logos as in the original graph:
 
-
 ```{r, fig.width= 8.5, fig.height= 6}
-library(grid)
-library(patchwork)
 
 #Combine the flag chart with logos
 final_upgrade <- upgrade_flag + 
@@ -512,7 +545,9 @@ final_upgrade
 
 
 
-This has been the improvement to my graph. With enhancements in its visual appearance and the inclusion of data from the continents, I believe the graph now provides more information. However, the issue is that, given the quality of the original graph and the available data, the scope for improvement was limited. 
+This has been the improvement to my graph. With enhancements in its visual appearance and the inclusion of data from the continents, I believe the graph now provides more information. However, the issue is that, given the quality of the original graph and the available data, the scope for improvement was limited.
+
+# Alternative
 
 Therefore, I believe two approaches could be considered with this type of data. First, creating a graph that reflects the evolution of cocaine consumption, and second, categorizing countries based on their status. I have decided on three categories: producer, transition, and consumer countries.
 
@@ -550,7 +585,7 @@ data_countries <- tibble::tibble(
   Año = rep(c(1988, 1998, 2008, 2018), each = 15)  
 )
 
-# Now, I create the varibale estatus:
+# Now, I create the varibale status:
 data_countries <- data_countries %>%
   mutate(País = case_when(
     País %in% c("Escocia (R.U.)", "Inglaterra y Gales (R.U.)", "Irlanda del Norte (R.U.)") ~ "Reino Unido",
@@ -577,11 +612,11 @@ First, I will also maintain the size of the graph to ensure consistency and comp
 
 To complete this exercise, I will present different visualization styles or attempts I have made:
 
+## First Attempt:
 In the first attempt, I aim to represent the evolution by country.
 
 
 ```{r,  fig.width= 8.5, fig.height= 6}
-library(ggrepel)
 
 # Plot showing the trend of cocaine consumption by country over time
 ggplot(data_countries) +
@@ -631,21 +666,19 @@ ggplot(data_countries) +
 As we can see, although the graph represents our objective, it is somewhat difficult to read. Adding the grey lines for annotating the country names has made it slightly easier to follow. However, despite the graph conveying the idea I want to express, I believe the visualization is not very clear. 
 Therefore, I consider it important to explore other ways of visualizing the data to make it more readable and visually appealing.
 
-
+## Second Attempt:
 Now, I will try placing the country labels at the beginning as well, to see if this approach makes the graph easier to read. Another idea that occurred to me is to include the country names both at the beginning, next to the y-axis, and at the end.
 In this attempt, I will also add the logos to simulate a finalized graph.
 
 ```{r,fig.width= 8.5, fig.height= 6}
 
 #First I am going to charge the logos
-logo3 <- readPNG("C:/Users/jorge/Desktop/CSS/Data-Visualization/Cocaine in Europe - Datavis/tur.png")
+logo3 <- readPNG("tur.png")
 logo3_grob <- rasterGrob(logo3, interpolate = TRUE)
-logo4 <- readPNG("C:/Users/jorge/Desktop/CSS/Data-Visualization/Cocaine in Europe - Datavis/tur1.png")
+logo4 <- readPNG("tur1.png")
 logo4_grob <- rasterGrob(logo4, interpolate = TRUE)
-logo5 <- readPNG("C:/Users/jorge/Desktop/CSS/Data-Visualization/Cocaine in Europe - Datavis/ray.png")
+logo5 <- readPNG("ray.png")
 logo5_grob <- rasterGrob(logo5, interpolate = TRUE)
-library(grid)
-library(patchwork)
 
 # Updating the country name "Estados Unidos" to "EEUU" for better fit on the plot
 data_countries <- data_countries %>%
@@ -727,18 +760,11 @@ ggplot(data_countries) +
 
 In this way, the evolution of consumption can be followed much more clearly, although the presence of 13 countries still makes the graph somewhat difficult to read, as there are many lines crossing each other.
 
+## Third Attempt:
 Next, I will attempt the same representation as before but grouping the countries based on their status values: producers, consumers, and transition countries.
 
 
 ```{r, fig.width= 8.5, fig.height= 6} 
-library(ggstream)
-library(extrafont)
-library(ggrepel)
-library(scales)  
-library(ggplot2)
-library(ggrepel)
-library(dplyr)
-
 
 #Colors for each status (Producer, Consumer, Transition)
 color_palette <- c(
@@ -830,13 +856,10 @@ inset_element(
 
 Regarding this graph, although I have represented the information I initially wanted, I believe that reducing 13 countries to 3 colors still hinders clear readability.
 
+## Fourth Attempt:
 Therefore, a solution to the problem could be to create 3 separate graphs using facet wrap, as this would help avoid having too many countries in a single grid.
 
 ```{r, fig.width= 8.5, fig.height= 6} 
-
-library(ggplot2)
-library(ggrepel)
-
 
 # Crear el gráfico con facet_wrap y colores según estatus
 ggplot(data_countries) +
@@ -883,11 +906,8 @@ ggplot(data_countries) +
 
 Since the Consumer category contains the most countries, this could make the graph less readable. To address this issue, I will split this category into two: European Consumers and Non-European Consumers. This way, the data will be more organized and easier to interpret, ensuring clearer visibility for each group.
 
-
+## Fifth Attempt
 ```{r, fig.width= 8.5, fig.height= 6}
-library(ggplot2)
-library(ggrepel)
-library(dplyr)
 
 #First, odify the data:
 data_countries <- data_countries %>%
@@ -984,7 +1004,7 @@ inset_element(
     on_top = TRUE)
 
 
-grafico_facet    #intentaria marcar los años en todos
+grafico_facet    
 ```
 
 I believe this graph is much more readable and makes it easier to compare the patterns across the different categories. By separating the countries into smaller, more focused groups, the data becomes less cluttered and more accessible, allowing for clearer insights. 
