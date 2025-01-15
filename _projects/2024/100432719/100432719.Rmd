@@ -2,7 +2,7 @@
 title: "Where do 8 billion people live?"
 description: "Replica and improvement of a map to show how the world population is distributed among different countries"
 categories: "2024"
-author: "Alba García Vega"
+author: "Alba García-Vega"
 date: "`r Sys.Date()`"
 output:
   distill::distill_article:
@@ -12,29 +12,24 @@ output:
 
 ```{r setup, include=FALSE}
 library(showtext)
-knitr::opts_chunk$set(echo = TRUE, fig.showtext = TRUE, 
-                      fig.dpi = 150)
-
+knitr::opts_chunk$set(out.width="100%", fig.showtext = TRUE, fig.dpi = 150)
 ```
 
-# Introduction: what I am going to show you?
+## Introduction
 
 When I was thinking about this project, I ran directly into this map:
 
 The first thing I thought was: *wow! A graph were my 3 disciplines merge together: sociology, international relations and, now, programming!*. So I decided to use it for this project, replicate it and then improve it. This is a map that was published in the social media Reddit, where we can see how the world population is distributed by countries: those with the bigger circles represent a bigger proportion of the world population and vice versa. 
 
-```{r}
-knitr::include_graphics("originalmap.webp")
-```
+![Original graph.](originalmap.jpg){.external width="100%"}
 
-
-# Replica
+## Replica
 
 First of all, I have created the data base "population_data", where I have recorded every single country in the world, their respective populations, continents, latitude, longitude and the percentage of the world population their own population represents. This has been a key part of the project not only because it made it easier to fit the circles later on, but because there were **no data bases online with all these data**, and also because in the original map, some countries were not shown or taken into consideration. Even in my replica, I have wanted to show as many countries as possible as an initial improvement. 
 
 
 ```{r}
-load("population_data.RData")
+population_data <- read.csv("population_data.csv")
 ```
 
 
@@ -54,11 +49,6 @@ population_by_continent <- population_data |> group_by(continent) |>
 ```
 
 ```{r}
-save(population_by_continent, file = "population_by_continent.RData")
-load("population_by_continent.RData")
-```
-
-```{r}
 head(population_by_continent)
 ```
 
@@ -68,11 +58,9 @@ First of all, let´s load all the packages I needed:
 
 ```{r}
 library(ggplot2)
-library(dplyr)
 library(sf)
 library(ggrepel)
 library(cowplot)
-library(forcats)
 library(permute)
 library(plotly)
 library(patchwork)
@@ -92,15 +80,18 @@ population_data <- population_data |>
 I had written incorrectly South America in some of the countries, because I created the data base manually, so I had to fix it:
 
 ```{r}
-population_data <- population_data |> mutate(continent = case_when(continent == "South Amrica" ~ "South America", TRUE ~ continent))
+population_data <- population_data |> 
+  mutate(continent = case_when(continent == "South Amrica" ~ "South America", TRUE ~ continent))
 
-population_by_continent <- population_by_continent |> mutate(continent = case_when(continent == "Central America" ~ "South America", TRUE ~ continent))
+population_by_continent <- population_by_continent |> 
+  mutate(continent = case_when(continent == "Central America" ~ "South America", TRUE ~ continent))
 ```
 
 Here, I started to design the map itself, not only the data that was going to be shown in it. First of all, I created a new variable inside of population_data, circle_size and circle_sized_adjusted, where I designed the desirable size of the circles in general, but also of the "big 5" specifically. These 5 countries, China, India, USA, Brazil and Nigeria, were **not** proportional in the original map. They were much bigger than other countries´ circles, even when those countries´ percentage of the world population was not that much smaller. Because of this, I designed these circles as circle_size_adjusted, so that every circle is bigger than in the original variable, circle_size (where every size was directly proportional to the percentage of the population), so that every country´s circle was augmented 60 times, while the big 5 had their circles augmented 150 times.
 
 ```{r}
-population_data <- population_data |> mutate(circle_size = as.numeric(circle_size))
+population_data <- population_data |> 
+  mutate(circle_size = as.numeric(circle_size))
 
 population_data <- population_data |> 
   mutate(circle_size_adjusted = case_when(
@@ -113,7 +104,8 @@ population_data <- population_data |>
 After a couple of first trials, I decided that **not every country should be included as a label in the map**. In the original map they were not, and this makes sense in order to keep some... Well, some order :). So I chose the most visible countries from the original map and created the vector countries_labelled, which collects the countries that would get a label. It is important to note that **every country has a different circle**, but not all of them are labelled. 
 
 ```{r}
-countries_labelled <- c( "Canada", "United States", "Mexico", "Cuba", "Guatemala", "Haiti", "Dominican Republic", 
+countries_labelled <- c(
+  "Canada", "United States", "Mexico", "Cuba", "Guatemala", "Haiti", "Dominican Republic", 
   "Colombia", "Venezuela", "Ecuador", "Peru", "Bolivia", "Brazil", "Uruguay", 
   "Paraguay", "Argentina", "Chile", "United Kingdom", "Greenland", "Spain", 
   "Portugal", "France", "Italy", "Germany", "Poland", "Ukraine", "Turkey", 
@@ -126,41 +118,50 @@ countries_labelled <- c( "Canada", "United States", "Mexico", "Cuba", "Guatemala
 I faced some problems with Kenya, that was not considered as Africa in the original data base; and also with the new variable, circle_size_adjusted, that was not considered as numeric data. I fixed both problems in this chunk:
 
 ```{r}
-population_data <- population_data |> mutate(circle_size_adjusted = as.numeric(circle_size_adjusted))
-population_data <- population_data |> mutate(continent = ifelse(country == "Kenya", "Africa", continent))
+population_data <- population_data |>
+  mutate(circle_size_adjusted = as.numeric(circle_size_adjusted))
+population_data <- population_data |>
+  mutate(continent = ifelse(country == "Kenya", "Africa", continent))
 ```
 
 Then I grouped the data by continent and created the variable of percentage_scaled. This would be used in order to create the legend bar. 
 
 ```{r}
-population_by_continent <- population_data |> group_by(continent) |> summarize(percentage = sum(percentage)) |> mutate(percentage_scaled = percentage * 1.5)
+population_by_continent <- population_data |>
+  group_by(continent) |>
+  summarize(percentage = sum(percentage)) |>
+  mutate(percentage_scaled = percentage * 1.5)
 ```
 
 Also in order to create the legend bar, I created the data base population_by_continent_summarized. I built this new data base by using population_by_continent and its new variable, percentage_scaled. What I did here was to create two variables inside population_by_continent_summmarized: cumulative and label_position. The most important one out of these two is label_position, which has allowed me to situate the labels in the legend bar correctly. The idea is that the whole bar is a vector, and each label must be situated in position that results from substracting from the whole vector (cumulative, that represents all the continent data) half of the value of percentage_scaled.
 
 ```{r}
-population_by_continent_summarized <- population_by_continent |> arrange(percentage_scaled) |> mutate(
-  cumulative = cumsum(percentage_scaled),
-  label_position = cumulative - percentage_scaled / 2
-) |> mutate(continent = factor(continent, levels = continent))
+population_by_continent_summarized <- population_by_continent |>
+  arrange(percentage_scaled) |>
+  mutate(
+    cumulative = cumsum(percentage_scaled),
+    label_position = cumulative - percentage_scaled / 2
+  ) |> mutate(continent = factor(continent, levels = continent))
 ```
 
 Now, I could finally create the legend_bar, which is the first step in the creation of the replica. And, once I had the legend bar, I could create the replica map itself:
 
-```{r, fig.width = 30, fig.height = 35}
+```{r, fig.width = 30, fig.height = 20, preview=TRUE}
 # Creation of the legend bar:
 
-legend_bar <- ggplot(population_by_continent_summarized, aes(x = 1, y = percentage_scaled, fill = reorder(continent, -percentage_scaled))) +
+legend_bar <- ggplot(population_by_continent_summarized) +
+  aes(x = 1, y = percentage_scaled, fill = reorder(continent, -percentage_scaled)) +
   geom_bar(stat = "identity", width = 2, color = "black") +
   geom_text(
     aes(
-      label = ifelse(continent == "Oceania", "", paste0(continent, ":", round(percentage_scaled, 1), "%")),
+      label = ifelse(continent == "Oceania", "",
+                     paste0(continent, ":", round(percentage_scaled, 1), "%")),
       size = percentage_scaled
     ),
     color = "white",
     fontface = "bold",
     family = "Arial",
-    position = position_stack(vjust = 0.5)  # Asegura que las etiquetas se apilen correctamente
+    position = position_stack(vjust = 0.5)
   ) +
   scale_size_continuous(range = c(0.5, 20)) +
   coord_flip() +
@@ -193,9 +194,8 @@ map <- ggplot() +
       coord_sf(crs = "+proj=robin") +
   geom_point(
     data = population_data,
-    aes(
-      x = adjusted_long, y = adjusted_lat, size = circle_size_adjusted, fill = continent
-    ),
+    aes(x = adjusted_long, y = adjusted_lat,
+        size = circle_size_adjusted, fill = continent),
     alpha = 1,
     shape = 21,
     color = "black",
@@ -203,10 +203,10 @@ map <- ggplot() +
   ) +
   geom_label(
     data = population_data |> filter(country %in% countries_labelled),
-    aes(
-      x = adjusted_long, y = adjusted_lat, label = paste0(country, "\n", round(percentage, 1), "%"),
-    size = ifelse(country %in% c("India", "China"), 20, 6)),  fontface = "bold", family = "Arial", color = "black", fill = NA, label.size = 0
-  ) +
+    aes(x = adjusted_long, y = adjusted_lat,
+        label = paste0(country, "\n", round(percentage, 1), "%"),
+        size = ifelse(country %in% c("India", "China"), 20, 6)),
+    fontface = "bold", family = "Arial", color = "black", fill = NA, label.size = 0) +
   scale_size_identity() +
   scale_size_continuous(range = c(5, 95), name = "Population(%)") +
   scale_fill_manual(
@@ -234,7 +234,7 @@ final_plot
 ```
 
 
-# Improvement
+## Improvement
 
 Now, which were the main problems in the original map? In my opinion, the main problem was that the information gets diluted in the whole map. If the idea is to inform people of which countries represent the biggest percentages of population in the world, it is not important to know where the country is, mainly what´s its population, how big their proportion of the world population is compared to that of other countries, and in which continent they can be found (so we can know which continent is the most populated). So I have decided to create a **treemap** where you will be able to see all of this information. In this case you will be able to see the total population of each country, not the proportion of the world population they represent, since that information is already provided by the size of their square in the treemap.
 
