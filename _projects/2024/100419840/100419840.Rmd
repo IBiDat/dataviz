@@ -2,7 +2,7 @@
 title: "How housing is no longer a right"
 description: Visualization of the housing crisis in Spain according to official data from the Ministry of Transportation.
 categories: "2024"
-author: Maria Carda Gargallo
+author: Maria Carda-Gargallo
 date: "`r Sys.Date()`"
 output:
   distill::distill_article:
@@ -13,21 +13,19 @@ output:
 
 ## Introduction
 
-The original graph originates from the article published by elDiario.es on the occasion of a demonstration on rental prices in Madrid last October 2024 (["El aumento del precio del alquiler y la especulación avivan las protestas por el derecho a la vivienda"](https://www.eldiario.es/economia/aumento-precio-alquiler-especulacion-avivan-protestas-derecho-vivienda_1_11726321.html)). This article highlights different aspects of this housing crisis, and shows the boom in home purchase prices despite the slight increase in wages in recent years.
+The original graph is derived from an article published by *elDiario.es* in October 2024, coinciding with a demonstration in Madrid addressing rising rental prices (["El aumento del precio del alquiler y la especulación avivan las protestas por el derecho a la vivienda"](https://www.eldiario.es/economia/aumento-precio-alquiler-especulacion-avivan-protestas-derecho-vivienda_1_11726321.html)). The article examines various facets of the ongoing housing crisis such as the interplay between speculation and affordability.
 
 
 ### The original graph
 
-The graph shows the *Quarterly evolution of the appraised value of free housing per quarter in each Autonomous Community with respect to the quarter where the price of housing peaked in each community*, i.e. the variation in the appraised price of housing with respect to the 2008 crisis. It highlights the values of three communities (Madrid, Baleares and Canarias), which are those with the fastest growth trends in recent months.
+The graph shows the *Quarterly evolution of the appraised value of free housing per quarter in each Autonomous Community with respect to the quarter where the price of housing peaked in each community*- In other words, the variation in the appraised price of housing with respect to the 2008 crisis. It highlights the values of three communities (Madrid, Baleares and Canarias), which are those with the fastest growth trends in recent months.
 
 ![Original graph](https://raw.githubusercontent.com/mariacardag/datavizclass/main/image.png)
 
 
 ### Collecting data
 
-The data reflected in the graph is available free online. It is quarterly published by the Spanish Ministry of Transportation. 
-
-The graph illustrates the appraised value of free housing.
+The data presented in the graph (*appraised value of free housing*) is publicly accessible online and is published quarterly by the Spanish Ministry of Transportation. 
 
 It can be easily downloaded [here](https://apps.fomento.gob.es/boletinonline2/?nivel=2&orden=35000000).
 
@@ -48,7 +46,7 @@ library(scales)
 
 ### Loading and preparing the data
 
-The database needs to be loaded and the missing values coded as "NA". 
+Afterwards, the database needs to be loaded and the missing values coded as "NA". 
 
 ```{r}
 data <- read_excel("BBDD_DATAVIZ.xls")
@@ -87,7 +85,8 @@ Since the data is is provided in quarters, a new variable called "Fecha" (Date) 
 ```{r}
 
 data_filtered <- data_filtered %>%
-  mutate(Fecha = as.Date(paste(Año, Trimestre * 3, "01", sep = "-"), format = "%Y-%m-%d"))
+  mutate(Fecha = as.Date(paste(Año, Trimestre * 3, "01", sep = "-"), 
+                         format = "%Y-%m-%d"))
 ```
 
 Following the previous steps, it is needed to calculate the maximum value of the appraised value during the housing crisis. Therefore, the data is filtered before 2009 (according to the period highlighted in the original graph). The, it is grouped by region to get the maximum value for each one of them. After that, if the value is missing it is replaced by 0 and since this calculus has been made in a different data frame, the results are finally joined by region.
@@ -106,7 +105,7 @@ data_filtered <- data_filtered %>%
   left_join(max_data, by = "CCAA")
 ```
 
-Finally, a variable is aggregated to be able to represent the evolution of housing prices according to the maximum value calculated before. This variable contains the porcentual change in housing prices for the maximum value in the crisis period. Moreover, it has been contemplated that if the maximum value is missing (equal to 0), the Evolution (Evolución) value is also 0.
+Finally, a variable is aggregated to be able to represent the evolution of housing prices according to the maximum value calculated before. This variable contains the porcentual change in housing prices for the maximum value in the crisis period. Moreover, it has been contemplated that if the maximum value is missing (equal to 0), the Evolution (*Evolución*) value is also 0.
 
 ```{r}
 data_filtered <- data_filtered %>%
@@ -136,10 +135,12 @@ mi_grafico_mal <- mi_grafico_mal +
                             color = "grey80")
 mi_grafico_mal
 ```
-The second part is to represent the highlighted regions, which are those contained in the vector of the previous steps and they are colored by region.
+
+The second part is to include the highlighted regions, which are those contained in the vector of the previous steps and they are colored by region.
 
 ```{r}
-mi_grafico_mal <- mi_grafico_mal + geom_step(data = subset(data_filtered, CCAA %in% comunidades_destacadas), aes(color = CCAA),
+mi_grafico_mal <- mi_grafico_mal + geom_step(data = subset(
+  data_filtered, CCAA %in% comunidades_destacadas), aes(color = CCAA),
                                              size = 1.2)
 mi_grafico_mal 
 ```
@@ -147,12 +148,13 @@ mi_grafico_mal
 Then, the marked line at the y-axis for value 0 is added in black.
 
 ```{r}
-mi_grafico_mal <- mi_grafico_mal + geom_hline(yintercept = 0, linetype = "solid", linewidth = 0.3, color ="black")
+mi_grafico_mal <- mi_grafico_mal + geom_hline(yintercept = 0, 
+              linetype = "solid", linewidth = 0.3, color ="black")
 
 mi_grafico_mal
 ```
 
-
+Afterwards, custom text annotations are added by labeling specific regions (CCAA) from the filtered data at their most recent date (*maximum date*). Plus, their name and the rounded percentage change (*Evolucion*) are displayed at a specified position with styling adjustments.
 
 ```{r}
 mi_grafico_mal <- mi_grafico_mal + geom_text(
@@ -167,12 +169,13 @@ mi_grafico_mal <- mi_grafico_mal + geom_text(
 
 mi_grafico_mal
 ```
+
 To highlight the period of the economic crisis of 2008, a rectangle is created using *annotate* using the max and min values for the y-axis and the period between 2006 and 2008 for the x-axis.
 
 ```{r}
 mi_grafico_mal <- mi_grafico_mal + annotate("rect", 
-                                   xmin = as.Date("2006-01-01"), xmax = as.Date("2008-12-31"), ymin = -Inf, ymax = Inf, 
-                                   fill = "grey", alpha = 0.2)
+        xmin = as.Date("2006-01-01"), xmax = as.Date("2008-12-31"), 
+        ymin = -Inf, ymax = Inf, fill = "grey", alpha = 0.2)
 
 mi_grafico_mal
 ```
@@ -180,12 +183,14 @@ mi_grafico_mal
 However, this previous area contains the label "Burbuja Inmobiliaria" (Housing Bubble), which is also added using *annotate* to the estimated coordinates and style of the original graph.
 
 ```{r}
-mi_grafico_mal <- mi_grafico_mal + annotate("text", x = as.Date("2007-07-01"), y = 10, label = "Burbuja\nInmobiliaria", 
-                          color = "black", size = 4, fontface = "bold", hjust = 0.5, vjust = -0.5)
+mi_grafico_mal <- mi_grafico_mal + annotate("text", 
+      x = as.Date("2007-07-01"), y = 10, label = "Burbuja\nInmobiliaria", 
+      color = "black", size = 4, fontface = "bold", hjust = 0.5, vjust = -0.5)
 
 mi_grafico_mal
 ```
-Now that all necessary data representation is prepared, the following steps are related to the theme and final adjustments to accurately represent the original graph. 
+
+Now that all necessary data representation is prepared, the final steps are related to the theme and adjustments to accurately represent the original graph. 
 
 First, the x-axis is adjusted using the *scale_x_date* command to represent the date variable only for even years. To do so, the limit of the axis is set to the final month of available data (June of 2024, at the time of consultation) and then the breaks are set so that the year represented is divisible by 2 (to ensure even numbers).
 
@@ -193,33 +198,36 @@ First, the x-axis is adjusted using the *scale_x_date* command to represent the 
 mi_grafico_mal <- mi_grafico_mal + scale_x_date(
   limits = c(min(data_filtered$Fecha, na.rm = TRUE), as.Date("2024-06-30")),
   breaks = seq(
-    from = as.Date(paste0(ifelse(year(min(data_filtered$Fecha, na.rm = TRUE)) %% 2 == 0, 
-                                  year(min(data_filtered$Fecha, na.rm = TRUE)), 
-                                  year(min(data_filtered$Fecha, na.rm = TRUE)) + 1), "-01-01")),
+    from = as.Date(paste0(ifelse(year(min(
+      data_filtered$Fecha, na.rm = TRUE)) %% 2 == 0,
+      year(min(data_filtered$Fecha, na.rm = TRUE)),
+      year(min(data_filtered$Fecha, na.rm = TRUE)) + 1), "-01-01")),
     to = as.Date("2024-01-01"),
     by = "2 years"),
   date_labels = "%Y")
 
 mi_grafico_mal 
 ```
+
 Second, the y-axis is also adjusted so that values are represented by 10% and despite showing values for up to 30% and down to -80%, not show these limit labels.
 
 ```{r}
 mi_grafico_mal <- mi_grafico_mal + scale_y_continuous(
-  limits = c(-80, 30),  # Establecer el límite superior en +30%
-  breaks = seq(-70, 20, by = 10),  # Mostrar etiquetas de cada 10 unidades
-  labels = function(y) ifelse(y == -80, "", paste0(y, "%")),  # Ocultar etiqueta en -80
+  limits = c(-80, 30),  
+  breaks = seq(-70, 20, by = 10),  
+  labels = function(y) ifelse(y == -80, "", paste0(y, "%")),  
   expand = expansion(mult = c(0, 0.05))
 )
 
 mi_grafico_mal
 ```
 
-Afterwards, the original colors of the highlighted regions are manually coded. (PONER AQUÍ EL LINK DEL BUSCADOR DE COLORES)
+Afterwards, the original colors of the highlighted regions are manually coded. 
 
 ```{r}
-mi_grafico_mal <- mi_grafico_mal + scale_color_manual(values = c("Media Nacional" = "#5E5E5E", "Baleares" = "#ECDC49", 
-                                "Madrid" = "#2C7BCB", "Canarias" = "#175695", "Otros" = "#D9D9D9")) 
+mi_grafico_mal <- mi_grafico_mal + scale_color_manual(values = c(
+  "Media Nacional" = "#5E5E5E", "Baleares" = "#ECDC49", 
+  "Madrid" = "#2C7BCB", "Canarias" = "#175695", "Otros" = "#D9D9D9")) 
 
 mi_grafico_mal
 ```
@@ -237,46 +245,49 @@ mi_grafico_mal <- mi_grafico_mal +
 
 mi_grafico_mal
 ```
+
 Finally, the theme is established to accurately replicate the graph. Here is necessary to eliminate the legend, both axis labels and the grid lines of the x-axis. Regarding the y-axis, the grid lines are styled according to the original in grey. 
 
 ```{r}
 mi_grafico_mal <- mi_grafico_mal + theme(
-  legend.position = "none",               # Remove the legend
-  axis.title.y = element_blank(),         # Remove y-axis title
-  axis.title.x = element_blank(),         # Remove x-axis title
-  panel.grid.major.x = element_blank(),   # Remove major grid lines on x-axis
-  panel.grid.major.y = element_line(color = "grey80", size = 0.5), # Style major y-axis grid lines
-  panel.grid.minor = element_blank(),     # Remove minor grid lines
-  plot.margin = margin(5, 80, 5, 5),      # Set plot margins
-  plot.title = element_text(face = "bold"), # Make the plot title bold
-  panel.background  = element_rect(fill = "white", color = NA) # Set plot background to white
+  legend.position = "none",               
+  axis.title.y = element_blank(),        
+  axis.title.x = element_blank(),        
+  panel.grid.major.x = element_blank(),   
+  panel.grid.major.y = element_line(color = "grey80", size = 0.5), 
+  panel.grid.minor = element_blank(),    
+  plot.margin = margin(5, 80, 5, 5),      
+  plot.title = element_text(face = "bold"), 
+  panel.background  = element_rect(fill = "white", color = NA) 
 )
 
 
 mi_grafico_mal
 ```
 
-Finally, *coord_cartesian* is employed to eliminate the limits that do not allow to see the highlighted regions' labels (concretely, the key command is clip = "off").
+Finally, *coord_cartesian* is employed to eliminate the limits that do not allow to see the highlighted regions' labels (concretely, the key command is *clip = "off"*).
 
 ```{r, fig.height=8, fig.width=17}
-mi_grafico_mal <- mi_grafico_mal + coord_cartesian(xlim = c(as.Date("1995-03-01"), 
-                                                            as.Date("2024-06-30")), clip = "off", expand = 0)
+mi_grafico_mal <- mi_grafico_mal + coord_cartesian(xlim = 
+                    c(as.Date("1995-03-01"), 
+                    as.Date("2024-06-30")), clip = "off", expand = 0)
 
 mi_grafico_mal
 ```
 
-
 However, this final graph has an issue since Ceuta and Melilla are not represented in the original graph. Therefore, the data is filtered to eliminate this two regions and then the code is executed altogether to represent the graph correctly.
 
-```{r, fig.height=8, fig.width=17}
+```{r, fig.height=8, fig.width=17, preview = TRUE}
 data_limited <- subset(data_filtered, CCAA != "Ceuta" & CCAA != "Melilla")
 
 mi_grafico <- ggplot(data_limited, 
        aes(x = Fecha, y = Evolucion, group = CCAA, color = CCAA)) + 
   geom_step(data = subset(data_limited, !CCAA %in% comunidades_destacadas), 
             color = "grey80") +  
-  geom_step(data = subset(data_limited, CCAA %in% comunidades_destacadas), aes(color = CCAA), size = 1.2) + 
-  geom_hline(yintercept = 0, linetype = "solid", linewidth = 0.3, color ="black") +
+  geom_step(data = subset(data_limited, CCAA %in% comunidades_destacadas), 
+            aes(color = CCAA), size = 1.2) + 
+  geom_hline(yintercept = 0, linetype = "solid", linewidth = 0.3, 
+             color ="black") +
   geom_text(
   data = subset(data_filtered, CCAA %in% comunidades_destacadas) %>%
                         group_by(CCAA) %>%
@@ -286,16 +297,20 @@ mi_grafico <- ggplot(data_limited,
                         label = paste(CCAA, "\n", round(Evolucion, 1), "%"), 
                         color = CCAA), 
                         hjust = 0, vjust = 0.3, size = 2.8, fontface = "bold") +
-  annotate("rect", xmin = as.Date("2006-01-01"), xmax = as.Date("2008-12-31"), ymin = -Inf, ymax = Inf, 
+  annotate("rect", xmin = as.Date("2006-01-01"), xmax = as.Date("2008-12-31"), 
+           ymin = -Inf, ymax = Inf, 
            fill = "grey", alpha = 0.2) + # Rectángulo gris
-  annotate("text", x = as.Date("2007-07-01"), y = 10, label = "Burbuja\nInmobiliaria", 
-           color = "black", size = 3.5, fontface = "bold", hjust = 0.5, vjust = -0.5) +
+  annotate("text", x = as.Date("2007-07-01"), y = 10, 
+           label = "Burbuja\nInmobiliaria", 
+           color = "black", size = 3.5, fontface = "bold", hjust = 0.5, 
+           vjust = -0.5) +
  scale_x_date(
     limits = c(min(data_filtered$Fecha, na.rm = TRUE), as.Date("2024-06-30")),
     breaks = seq(
-        from = as.Date(paste0(ifelse(year(min(data_filtered$Fecha, na.rm = TRUE)) %% 2 == 0, 
-                                     year(min(data_filtered$Fecha, na.rm = TRUE)), 
-                                     year(min(data_filtered$Fecha, na.rm = TRUE)) + 1), "-01-01")),
+        from = as.Date(paste0(ifelse(year(min(
+          data_filtered$Fecha, na.rm = TRUE)) %% 2 == 0, 
+          year(min(data_filtered$Fecha, na.rm = TRUE)),
+          year(min(data_filtered$Fecha, na.rm = TRUE)) + 1), "-01-01")),
         to = as.Date("2024-01-01"),
         by = "2 years"),
     date_labels = "%Y") + 
@@ -304,12 +319,16 @@ mi_grafico <- ggplot(data_limited,
   breaks = seq(-70, 20, by = 10),  
   labels = function(y) ifelse(y == -80, "", paste0(y, "%")),  
   expand = expansion(mult = c(0, 0.05))) + 
-  scale_color_manual(values = c("Media Nacional" = "#5E5E5E", "Baleares" = "#ECDC49", 
-                                "Madrid" = "#2C7BCB", "Canarias" = "#175695", "Otros" = "#D9D9D9")) +
-  labs(title = "En Baleares y Madrid el precio de la vivienda ya está por encima del peor momento de la burbuja",
-    subtitle = "Evolución trimestral del valor tasado de la vivienda libre en cada CCAA respecto al 
-    trimestre donde el precio de la vivienda tocó techo en cada\ncomunidad",
-    caption = "Fuente: Ministerio de Transportes y Movilidad Sostenible")  +
+  scale_color_manual(values = c("Media Nacional" = "#5E5E5E", 
+                                "Baleares" = "#ECDC49", 
+                                "Madrid" = "#2C7BCB", "Canarias" = "#175695", 
+                                "Otros" = "#D9D9D9")) +
+  labs(title = 
+"En Baleares y Madrid el precio de la vivienda ya está por encima del peor momento de la burbuja",
+subtitle = 
+"Evolución trimestral del valor tasado de la vivienda libre en cada CCAA respecto al 
+trimestre donde el precio de la vivienda tocó techo en cada\ncomunidad",
+caption = "Fuente: Ministerio de Transportes y Movilidad Sostenible")  +
   theme(
     legend.position = "none", 
     axis.title.y = element_blank(),
@@ -320,7 +339,8 @@ mi_grafico <- ggplot(data_limited,
     plot.margin = margin(5, 60, 5, 5),
     plot.title = element_text(face = "bold"), 
     panel.background = element_rect(fill = "white")) + 
-    coord_cartesian(xlim = c(as.Date("1995-03-01"), as.Date("2024-06-30")), clip = "off", expand = 0)
+    coord_cartesian(xlim = c(as.Date("1995-03-01"), as.Date("2024-06-30")), 
+                    clip = "off", expand = 0)
 
 mi_grafico
 ```
@@ -332,8 +352,10 @@ In addition, *ggplotly* has been used to make the plot interactive, which enable
 ```{r}
 y <- ggplot(data_limited, 
             aes(x = Fecha, y = Evolucion, group = CCAA, color = CCAA, 
-                text = paste("CCAA:", CCAA, "<br>Año:", format(Fecha, "%Y"), "<br>Trimestre:", 
-                             Trimestre, "<br>Evolución:", round(Evolucion, 2), "%"))) + 
+                text = paste("CCAA:", CCAA, "<br>Año:", format(Fecha, "%Y"),
+                             "<br>Trimestre:", 
+                             Trimestre, "<br>Evolución:",
+                             round(Evolucion, 2), "%"))) + 
   geom_step(data = subset(data_limited, !CCAA %in% comunidades_destacadas), 
             color = "grey80") +  # Comunidades en gris claro
   geom_step(data = subset(data_limited, CCAA %in% comunidades_destacadas), 
@@ -348,10 +370,13 @@ geom_text(
                         label = paste(CCAA, "\n", round(Evolucion, 1), "%"), 
                         color = CCAA), 
                         hjust = 0, vjust = 0.3, size = 2.8, fontface = "bold")+
-  annotate("rect", xmin = as.Date("2006-01-01"), xmax = as.Date("2008-12-31"), ymin = -Inf, ymax = Inf, 
+  annotate("rect", xmin = as.Date("2006-01-01"), xmax = as.Date("2008-12-31"),
+           ymin = -Inf, ymax = Inf, 
            fill = "grey", alpha = 0.2) +  
-  annotate("text", x = as.Date("2007-07-01"), y = 10, label = "Burbuja\nInmobiliaria", 
-           color = "black", size = 3, fontface = "bold", hjust = 0.5, vjust = -0.5) +
+  annotate("text", x = as.Date("2007-07-01"), y = 10, 
+           label = "Burbuja\nInmobiliaria", 
+           color = "black", size = 3, fontface = "bold", hjust = 0.5, 
+           vjust = -0.5) +
   scale_x_date(
     limits = c(min(data_limited$Fecha, na.rm = TRUE), as.Date("2024-12-31")),  
     date_breaks = "2 years",  
@@ -363,8 +388,10 @@ geom_text(
     labels = function(y) ifelse(y == -80, "", paste0(y, "%")),  
     expand = expansion(mult = c(0, 0.05))  
   ) + 
-  scale_color_manual(values = c("Media Nacional" = "#5E5E5E", "Baleares" = "#ECDC49", 
-                                "Madrid" = "#2C7BCB", "Canarias" = "#175695", "Otros" = "#D9D9D9")) +
+  scale_color_manual(values = c("Media Nacional" = "#5E5E5E", 
+                                "Baleares" = "#ECDC49", 
+                                "Madrid" = "#2C7BCB", "Canarias" = "#175695", 
+                                "Otros" = "#D9D9D9")) +
   labs(
     title = "Evolución del precio de la vivienda libre en cada CCAA: 
     Comparación trimestral respecto al valor máximo antes de la burbuja",
@@ -412,19 +439,24 @@ Afterwards, the highlighted crisis period is represented by a yellow rectangle s
 ```{r}
 
 
-tile <- tile  + geom_rect(aes(xmin = as.Date("2006-01-01"), xmax = as.Date("2008-12-31"), 
-                  ymin = -Inf, ymax = Inf, color = "Burbuja Inmobiliaria"), 
-              fill = NA, linewidth = 1) +
-    scale_color_manual(
-        name = NULL, 
-        values = c("Burbuja Inmobiliaria" = "yellow")
-    )  + annotate(
-        "rect",
-        xmin = as.Date("1995-03-01"), xmax = as.Date("2024-06-30"),
-        ymin = which(levels(factor(data_limited$CCAA)) == "Media\nNacional") - 0.5,
-        ymax = which(levels(factor(data_limited$CCAA)) == "Media\nNacional") + 0.5,
-        fill = NA, color = "green", linewidth = 0.4
-    )
+tile <- tile + 
+  geom_rect(aes(xmin = as.Date("2006-01-01"),
+                xmax = as.Date("2008-12-31"), 
+                ymin = -Inf, ymax = Inf, color = "Burbuja Inmobiliaria"), 
+            fill = NA, linewidth = 1) +
+  geom_rect(aes(xmin = as.Date("1995-03-01"),
+                xmax = as.Date("2024-06-30"),
+                ymin = which(levels(factor(
+                  data_limited$CCAA)) == "Media\nNacional") - 0.5,
+                ymax = which(levels(factor(
+                  data_limited$CCAA)) == "Media\nNacional") + 0.5,
+                color = "Media Nacional"),
+            fill = NA, linewidth = 0.4) +
+  scale_color_manual(
+    name = NULL, 
+    values = c("Burbuja Inmobiliaria" = "yellow", "Media Nacional" = "green")
+  )
+
 
 tile
 ```
@@ -440,6 +472,7 @@ tile <- tile  +
 
 tile
 ```
+
 For this graph, it is important to determine the colors of the gradient for an easier visualization. Consequently, the gradient has been coded so that values around 0% are white, the values above are orange and the inferior values are blue. 
 
 ```{r}
@@ -450,6 +483,7 @@ tile <- tile +  scale_fill_gradientn(
 
 tile
 ```
+
 The final steps include determining the title, subtitle and caption according to the original graph.
 
 ```{r, fig.height=6, fig.width=12}
@@ -575,7 +609,8 @@ animated_plot <- plot_ly(data = filtered_data,
                                        "<br>Renta Media: ", renta_media, 
                                        "<br>Valor Tasado: ", Valor_Tasado),
                          hoverinfo = "text",   
-                         marker = list(sizemode = 'diameter', opacity = 0.6, line = list(width = 0))) %>%
+                         marker = list(sizemode = 'diameter', opacity = 0.6, 
+                                       line = list(width = 0))) %>%
   layout(title = "Evolution of housing prices and wages per region",
          xaxis = list(title = "Valor Tasado de la Vivienda", range = y_range),  
          yaxis = list(title = "Renta Media", range = x_range),                 
@@ -591,8 +626,9 @@ animated_plot
 
 ## Conclusions
 
-The alternative versions of the original graph allow to extract some information that perhaps was not easily to consider in the article of the online newspaper. For example, it is easier to observe the differences between regions, since those that are in a worse situation than during the 2008 crisis (in orange in the tile graph) stand out against those that have not yet reached their prices during the crisis. Plus, each region is easier to identify.
+The alternative versions of the original graph offer insights that may not have been easily considered in the article in the article published by the online newspaper. For instance, these versions make it easier to distinguish differences between regions. In the tile graph, those that are currently experiencing worse conditions than during the 2008 financial crisis (*highlighted in orange**) clearly stand out from those that have yet to reach their crisis-era price levels. Moreover, the visualization enhances clarity by making it easier to identify individual regions.
 
-Finally, the interactive version of the bubble plot provides a view of the trend in relation to wages, which puts the issue in perspective, since they are not on an even trend. This approach is key to understanding the magnitude of the housing problem and regional disparities in housing affordability. 
+Additionally, the interactive version of the bubble plot provides a dynamic perspective on housing trends in relation to wages, since they do not follow a parallel trajectory. This approach is key to understanding the magnitude of the housing problem and regional disparities in housing affordability. 
 
+In conclusion, these alternative visualizations not only provide a clearer understanding of regional disparities but also underscore the complexity of the housing crisis.
 
