@@ -12,7 +12,7 @@ output:
     toc: true
 ---
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(out.width="1000%", fig.align="center")
+knitr::opts_chunk$set(out.width="100%", fig.align="center")
 ```
 
 ## Introduction
@@ -27,20 +27,10 @@ This shift reflects broader societal changes, including advancements in technolo
 
 ### Load the packages 
 ```{r packages}
-#| echo: true
-library(tidyverse)
-library(ggplot2)
-library(dplyr)
-library(ggthemes)
-library(patchwork)
-library(grid)
-library(gridExtra)
-library(openxlsx)
-library(readxl)
-library(cowplot)
-library(readxl)
-library(extrafont)
-library(showtext)
+library(tidyverse)   
+library(readxl)     
+library(cowplot)     
+library(scales) 
 ```
 
 The chart is made up of 10 individual graphs, each illustrating changes in employment within a specific sector over time. To construct the final visualization, I first modeled and created each graph separately, ensuring that each accurately depicted the employment trends for its respective sector. Once the individual graphs were completed, I combined them into a cohesive and comprehensive chart using faceting.
@@ -52,33 +42,33 @@ I was unable to access an existing online dataset, so I had to recreate the data
 Here you can find the link to the page of the article to extract the data: [The Changing Nature
 of Middle-Class Jobs - The New York Times ](https://www.nytimes.com/interactive/2015/02/23/business/economy/the-changing-nature-of-middle-class-jobs.html)
 
-```{r, echo = FALSE}
-data1 <- read_excel("C:/Users/marco/OneDrive/Desktop/Data Visualization - I sem/Project - The changing nature of middle-class job/Changing nature of middle class.xlsx")
+```{r}
+data1 <- read_xlsx("middle_class.xlsx", sheet = "Professionals and specialists")
 
-data2 <- read_excel("C:/Users/marco/OneDrive/Desktop/Data Visualization - I sem/Project - The changing nature of middle-class job/Changing nature of middle class.xlsx", sheet = "Managers and administrators")
+data2 <- read_xlsx("middle_class.xlsx", sheet = "Managers and administrators")
 
-data3 <- read_excel("C:/Users/marco/OneDrive/Desktop/Data Visualization - I sem/Project - The changing nature of middle-class job/Changing nature of middle class.xlsx", sheet = "Service workers and salespeople")
+data3 <- read_xlsx("middle_class.xlsx", sheet = "Service workers and salespeople")
 
-data4 <- read_excel("C:/Users/marco/OneDrive/Desktop/Data Visualization - I sem/Project - The changing nature of middle-class job/Changing nature of middle class.xlsx", sheet = "Technicians")
+data4 <- read_xlsx("middle_class.xlsx", sheet = "Technicians")
 
-data5 <- read_excel("C:/Users/marco/OneDrive/Desktop/Data Visualization - I sem/Project - The changing nature of middle-class job/Changing nature of middle class.xlsx", sheet = "Police, fire and military")
+data5 <- read_xlsx("middle_class.xlsx", sheet = "Police, fire and military")
 
-data6 <- read_excel("C:/Users/marco/OneDrive/Desktop/Data Visualization - I sem/Project - The changing nature of middle-class job/Changing nature of middle class.xlsx", sheet = "Administrative support workers")
+data6 <- read_xlsx("middle_class.xlsx", sheet = "Administrative support workers")
 
-data7 <- read_excel("C:/Users/marco/OneDrive/Desktop/Data Visualization - I sem/Project - The changing nature of middle-class job/Changing nature of middle class.xlsx", sheet = "Transportation workers")
+data7 <- read_xlsx("middle_class.xlsx", sheet = "Transportation workers")
 
-data8 <- read_excel("C:/Users/marco/OneDrive/Desktop/Data Visualization - I sem/Project - The changing nature of middle-class job/Changing nature of middle class.xlsx", sheet = "Construction and agricolture ")
+data8 <- read_xlsx("middle_class.xlsx", sheet = "Construction and agricolture ")
 
-data9 <- read_excel("C:/Users/marco/OneDrive/Desktop/Data Visualization - I sem/Project - The changing nature of middle-class job/Changing nature of middle class.xlsx", sheet = "Skilled production workers")
+data9 <- read_xlsx("middle_class.xlsx", sheet = "Skilled production workers")
 
-data10 <- read_excel("C:/Users/marco/OneDrive/Desktop/Data Visualization - I sem/Project - The changing nature of middle-class job/Changing nature of middle class.xlsx", sheet = "Machine operators and assembler")
+data10 <- read_xlsx("middle_class.xlsx", sheet = "Machine operators and assembler")
 
 ```
 
 This is an example of the sheet for 'Managers and administrators'. The column 'Jobs' represents specific occupations or job titles within each sector, while 'Sector' groups jobs into broader categories and reflects the division by sheets. 'Years' indicates the time frame of the data (1980 and 2012), and 'Employed' shows the number of people employed in a specific job, expressed in thousands (e.g., 41 represents 41,000 workers). Finally, 'Gender' represents the proportion of workers in a job that are male, expressed as a decimal (e.g., 1.0 means 100% male, 0.0 means 100% female, and intermediate values like 0.5 indicate an equal gender balance).
 
 ```{r showing data}
-data1
+head(data1)
 ```
 
 ### Create the loop for the color gradient transition between the points 
@@ -86,8 +76,7 @@ data1
 In my opinion, the most interesting aspect of the chart is the gradient color shift within the lines that make up the visualization. This color change represents the percentage shift in the workforce composition for a specific job by gender-blue indicates 100% male employment, red represents 100% female employment, and intermediate colors reflect varying percentages, culminating in a neutral gray where gender parity is achieved.
 To implement this effect, it is necessary to create a loop that interpolates the colors along the lines, ensuring a smooth gradient transition between points. 
 
-```{r loop color gradient}
-#| echo: true
+```{r loop-color-gradient}
 # Tranform the data in Gender column in factor to create the interpolation for the color gradient 
 data1$Gender <- as.factor(data1$Gender)
 data2$Gender <- as.factor(data2$Gender)
@@ -125,8 +114,7 @@ interpolate_lines <- function(data) {
 
 In the initial plot setup, I added light gray horizontal grid lines for reference and used geom_line() to plot smooth gradient lines representing employment trends for each job category, with colors mapped to gender proportions. I overlaid the original data points with geom_point() for clarity and defined a gradient color scale from red (100% female) to blue (100% male), with gray indicating gender parity.
 
-```{r initial plot set-up}
-#| echo: true
+```{r initial-plot-setup}
 interp_data1 <- interpolate_lines(data1)
 
 plot1_step1 <- ggplot() +
@@ -142,8 +130,7 @@ plot1_step1 <- ggplot() +
 #### Axes Customization 
 The axes were adjusted with scale_x_continuous() and scale_y_continuous(). The x-axis was formatted to display the key years 1980 and 2012 with shortened labels ("'80" and "'12"), while the y-axis was set with breaks at intervals of 10 and limited to a range of 0 to 90. The y-axis labels were tailored to show numeric values up to 60, leaving the upper range visually open. At least I added a descriptive label to the x-axis using labs() to provide context.
 
-```{r axes costumatization}
-#| echo: true
+```{r axes-costumatization}
 plot1_step2 <- plot1_step1 +
   # Customize axes
   scale_x_continuous(breaks = c(1980, 2012), labels = c("'80", "'12")) +
@@ -180,7 +167,7 @@ plot1_step3 <- plot1_step2 +
 #### Annotation
 Using annotate("text"), I added a label for "Registered nurses," positioning it near the corresponding data point to replicate the original annotation. I used annotate("segment") to draw a connecting line between the label and the data point, mirroring the style of the original chart.
 
-```{r first graph, layout="l-page", fig.height= 5, fig.width=12}
+```{r first-graph, layout="l-page", fig.height= 5, fig.width=12}
 plot1 <- plot1_step3 +
   annotate("text", x = 1998, y = 40, label = "Registered\nnurses", 
            size = 4, color = "black", fontface = "plain", hjust = 0.5) +
@@ -193,47 +180,51 @@ plot1
 (it looks a little... weird; but don't worry after the faceting the result will be much better!)
 
 ### The others graphs
-#### 2° Graph 
-The differences between these plots and the first one are minimal, with the only significant changes being in the axis customization. In the second plot, the x-axis does not include custom labels, simplifying its appearance, while the y-axis uses scale_y_continuous() with a custom labeling scheme that only displays "70" and "80" at the higher range of values, leaving the lower values blank.
+#### Common part 
 
-```{r second graph}
+Since the graphs are very similar to each other and differ only in small but significant ways that make each graph unique, I decided to group the shared elements, such as the theme and the color_gradient, into variables. This allows me to reuse these components in each graph, reducing redundancy and shortening the code for each individual plot.
+
+```{r}
+gender_color_scale <- scale_color_gradientn(
+  colors = c("red", "pink", "grey", "#8cdde3", "#2e86c1"),
+  name = "Gender"
+)
+
+base_theme <- theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_blank(),
+    legend.position = "none",
+    axis.title.y = element_blank(),
+    axis.title = element_text(size = 12)
+  )
+
+```
+
+
+#### 2° Graph 
+In the second plot, the x-axis does not include custom labels, simplifying its appearance, while the y-axis uses scale_y_continuous() with a custom labeling scheme that only displays "70" and "80" at the higher range of values, leaving the lower values blank.
+
+```{r second-graph}
 interp_data2 <- interpolate_lines(data2)
 
 plot2 <- ggplot() +
-  # Add smooth gradient lines for each job
   geom_line(data = interp_data2, aes(x = Years, y = Employed, group = Jobs, color = as.numeric(Gender)), linewidth = 1.2) +
-  
-  # Add original points using data2
   geom_point(data = data2, aes(x = Years, y = Employed, color = as.numeric(Gender)), size = 3) +
-  
-  # Use gradient color scale for Gender
-  scale_color_gradientn(
-    colors = c("red", "pink", "grey", "#8cdde3", "#2e86c1"),
-    name = "Gender"
-  ) +
-  
-  # Customize axes
-  scale_x_continuous(breaks = c(1980, 2012)) +  
+  gender_color_scale +
+  scale_x_continuous(breaks = c(1980, 2012)) +
   scale_y_continuous(
-    breaks = seq(0, 80, 10),    
-    limits = c(0, 90), 
-    labels = c("", "", "", "", "", "", "", "70", "80") 
-  ) + 
-  
-  #Add a descriptive label
+    breaks = seq(0, 80, 10),
+    limits = c(0, 90),
+    labels = c("", "", "", "", "", "", "", "70", "80")
+  ) +
   labs(x = "+ 40 jobs\nManagers and\nadministrators\n") +
-  
-  # Clean theme
-  theme_minimal() +  
+  base_theme +
   theme(
-    panel.grid.major.x = element_blank(),  
-    panel.grid.minor = element_blank(),
-    panel.grid.major.y = element_line(color = "lightgray", size = 0.3),
-    legend.position = "blank",  
+    panel.grid.major.y = element_line(color = "lightgray", size = 0.3), # Add light gray gridlines
     axis.text.x = element_blank(),
-    axis.text.y = element_text(size = 10, color = "black"),
-    axis.title.y = element_blank(),
-    axis.title = element_text(size = 12)
+    axis.text.y = element_text(size = 10, color = "black")
   )
 ```
 
@@ -241,236 +232,122 @@ Starting from the 3° until the 9° plot (except for the 8°, see below why) the
 
 #### 3° Graph
 
-```{r third graph}
+```{r third-graph}
 interp_data3 <- interpolate_lines(data3)
 
 plot3 <- ggplot() +
-  # Add horizontal gridlines
   geom_hline(yintercept = seq(0, 40, 10), color = "lightgray", linewidth = 0.3) +
-  
-  # Add smooth gradient lines for each job
   geom_line(data = interp_data3, aes(x = Years, y = Employed, group = Jobs, color = as.numeric(Gender)), linewidth = 1.2) +
-  
-  # Add original points using data3
   geom_point(data = data3, aes(x = Years, y = Employed, color = as.numeric(Gender)), size = 3) +
-  
-  # Use gradient color scale for Gender
-  scale_color_gradientn(
-    colors = c("red", "pink", "grey", "#8cdde3", "#2e86c1"),
-    name = "Gender"
-  ) +
-  
-  # Customize x and y axes
-  scale_x_continuous(breaks = c(1980, 2012)) +  
+  gender_color_scale +
+  scale_x_continuous(breaks = c(1980, 2012)) +
   scale_y_continuous(
-    breaks = seq(0, 80, 10),    
+    breaks = seq(0, 80, 10),
     limits = c(0, 90)
   ) +
-  
   labs(x = "+ 23 jobs\nService Workers\nand salespeople\n") +
-  
-  # Minimal theme for cleaner visuals
-  theme_minimal() +  
+  base_theme +
   theme(
-    panel.grid.major.x = element_blank(),  
-    panel.grid.minor = element_blank(),    
-    panel.grid.major.y = element_blank(), 
-    legend.position = "none",             
-    axis.text.y = element_blank(),
     axis.text.x = element_blank(),
-    axis.title.y = element_blank(),
-    axis.title = element_text(size = 12)
+    axis.text.y = element_blank()
   )
 ```
 
 #### 4° Graph
 
-```{r forth graph}
+```{r forth-graph}
 interp_data4 <- interpolate_lines(data4)
 
 plot4 <- ggplot() +
-  # Add horizontal gridlines
   geom_hline(yintercept = seq(0, 20, 10), color = "lightgray", linewidth = 0.3) +
-  
-  # Add smooth gradient lines for each job
   geom_line(data = interp_data4, aes(x = Years, y = Employed, group = Jobs, color = as.numeric(Gender)), linewidth = 1.2) +
-  
-  # Add original points using data4
   geom_point(data = data4, aes(x = Years, y = Employed, color = as.numeric(Gender)), size = 3) +
-  
-  # Use gradient color scale for Gender
-  scale_color_gradientn(
-    colors = c("red", "pink", "grey", "#8cdde3", "#2e86c1"),
-    name = "Gender"
-  ) +
-  
-  annotate("text", x = 1998, y = 25, label = "Health\ntechnologists and\ntechnicians", 
-           size = 4, color = "black", fontface = "plain", hjust = 0.5) +
-  annotate("segment", x = 1998, xend = 1998, y = 15.5, yend = 22, 
-           color = "black", linewidth = 0.8) +
-  
-  # Customize x and y axes
-  scale_x_continuous(breaks = c(1980, 2012)) +  
+  gender_color_scale +
+  annotate("text", x = 1998, y = 25, label = "Health\ntechnologists and\ntechnicians", size = 4, color = "black", fontface = "plain", hjust = 0.5) +
+  annotate("segment", x = 1998, xend = 1998, y = 15.5, yend = 22, color = "black", linewidth = 0.8) +
+  scale_x_continuous(breaks = c(1980, 2012)) +
   scale_y_continuous(
-    breaks = seq(0, 80, 10),    
+    breaks = seq(0, 80, 10),
     limits = c(0, 90)
   ) +
-  
   labs(x = "+ 13 jobs\nTechnicians\n\n") +
-  
-  # Minimal theme for cleaner visuals
-  theme_minimal() +  
+  base_theme +
   theme(
-    panel.grid.major.x = element_blank(),  
-    panel.grid.minor = element_blank(),    
-    panel.grid.major.y = element_blank(), 
-    legend.position = "none",              
-    axis.text.y = element_blank(),
     axis.text.x = element_blank(),
-    axis.title.y = element_blank(),
-    axis.title = element_text(size = 12)
+    axis.text.y = element_blank()
   )
 ```
 
 #### 5° Graph
 
-```{r fifth graph}
+```{r fifth-graph}
 interp_data5 <- interpolate_lines(data5)
 
 plot5 <- ggplot() +
-  # Add horizontal gridlines
   geom_hline(yintercept = seq(0, 10, 10), color = "lightgray", linewidth = 0.3) +
-  
-  # Add smooth gradient lines for each job
   geom_line(data = interp_data5, aes(x = Years, y = Employed, group = Jobs, color = as.numeric(Gender)), linewidth = 1.2) +
-  
-  # Add original points using data5
   geom_point(data = data5, aes(x = Years, y = Employed, color = as.numeric(Gender)), size = 3) +
-  
-  # Use gradient color scale for Gender
-  scale_color_gradientn(
-    colors = c("red", "pink", "grey", "#8cdde3", "#2e86c1"),
-    name = "Gender"
-  ) +
-  
-  annotate("text", x = 1998, y = 21, label = "Police and\ndetectives", 
-           size = 4, color = "black", fontface = "plain", hjust = 0.5) +
-  annotate("segment", x = 1998, xend = 1998, y = 16.2, yend = 19, 
-           color = "black", linewidth = 0.8) +
-  
-  # Customize x and y axes
-  scale_x_continuous(breaks = c(1980, 2012)) +  
+  gender_color_scale +
+  annotate("text", x = 1998, y = 21, label = "Police and\ndetectives", size = 4, color = "black", fontface = "plain", hjust = 0.5) +
+  annotate("segment", x = 1998, xend = 1998, y = 16.2, yend = 19, color = "black", linewidth = 0.8) +
+  scale_x_continuous(breaks = c(1980, 2012)) +
   scale_y_continuous(
-    breaks = seq(0, 80, 10),    
+    breaks = seq(0, 80, 10),
     limits = c(0, 90)
   ) +
-  
   labs(x = "+ 3 jobs\nPolice, fire,\nand military\n") +
-  
-  # Minimal theme for cleaner visuals
-  theme_minimal() +  
+  base_theme +
   theme(
-    panel.grid.major.x = element_blank(),  
-    panel.grid.minor = element_blank(),    
-    panel.grid.major.y = element_blank(), 
-    legend.position = "none",              
-    axis.text.y = element_blank(),
     axis.text.x = element_blank(),
-    axis.title.y = element_blank(),
-    axis.title = element_text(size = 12)
+    axis.text.y = element_blank()
   )
 ```
 
 #### 6° Graph
 
-```{r sixth graph}
+```{r sixth-graph}
 interp_data6 <- interpolate_lines(data6)
 
 plot6 <- ggplot() +
-  # Add horizontal gridlines
   geom_hline(yintercept = seq(0, 20, 10), color = "lightgray", linewidth = 0.3) +
-  
-  # Add smooth gradient lines for each job
   geom_line(data = interp_data6, aes(x = Years, y = Employed, group = Jobs, color = as.numeric(Gender)), linewidth = 1.2) +
-  
-  # Add original points using data6
   geom_point(data = data6, aes(x = Years, y = Employed, color = as.numeric(Gender)), size = 3) +
-  
-  # Use gradient color scale for Gender
-  scale_color_gradientn(
-    colors = c("red", "pink", "grey", "#8cdde3", "#2e86c1"),
-    name = "Gender"
-  ) +
-  
-  annotate("text", x = 1998, y = 28.5, label = "Secretaries", 
-           size = 4, color = "black", fontface = "plain", hjust = 0.5) +
-  annotate("segment", x = 1998, xend = 1998, y = 25.7, yend = 27, 
-           color = "black", linewidth = 0.8) +
-  
-  # Customize x and y axes
-  scale_x_continuous(breaks = c(1980, 2012)) +  
+  gender_color_scale +
+  annotate("text", x = 1998, y = 28.5, label = "Secretaries", size = 4, color = "black", fontface = "plain", hjust = 0.5) +
+  annotate("segment", x = 1998, xend = 1998, y = 25.7, yend = 27, color = "black", linewidth = 0.8) +
+  scale_x_continuous(breaks = c(1980, 2012)) +
   scale_y_continuous(
-    breaks = seq(0, 80, 10),    
+    breaks = seq(0, 80, 10),
     limits = c(0, 90)
   ) +
-  
   labs(x = "- 3 jobs\nAdministrative\nsupport workers\n") +
-  
-  # Minimal theme for cleaner visuals
-  theme_minimal() +  
+  base_theme +
   theme(
-    panel.grid.major.x = element_blank(),  
-    panel.grid.minor = element_blank(),    
-    panel.grid.major.y = element_blank(), 
-    legend.position = "none",              
-    axis.text.y = element_blank(),
     axis.text.x = element_blank(),
-    axis.title.y = element_blank(),
-    axis.title = element_text(size = 12)
+    axis.text.y = element_blank()
   )
 ```
 
 #### 7° Graph
 
-```{r seventh graph}
+```{r seventh-graph}
 interp_data7 <- interpolate_lines(data7)
 
 plot7 <- ggplot() +
-  # Add horizontal gridlines
   geom_hline(yintercept = seq(0, 30, 10), color = "lightgray", linewidth = 0.3) +
-  
-  # Add smooth gradient lines for each job
   geom_line(data = interp_data7, aes(x = Years, y = Employed, group = Jobs, color = as.numeric(Gender)), linewidth = 1.2) +
-  
-  # Add original points using data7
   geom_point(data = data7, aes(x = Years, y = Employed, color = as.numeric(Gender)), size = 3) +
-  
-  # Use gradient color scale for Gender
-  scale_color_gradientn(
-    colors = c("red", "pink", "grey", "#8cdde3", "#2e86c1"),
-    name = "Gender"
-  ) +
-  
-  # Customize x and y axes
-  scale_x_continuous(breaks = c(1980, 2012)) +  
+  gender_color_scale +
+  scale_x_continuous(breaks = c(1980, 2012)) +
   scale_y_continuous(
-    breaks = seq(0, 80, 10),    
+    breaks = seq(0, 80, 10),
     limits = c(0, 90)
   ) +
-  
   labs(x = "- 26 jobs\nTransportation\nworkers\n") +
-  
-  # Minimal theme for cleaner visuals
-  theme_minimal() +  
+  base_theme +
   theme(
-    panel.grid.major.x = element_blank(),  
-    panel.grid.minor = element_blank(),    
-    panel.grid.major.y = element_blank(), 
-    legend.position = "none",              
-    axis.text.y = element_blank(),
     axis.text.x = element_blank(),
-    axis.title.y = element_blank(),
-    axis.title = element_text(size = 12)
+    axis.text.y = element_blank()
   )
 ```
 
@@ -479,129 +356,73 @@ There was an issue with the interpolation of colors in this graph. In the graph 
 
 To resolve this problem, I explicitly set the color for both geom_line and geom_point to "#2e86c1". This fixed the color across the entire graph, ensuring consistency with the data and accurately reflecting the predominance of men in these roles. By doing so, I eliminated the unintended color gradient and maintained the graph’s integrity.
 
-```{r eigth graph}
+```{r eigth-graph}
 plot8 <- ggplot(data8, aes(x = Years, y = Employed, group = Jobs)) +
-  
   geom_hline(yintercept = seq(0, 30, 10), color = "lightgray", linewidth = 0.3) +
-  
-  geom_line(color = "#2e86c1", linewidth = 1.2) +  
+  geom_line(color = "#2e86c1", linewidth = 1.2) +
   geom_point(color = "#2e86c1", size = 3) +
-  
-  scale_x_continuous(breaks = c(1980, 2012)) +  
+  scale_x_continuous(breaks = c(1980, 2012)) +
   scale_y_continuous(
-    breaks = seq(0, 80, 10),    
-    limits = c(0, 90)) +
-  
+    breaks = seq(0, 80, 10),
+    limits = c(0, 90)
+  ) +
   labs(x = "- 31 jobs\nConstruction\nand agriculture\nworkers") +
-  
-  theme_minimal() +  
+  base_theme +
   theme(
-    panel.grid.major.x = element_blank(),  
-    panel.grid.minor = element_blank(),    
-    panel.grid.major.y = element_blank(), 
-    legend.position = "none",              
-    axis.text.y = element_blank(),
     axis.text.x = element_blank(),
-    axis.title.y = element_blank(),
-    axis.title = element_text(size = 12)
-  ) 
+    axis.text.y = element_blank()
+  )
+
 ```
 
 #### 9° Graph
 
-```{r nineth graph}
+```{r nineth-graph}
 interp_data9 <- interpolate_lines(data9)
 
 plot9 <- ggplot() +
-  # Add horizontal gridlines
   geom_hline(yintercept = seq(0, 30, 10), color = "lightgray", linewidth = 0.3) +
-  
-  # Add smooth gradient lines for each job
   geom_line(data = interp_data9, aes(x = Years, y = Employed, group = Jobs, color = as.numeric(Gender)), linewidth = 1.2) +
-  
-  # Add original points using data9
   geom_point(data = data9, aes(x = Years, y = Employed, color = as.numeric(Gender)), size = 3) +
-  
-  # Use gradient color scale for Gender
-  scale_color_gradientn(
-    colors = c("red", "pink", "grey", "#8cdde3", "#2e86c1"),
-    name = "Gender"
-  ) +
-  
-  annotate("text", x = 1998, y = 31, label = "Production\nsupervisors or\nforemen", 
-           size = 4, color = "black", fontface = "plain", hjust = 0.5) +
-  annotate("segment", x = 1998, xend = 1998, y = 21.1, yend = 28, 
-           color = "black", linewidth = 0.8) +
-  
-  
-  
-  # Customize x and y axes
-  scale_x_continuous(breaks = c(1980, 2012)) +  
+  gender_color_scale +
+  annotate("text", x = 1998, y = 31, label = "Production\nsupervisors or\nforemen", size = 4, color = "black", fontface = "plain", hjust = 0.5) +
+  annotate("segment", x = 1998, xend = 1998, y = 21.1, yend = 28, color = "black", linewidth = 0.8) +
+  scale_x_continuous(breaks = c(1980, 2012)) +
   scale_y_continuous(
-    breaks = seq(0, 80, 10),    
+    breaks = seq(0, 80, 10),
     limits = c(0, 90)
   ) +
-  
   labs(x = "- 38 jobs\nSkilled\nproduction\nworkers") +
-  
-  # Minimal theme for cleaner visuals
-  theme_minimal() +  
+  base_theme +
   theme(
-    panel.grid.major.x = element_blank(),  
-    panel.grid.minor = element_blank(),    
-    panel.grid.major.y = element_blank(), 
-    legend.position = "none",             
-    axis.text.y = element_blank(),
     axis.text.x = element_blank(),
-    axis.title.y = element_blank(),
-    axis.title = element_text(size = 12)
+    axis.text.y = element_blank()
   )
 ```
 
 #### 10° Graph
 In this graph the y-axis labels returns and is being positioned on the right (not on the left like the first one)
 
-```{r tenth graph}
+```{r tenth-graph}
 interp_data10 <- interpolate_lines(data10)
 
 plot10 <- ggplot() +
-  # Add horizontal gridlines
   geom_hline(yintercept = seq(0, 50, 10), color = "lightgray", linewidth = 0.3) +
-  
-  # Add smooth gradient lines for each job
   geom_line(data = interp_data10, aes(x = Years, y = Employed, group = Jobs, color = as.numeric(Gender)), linewidth = 1.2) +
-  
-  # Add original points using data1
   geom_point(data = data10, aes(x = Years, y = Employed, color = as.numeric(Gender)), size = 3) +
-  
-  # Use gradient color scale for Gender
-  scale_color_gradientn(
-    colors = c("red", "pink", "grey", "#8cdde3", "#2e86c1"),
-    name = "Gender"
-  ) +
-  
-  # Customize x and y axes
-  scale_x_continuous(breaks = c(1980, 2012)) +  
+  gender_color_scale +
+  scale_x_continuous(breaks = c(1980, 2012)) +
   scale_y_continuous(
-    breaks = seq(0, 80, 10),    
+    breaks = seq(0, 80, 10),
     limits = c(0, 90),
     labels = c("0", "10", "20", "30", "40", "50", "", "", ""),
-    position = "right"  # Y-axis labels on the right
+    position = "right"
   ) +
-  
   labs(x = "- 62 jobs\nMachine\noperators and\nassemblers") +
-  
-  # Minimal theme for cleaner visuals
-  theme_minimal() +  
+  base_theme +
   theme(
-    panel.grid.major.x = element_blank(),  
-    panel.grid.minor = element_blank(),    
-    panel.grid.major.y = element_blank(), 
-    legend.position = "none",              
-    axis.text.y = element_text(size = 10, color = "black"),
     axis.text.x = element_blank(),
-    axis.title.y = element_blank(),
-    axis.title = element_text(size = 12)
+    axis.text.y = element_text(size = 10, color = "black")
   )
 ```
 
@@ -623,7 +444,7 @@ Another challenging aspect was the creation of the custom legend plot featured i
 
 To replicate the original design, I first created the data needed for the plot and assigned colors to fill each segment of the bar. Then, I constructed a horizontal segmented bar plot, adding black divider lines between each segment to closely resemble the style of the original graph. 
 
-```{r custom legend plot}
+```{r custom-legend-plot}
 # Create the custom legend data
 custom_legend <- data.frame(
   x = seq(10, 90, by = 20),  # Midpoints of the segments
@@ -680,7 +501,7 @@ custom_legend <- ggplot() +
 ### Final adjustments
 Now, we can enhance the graph by adding the missing text to the custom legend. This step ensures that the legend is not only visually aligned with the main graph but also provides all the text information that are visible in the original graph. 
 
-```{r final adjustments}
+```{r final-adjustments}
 
 semi_final_combined_plot <- ggdraw() +
   draw_plot(combined_plot, x = 0, y = 0, width = 1, height = 1) +  # Main plot
@@ -754,7 +575,7 @@ semi_final_combined_plot <- ggdraw() +
 
 Finally, we can add the title and the subtitle to the graph.
 
-```{r replica of the original graph, layout="l-page", fig.height=10.6, fig.width=19.2, preview=TRUE}
+```{r replica-of-the-original graph, layout="l-page", fig.height=10.6, fig.width=19.2, preview=TRUE}
 
  final_combined_plot <- semi_final_combined_plot +
   draw_text("The types of jobs that pay middle-class wages — between $40,000\n and $80,000 in 2014 dollars — have shifted since 1980. Fewer of\n these positions are in male-dominated production occupations,\n while a greater share are in workplaces more open to women.",
@@ -803,11 +624,10 @@ Since some job names were too long and cluttered the visualizations, I used case
 
 By the end, I had a clean and well-organized dataset called data_growth with shortened job names, their sectors, and their percentage growth rates.
 
-```{r, echo=FALSE}
+```{r remodelling_excel_file}
 # Define the file path
-file <- "C:/Users/marco/OneDrive/Desktop/Data Visualization - I sem/Project - The changing nature of middle-class job/Changing nature of middle class.xlsx"
-```
-```{r remodelling the excel file}
+file <- "middle_class.xlsx"
+
 # Get all sheet names
 sheet_names <- excel_sheets(file)
 
@@ -862,7 +682,7 @@ data_growth <- data_growth |>
 
 I've started with a basic horizontal lollipop chart, representing the percentage growth for each job from 1980 to 2012. For each job, I drew a line connecting the baseline (0%) to its growth percentage. The job names are displayed along the x-axis, rotated vertically for better readability. I have added the color to the line and to the points of the chart to show the growth or the decrease of the number of jobs in that field.
 
-```{r alternative plot, ,layout="l-page", fig.height=10.6, fig.width=19.2 }
+```{r alternative-plot, ,layout="l-page", fig.height=10.6, fig.width=19.2 }
 lollipop_base <- ggplot(data_growth) +
   geom_segment(aes(x = reorder(Jobs, -Growth_Percentage),  
                    xend = reorder(Jobs, -Growth_Percentage),
@@ -889,7 +709,7 @@ lollipop_base
 
 I have redifine a little the chart. Now the y-axis gridlines are displayed at 50% intervals, ranging from -100% to 500%, to improve clarity and allow viewers to easily interpret the data. Unnecessary x-axis gridlines have been removed to minimize distractions, ensuring the focus remains on the job growth trends and their respective percentages.
 
-```{r improvements, ,layout="l-page", fig.height=10.6, fig.width=19.2}
+```{r improvements, layout="l-page", fig.height=10.6, fig.width=19.2}
 lollipop_improvement1 <- lollipop_base +
   theme(
     panel.grid.major.x = element_blank(),  
@@ -911,20 +731,20 @@ And for last i added the original title to the alternative graph.
 lollipop_final <- ggdraw() +
   draw_plot(lollipop_improvement1, x = 0, y = 0, width = 1, height = 0.8) +
   draw_text("The Changing Nature\nof Middle-Class Jobs", 
-            x = 0.5, y = 0.93,  
+            x = 0.5, y = 0.95,  
             size = 40,     
             family = "serif", 
             fontface = "bold", 
             hjust = 0.5,        
             lineheight = 0.9) + 
   draw_text("By MARCO BOSO. 01, 2025", 
-            x = 0.5, y = 0.86,  
+            x = 0.5, y = 0.88,  
             size = 13,     
             family = "serif", 
             hjust = 0.5) +      
   draw_text("The percentage growth of jobs that pay middle-class wages has varied significantly since 1980.\nThis chart highlights the jobs that have grown the most and those that have faced the greatest decline over this period.",
-            x = 0.5, y = 0.81,  
-            size = 19,     
+            x = 0.5, y = 0.83,  
+            size = 18,     
             family = "serif", 
             fontface = "plain",  
             hjust = 0.5)        
@@ -933,9 +753,4 @@ lollipop_final
 
 ```
 Even though this chart does not delve into the detailed dynamics of occupational changes within middle-class jobs, I believe it offers a fresh perspective on the issue. By focusing on the overall percentage growth or decline of individual jobs, it highlights the broader shifts in employment patterns over time.
-
-Distill is a publication format for scientific and technical writing, native to the web.
-
-Learn more about using Distill at <https://rstudio.github.io/distill>.
-
 
