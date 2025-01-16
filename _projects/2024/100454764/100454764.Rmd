@@ -1,21 +1,1052 @@
 ---
-title: "The Title of my Article"
+title: "What Powers France?"
 description: |
-  A short description of the post.
-author: My name
-date: 2024-12-16
+  A comprehensive visualization of power plants in France.
+categories: "2024"
+author: Estela Moral
+date: "`r Sys.Date()`"
 output:
   distill::distill_article:
     self_contained: false
+    toc: true
+    fig_width: 9.75
+    fig_height: 8
 ---
 
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(out.width = "100%", fig.align = "center")
 ```
 
-Distill is a publication format for scientific and technical writing, native to the web.
+For my final project I decided to replicate this map created by the Twitter user [@researchremora](https://x.com/researchremora/status/1847607032402075945), known for the amazing maps and visualizations he shares on the platform.
 
-Learn more about using Distill at <https://rstudio.github.io/distill>.
+![Original map by @researchremora](images/GaQEh1XXkAAE3zd.jfif){.external width="100%"}
 
+The maps shows the different types of power plants located in France based on their primary fuel. The legend also displays the total energetic capacity of each fuel in megawatts (mw). Additionally, this map provides some insightful geographical information about the country. For instance, we can clearly see that the southern region of France is where they enjoy the most hours of sunlight. Similarly, the northern region of the country (specially on the coast) is where the strongest winds are most prevalent. We can even infer where the Pyrenees and the Alps are located just looking at the hydro plants, since most dams are placed in mountainous areas because of their high elevation and narrow valleys.
+
+The original author of the map used the `rayshader` package to create it, but for this project I will attempt to replicate it using only `ggplot2` and other related packages.
+
+## Frist steps
+
+First of all, I will load the packages that we will use for this project.
+
+### Packages
+
+```{r}
+library(tidyverse) # Includes several packages that we will use, such as 
+                   # dyplr (for cleaning and handling the data efficiently), 
+                   # readr (import cvs files), and 
+                   # ggplot2 (our main data visualization tool)
+library(sf) # Working with coordinates (longitude & latitude)
+library(giscoR) # Retrieve France map
+library(patchwork) # Arranging multiple plots
+library(ggshadow) # Adding glow and other effects to the data points
+library(sysfonts) # Loading Google Fonts into R
+library(showtext) # Managing fonts
+library(ggfx) # Adding shadows and different filters on ggplot2 layers
+```
+
+### Import and filter the data
+
+Now I fill read the csv file we will use for our visualization from the [Global Power Plant Database](https://datasets.wri.org/datasets/global-power-plant-database?_gl=1*1k7nule*_gcl_au*ODU1MjI4NzM4LjE3Mjk2Njc5OTA.&map=eyJ2aWV3U3RhdGUiOnsibGF0aXR1ZGUiOjAsImxvbmdpdHVkZSI6MCwiem9vbSI6MywiYmVhcmluZyI6MCwicGl0Y2giOjAsInBhZGRpbmciOnsidG9wIjowLCJib3R0b20iOjAsImxlZnQiOjAsInJpZ2h0IjowfX0sImJhc2VtYXAiOiJsaWdodCIsImJvdW5kYXJpZXMiOmZhbHNlLCJsYWJlbHMiOiJkYXJrIiwiYWN0aXZlTGF5ZXJHcm91cHMiOlt7ImRhdGFzZXRJZCI6IjUzNjIzZGZkLTNkZjYtNGYxNS1hMDkxLTY3NDU3Y2RiNTcxZiIsImxheWVycyI6WyIyYTY5NDI4OS1mZWM5LTRiZmUtYTZkMi01NmMzODY0ZWMzNDkiXX1dLCJib3VuZHMiOnsiYmJveCI6bnVsbCwib3B0aW9ucyI6e319LCJsYXllcnNQYXJzZWQiOltbIjJhNjk0Mjg5LWZlYzktNGJmZS1hNmQyLTU2YzM4NjRlYzM0OSIseyJ2aXNpYmlsaXR5Ijp0cnVlLCJhY3RpdmUiOnRydWUsIm9wYWNpdHkiOjEsInpJbmRleCI6MTF9XV19).
+
+```{r}
+power_plants_df <- read_csv(file = "global_power_plant_database.csv")
+```
+
+This database, created by the [World Resources Institute (WRI)](https://datasets.wri.org/), collects different information about existing power plants around the world.
+
+```{r}
+head(power_plants_df)
+```
+
+Since we are only interested in the power plants of France, we need to filter the data by creating a separate dataframe for each fuel type:
+
+```{r}
+fra_total <- power_plants_df |> filter(country == "FRA")
+fra_coal <- power_plants_df |> filter(country == "FRA",
+                                      primary_fuel == "Coal")
+fra_gas <- power_plants_df |> filter(country == "FRA",
+                                      primary_fuel == "Gas")
+fra_hydro <- power_plants_df |> filter(country == "FRA",
+                                      primary_fuel == "Hydro")
+fra_nuclear <- power_plants_df |> filter(country == "FRA",
+                                      primary_fuel == "Nuclear")
+fra_oil <- power_plants_df |> filter(country == "FRA",
+                                      primary_fuel == "Oil")
+fra_solar <- power_plants_df |> filter(country == "FRA",
+                                      primary_fuel == "Solar")
+fra_wind <- power_plants_df |> filter(country == "FRA",
+                                      primary_fuel == "Wind")
+fra_bio <- power_plants_df |> filter(country == "FRA",
+                                      primary_fuel == "Biomass")
+```
+
+The idea is to create a map for each fuel type, as well as a map that includes all the different power plants, so later we can arrange them together using the `patchwork` package.
+
+The next step is retrieving the France map from the `giscoR` package.
+
+```{r}
+FR <- gisco_get_countries(country = "FRA")
+```
+
+And finally, before getting started with our visualization, I will set the color palette for our data points, as well as the font we will use for the title and the legend of our plot, but you can customize it to your liking.
+
+```{r}
+fuel_colors <- c("Coal" = "#FDA5E2",
+                 "Gas" = "#FDBF63",
+                 "Hydro" = "#91DAF7",
+                 "Nuclear" = "#D69FFF",
+                 "Oil" = "#FF8585",
+                 "Solar" = "#FFF575",
+                 "Wind" = "#8AEEBE",
+                 "Biomass" = "#B7FF81")
+```
+
+```{r}
+sysfonts::font_add_google("Audiowide", family = "audiowide")
+showtext::showtext_auto()
+```
+
+## Plotting the maps
+
+### Total
+
+To begin with, I will plot the map that includes all the different types of power plants. First, we need to plot the map of France using the `geom_sf` function from `ggplot2`. It is important to adjust the coordinates properly with `coord_sf` because France has many overseas territories in other continents that we will not include in our visualization for the sake of simplicity. I also added a slight shadow effect to the borders of France using the `with_shadow` function from the `ggshadow` package. This way we can distinguish them better from the dark background.
+
+```{r}
+total_plants <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),     
+        plot.background = element_rect(fill = "#1A1E29", 
+                                       color = NA),
+        legend.position = "none") +
+   coord_sf(xlim = c(-6, 10), ylim  = c(41, 52))
+
+total_plants
+```
+
+Now we can add the data points using `geom_glowpoint` from the `ggfx` package. It works the same as `geom_point` from `ggplot2`, but it adds a glow effect that you can adjust with different arguments such as `shadowsize` or `shadowalpha`. Considering that we are plotting points into a map, we need to assign our $x$ and $y$ values to longitude and latitude respectively. We will color each point using the `primary_fuel` color palette we set at the beginning, specifying it in our aesthetics and creating our own color scale with `scale_color_manual`.
+
+```{r}
+total_plants <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),     
+        plot.background = element_rect(fill = "#1A1E29", 
+                                       color = NA),
+        legend.position = "none") +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  geom_glowpoint(data = fra_total, aes(x = longitude, 
+                                       y = latitude, 
+                                       color = primary_fuel),
+                 size = 0.25,
+                 shadowsize = 0.32,
+                 shadowalpha = 0.005) +
+  scale_color_manual(values = fuel_colors,
+                     name = NULL)
+  
+
+total_plants
+```
+
+After that, we can add our legend with the `annotate()` function
+
+```{r}
+total_plants <- total_plants + annotate("text", x = -3.6, y = 41.5, 
+           label = "~64,000 MW", color = fuel_colors["Nuclear"], 
+           size = 4.5, family = "audiowide") +
+  annotate("text", x = -3.6, y = 41, 
+           label = "NUCLEAR", color = fuel_colors["Nuclear"], 
+           size = 8.5, family = "audiowide") +
+  annotate("text", x = 0.45, y = 41.34, 
+           label = "~20,000 MW", color = fuel_colors["Hydro"], 
+           size = 3.25, family = "audiowide") +
+  annotate("text", x = 0.45, y = 40.95, 
+           label = "HYDRO", color = fuel_colors["Hydro"], 
+           size = 6.3, family = "audiowide") +
+  annotate("text", x = 3.1, y = 41.2, 
+           label = "~9,000 MW", color = fuel_colors["Wind"], 
+           size = 2.5, family = "audiowide") +
+  annotate("text", x = 3.1, y = 40.95, 
+           label = "WIND", color = fuel_colors["Wind"], 
+           size = 4.5, family = "audiowide") +
+  annotate("text", x = 4.65, y = 40.92, 
+           label = "GAS", color = fuel_colors["Gas"], 
+           size = 3.2, family = "audiowide") +
+  annotate("text", x = 6.1, y = 40.92, 
+           label = "SOLAR", color = fuel_colors["Solar"], 
+           size = 3.19, family = "audiowide") +
+   annotate("text", x = 7.5, y = 40.92, 
+            label = "OIL", color = fuel_colors["Oil"], 
+            size = 3.2, family = "audiowide") +
+   annotate("text", x = 8.68, y = 40.92, 
+            label = "COAL", color = fuel_colors["Coal"], 
+            size = 3, family = "audiowide") + 
+   annotate("text", x = 10.25, y = 40.92, 
+            label = "BIOMASS", color = fuel_colors["Biomass"], 
+            size = 2.5, family = "audiowide") 
+
+total_plants
+```
+
+In the following code chunks I will repeat the same process to plot a different map for each fuel type.
+
+### Coal
+
+```{r}
+coal_plants <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),     
+        plot.background = element_rect(fill = "#1A1E29", 
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_coal, aes(x = longitude, 
+                                      y = latitude, 
+                                      color = primary_fuel),
+                 size = 0.25,
+                 shadowsize = 0.32,
+                 shadowalpha = 0.005) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "COAL", 
+           color = fuel_colors["Coal"], size = 4.7, family = "audiowide")
+
+coal_plants
+```
+
+### Gas
+
+```{r}
+gas_plants <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(),
+        panel.border = element_blank(),
+        plot.background = element_rect(fill = "#1A1E29", 
+                                       color = NA),
+        legend.position = "none",
+        text = element_text(family = "audiowide")) +
+  geom_glowpoint(data = fra_gas, aes(x = longitude, 
+                                     y = latitude, 
+                                     color = primary_fuel),
+                 size = 0.25,
+                 shadowsize = 0.32,
+                 shadowalpha = 0.005) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "GAS", 
+           color = fuel_colors["Gas"], size = 4.7, family = "audiowide")
+
+gas_plants
+```
+
+### Hydro
+
+```{r}
+hydro_plants <- ggplot() +
+ with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+             sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(),
+        panel.border = element_blank(),
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_hydro, aes(x = longitude,
+                                       y = latitude,
+                                       color = primary_fuel),
+                 size = 0.25,
+                 shadowsize = 0.32,
+                 shadowalpha = 0.005) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "HYDRO", color = fuel_colors["Hydro"], size = 4.7, family = "audiowide")
+
+hydro_plants
+```
+
+### Nuclear
+
+```{r}
+nuclear_plants <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(),
+        panel.border = element_blank(),
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_nuclear, aes(x = longitude,
+                                         y = latitude,
+                                         color = primary_fuel),
+                 size = 0.25, 
+                 shadowsize = 0.32,
+                 shadowalpha = 0.005) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "NUCLEAR", 
+           color = fuel_colors["Nuclear"], size = 4.7, family = "audiowide")
+
+nuclear_plants
+```
+
+### Oil
+
+```{r}
+oil_plants <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(),
+        panel.border = element_blank(),
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_oil, aes(x = longitude, 
+                                     y = latitude, 
+                                    color = primary_fuel),
+                 size = 0.25,
+                 shadowsize = 0.32,
+                 shadowalpha = 0.005) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "OIL", 
+           color = fuel_colors["Oil"], size = 4.7, family = "audiowide")
+
+oil_plants
+```
+
+### Solar
+
+```{r}
+solar_plants <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(),
+        panel.border = element_blank(),
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_solar, aes(x = longitude, 
+                                       y = latitude, 
+                                       color = primary_fuel),
+                 size = 0.25,
+                 shadowsize = 0.32,
+                 shadowalpha = 0.005) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "SOLAR", 
+           color = fuel_colors["Solar"], size = 4.7, family = "audiowide")
+
+solar_plants
+```
+
+### Wind
+
+```{r}
+wind_plants <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),     
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_wind, aes(x = longitude, 
+                                      y = latitude,
+                                      color = primary_fuel),
+                 size = 0.25,
+                 shadowsize = 0.32,
+                 shadowalpha = 0.005) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "WIND", 
+           color = fuel_colors["Wind"], size = 4.7, family = "audiowide")
+
+wind_plants
+```
+
+### Biomass
+
+```{r}
+bio_plants <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),     
+        plot.background = element_rect(fill = "#1A1E29",
+                                   color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_bio, aes(x = longitude,
+                                     y = latitude, 
+                                     color = primary_fuel),
+                 size = 0.25,
+                 shadowsize = 0.32,
+                 shadowalpha = 0.005) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "BIOMASS", 
+           color = fuel_colors["Biomass"], size = 4.7, family = "audiowide")
+
+bio_plants
+```
+
+## Arrange map & title
+
+As the last step, we can arrange all the maps together using `plot_layout()`from `patchwork` package, and finally add the title.
+
+```{r preview = TRUE}
+# Specify the layout:
+layout <- "
+AAB
+AAC
+DEF
+GHI
+"
+
+# Arrange the maps:
+arranged_maps <- total_plants + nuclear_plants + hydro_plants + oil_plants + 
+  solar_plants + wind_plants + coal_plants + bio_plants + gas_plants +
+  plot_layout(design = layout)
+
+# Add the title:
+final_map <- arranged_maps + plot_annotation(
+  theme = theme(plot.background = element_rect(fill = "#1A1E29",
+                                               color = NA),
+                plot.caption = element_text(color = "white",
+                                            size = 50,
+                                            hjust = 0.5, vjust = 0.5,
+                                            margin = unit(c(0.3, 0, 0.3, 0), "cm"),
+                                            family = "audiowide")),
+  caption = "WHAT POWERS FRANCE?")
+
+final_map
+```
+
+## Alternative map
+
+The map we just created shows in a clear and straightforward way the wide variety of power plants that exist in France. However it can be a bit misleading because it does not reflect which are main types of energy that actually fuel the country. Looking solely at the map one might think that sunlight is the main energy source, since solar plants are the most numerous, but if we take a closer look and read the legend, we can see that nuclear power plants are the ones with the highest energy capacity (64,000 MW). To avoid this kind of misunderstandings, I have come up with an alternative way to plot the maps: adjusting the size of each data point to reflect the actual energy capacity of each plant.
+
+### Version 2.0.
+
+In order to do that we just need to adjust the `size` parameter into the aesthetics, linking it to the `capacity_mw` variable. We can also add some transparency to see the points better when overplotting happens. 
+
+(It is important to note that the `shadowsize` parameter cannot be mapped to the `capacity_mw` variable because of how the `geom_glowpoint()` function works, so we must adjust it manually).
+
+```{r}
+total_plants_2.0 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(), 
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_total, aes(x = longitude, 
+                                       y = latitude,
+                                       color = primary_fuel,
+                                       size = capacity_mw, # Adjust the size to capacity_ww
+                                       alpha = 0.3), # Add some transparency to help visualization
+                 shadowsize = 1,
+                 shadowalpha = 0.005) +
+  scale_color_manual(values = fuel_colors, name = NULL) +
+  coord_sf(xlim = c(-6, 10), ylim = c (41, 52)) 
+
+total_plants_2.0
+```
+
+If we tweak the same parameters in the rest of the maps the result is as follows: 
+
+```{r}
+#| echo: false
+
+# TOTAL PLANTS
+
+total_plants_2.0 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(), 
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_total, aes(x = longitude, 
+                                       y = latitude,
+                                       color = primary_fuel,
+                                       size = capacity_mw, # Adjust the size to capacity_ww
+                                       alpha = 0.3), # Add some transparency to help visualization
+                 shadowsize = 1,
+                 shadowalpha = 0.005) +
+  scale_color_manual(values = fuel_colors, name = NULL) +
+  coord_sf(xlim = c(-6, 10), ylim = c (41, 52)) +
+  annotate("text", x = -3.6, y = 41.5, label = "~64,000 MW", 
+           color = fuel_colors["Nuclear"], 
+           size = 4.5, family = "audiowide") +
+  annotate("text", x = -3.6, y = 41, 
+           label = "NUCLEAR", color = fuel_colors["Nuclear"], 
+           size = 8.5, family = "audiowide") +
+  annotate("text", x = 0.45, y = 41.34, 
+           label = "~20,000 MW", color = fuel_colors["Hydro"], 
+           size = 3.25, family = "audiowide") +
+  annotate("text", x = 0.45, y = 40.95, 
+           label = "HYDRO", color = fuel_colors["Hydro"], 
+           size = 6.3, family = "audiowide") +
+  annotate("text", x = 3.1, y = 41.2, 
+           label = "~9,000 MW", color = fuel_colors["Wind"], 
+           size = 2.5, family = "audiowide") +
+  annotate("text", x = 3.1, y = 40.95, 
+           label = "WIND", color = fuel_colors["Wind"], 
+           size = 4.5, family = "audiowide") +
+  annotate("text", x = 4.65, y = 40.92, 
+           label = "GAS", color = fuel_colors["Gas"], 
+           size = 3.2, family = "audiowide") +
+  annotate("text", x = 6.1, y = 40.92, 
+           label = "SOLAR", color = fuel_colors["Solar"], 
+           size = 3.19, family = "audiowide") +
+  annotate("text", x = 7.5, y = 40.92, 
+           label = "OIL", color = fuel_colors["Oil"], 
+           size = 3.2, family = "audiowide") +
+  annotate("text", x = 8.68, y = 40.92, 
+           label = "COAL", color = fuel_colors["Coal"], 
+           size = 3, family = "audiowide") + 
+  annotate("text", x = 10.25, y = 40.92, 
+           label = "BIOMASS", color = fuel_colors["Coal"], 
+           size = 2.5, family = "audiowide")
+
+## COAL
+
+coal_plants_2.0 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(),
+        panel.border = element_blank(),     
+        plot.background = element_rect(fill = "#1A1E29", 
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_coal, aes(x = longitude, 
+                                      y = latitude,
+                                      color = primary_fuel,
+                                      size = capacity_mw,
+                                      alpha = 0.3),
+                 shadowsize = 1.28,
+                 shadowalpha = 0.02) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "COAL", 
+           color = fuel_colors["Coal"], size = 4.7, family = "audiowide")
+
+## GAS
+
+gas_plants_2.0 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),     
+        plot.background = element_rect(fill = "#1A1E29", 
+                                       color = NA),
+        legend.position = "none",
+        text = element_text(family = "audiowide")) +
+  geom_glowpoint(data = fra_gas, aes(x = longitude,
+                                     y = latitude,
+                                     color = primary_fuel,
+                                     size = capacity_mw,
+                                     alpha = 0.3),
+                 shadowsize = 1.25,
+                 shadowalpha = 0.015) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim=c(-6, 10), ylim=c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "GAS", 
+           color = fuel_colors["Gas"], size = 4.7, family = "audiowide")
+
+## HYDRO
+
+hydro_plants_2.0 <- ggplot() +
+ with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(), 
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_hydro, aes(x = longitude, 
+                                       y = latitude, 
+                                       color = primary_fuel,
+                                       size = capacity_mw,
+                                       alpha = 0.3),
+                 shadowsize = 1,
+                 shadowalpha = 0.002) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "HYDRO", 
+           color = fuel_colors["Hydro"], size = 4.7, family = "audiowide")
+
+
+## NUCLEAR
+
+nuclear_plants_2.0 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(),
+        panel.border = element_blank(),
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_nuclear, aes(x = longitude, 
+                                         y = latitude, 
+                                         color = primary_fuel,
+                                         size = capacity_mw,
+                                         alpha = 0.3),
+                 shadowsize = 1.25,
+                 shadowalpha = 0.018) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim=  c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "NUCLEAR", 
+           color = fuel_colors["Nuclear"], size = 4.7, family = "audiowide")
+
+## OIL
+
+oil_plants_2.0 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),     
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_oil, aes(x = longitude,
+                                     y = latitude,
+                                     color = primary_fuel,
+                                     size = capacity_mw,
+                                     alpha = 0.3),
+                 shadowsize = 1.3,
+                 shadowalpha = 0.018) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim=c(-6, 10), ylim=c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "OIL", 
+           color = fuel_colors["Oil"], size = 4.7, family = "audiowide")
+
+## SOLAR
+
+solar_plants_2.0 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),   
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_solar, aes(x = longitude,
+                                       y = latitude,
+                                       color = primary_fuel,
+                                       size = capacity_mw,
+                                       alpha = 0.3),
+                 shadowsize = 1,
+                 shadowalpha = 0.002) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "SOLAR", 
+           color = fuel_colors["Solar"], size = 4.7, family = "audiowide")
+
+## WIND
+
+wind_plants_2.0 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+    panel.border = element_blank(),     
+    plot.background = element_rect(fill = "#1A1E29",
+                                   color = NA),
+    legend.position = "none") +
+  geom_glowpoint(data = fra_wind, aes(x = longitude,
+                                      y = latitude,
+                                      color = primary_fuel,
+                                      size = capacity_mw,
+                                      alpha = 0.3),
+                 shadowsize = 1,
+                 shadowalpha = 0.002) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "WIND", 
+           color = fuel_colors["Wind"], size = 4.7, family = "audiowide")
+
+## BIOMASS
+
+bio_plants_2.0 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(),
+        panel.border = element_blank(),
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_bio, aes(x = longitude,
+                                     y = latitude,
+                                     color = primary_fuel,
+                                     size = capacity_mw,
+                                     alpha = 0.3),
+                 shadowsize = 1.25,
+                 shadowalpha = 0.015) +
+  scale_color_manual(values = fuel_colors) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "BIOMASS", 
+           color = fuel_colors["Biomass"], size = 4.7, family = "audiowide")
+
+## ARRANGE MAPS & TITLE
+
+arranged_maps_2.0 <- total_plants_2.0 + nuclear_plants_2.0 + hydro_plants_2.0 +
+  oil_plants_2.0 + solar_plants_2.0 + wind_plants_2.0 + coal_plants_2.0 + 
+  bio_plants_2.0 + gas_plants_2.0 + 
+  plot_layout(design = layout)
+
+final_map_2.0 <- arranged_maps_2.0 + 
+  plot_annotation(theme = theme(plot.background = element_rect(fill = "#1A1E29",
+                                                               color = NA),
+                                plot.caption = element_text(color = "white",
+                                                            size = 50, 
+                                                            hjust = 0.5, vjust = 0.5, 
+                                                            margin = unit(c(0.3, 0, 0.3, 0), "cm"),
+                                                            family = "audiowide")),
+                  caption = "WHAT POWERS FRANCE?")
+
+final_map_2.0
+```
+
+
+### Version 2.1.
+
+Despite adding the alpha, there is still some overplotting issues, specially in the wind and hydro power plants. For this reason I decided to change the scale that ggplot uses to calculate the size of each data point adding the `scale_size_area(max_size = ... )` at the end of the code. This allows me to limit the maximum size of the biggest point, plotting the rest of them accordingly. Changing this parameter I am able to make all of the points look proportionally smaller so they do not overlap as much with eachother.
+
+```{r}
+total_plants_2.1 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(), 
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_total, aes(x = longitude, 
+                                       y = latitude,
+                                       color = primary_fuel,
+                                       size = capacity_mw, 
+                                       alpha = 0.3), 
+                 shadowsize = 1,
+                 shadowalpha = 0.005) +
+  scale_color_manual(values = fuel_colors, name = NULL) +
+  scale_size_area(max_size = 5) + # Limits maximum size of the points
+  coord_sf(xlim = c(-6, 10), ylim = c (41, 52)) 
+
+total_plants_2.1
+```
+
+Now I repeat the same in the rest of the maps
+
+```{r}
+#| echo: false
+
+## TOTAL PLANTS
+
+total_plants_2.1 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"), 
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(
+    data = fra_total, aes(x = longitude, 
+                          y = latitude, 
+                          color = primary_fuel,
+                          size = capacity_mw,
+                          alpha = 0.3),
+    shadowsize = 1,
+    shadowalpha = 0.005) +
+  scale_color_manual(values = fuel_colors, name = NULL) +
+  coord_sf(xlim = c(-6, 10), ylim  = c(41, 52)) +
+  annotate("text", x = -3.6, y = 41.5, 
+           label = "~64,000 MW", color = fuel_colors["Nuclear"], 
+           size = 4.5, family = "audiowide") +
+  annotate("text", x = -3.6, y = 41, 
+           label = "NUCLEAR", color = fuel_colors["Nuclear"], 
+           size = 8.5, family = "audiowide") +
+  annotate("text", x = 0.45, y = 41.34, 
+           label = "~20,000 MW", color = fuel_colors["Hydro"], 
+           size = 3.25, family = "audiowide") +
+  annotate("text", x = 0.45, y = 40.95, 
+           label = "HYDRO", color = fuel_colors["Hydro"], 
+           size = 6.3, family = "audiowide") +
+  annotate("text", x = 3.1, y = 41.2, 
+           label = "~9,000 MW", color = fuel_colors["Wind"], 
+           size = 2.5, family = "audiowide") +
+  annotate("text", x = 3.1, y = 40.95, 
+           label = "WIND", color = fuel_colors["Wind"], 
+           size = 4.5, family = "audiowide") +
+  annotate("text", x = 4.65, y = 40.92, 
+           label = "GAS", color = fuel_colors["Gas"], 
+           size = 3.2, family = "audiowide") +
+  annotate("text", x = 6.1, y = 40.92, 
+           label = "SOLAR", color = fuel_colors["Solar"], 
+           size = 3.19, family = "audiowide") +
+   annotate("text", x = 7.5, y = 40.92, 
+           label = "OIL", color = fuel_colors["Oil"], 
+           size = 3.2, family = "audiowide") +
+   annotate("text", x = 8.68, y = 40.92, 
+           label = "COAL", color = fuel_colors["Coal"], 
+           size = 3, family = "audiowide") + 
+  annotate("text", x = 10.25, y = 40.92, 
+           label = "BIOMASS", color = fuel_colors["Coal"], 
+           size = 2.5, family = "audiowide")
+
+## COAL
+
+coal_plants_2.1 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"), 
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),     
+        plot.background = element_rect(fill = "#1A1E29", 
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_coal, aes(x = longitude, 
+                                      y = latitude, 
+                                      color = primary_fuel,
+                                      size = capacity_mw,
+                                      alpha = 0.3),
+                 shadowsize = 1.28,
+                 shadowalpha = 0.02) +
+  scale_color_manual(values = fuel_colors) +
+  scale_size_area(max_size = 5) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "COAL", 
+           color = fuel_colors["Coal"], size = 4.7, 
+           family = "audiowide")
+
+## GAS 
+
+gas_plants_2.1 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),     
+        plot.background = element_rect(fill = "#1A1E29", 
+                                       color = NA),
+        legend.position = "none",
+        text = element_text(family = "audiowide")) +
+  geom_glowpoint(data = fra_gas, aes(x = longitude, 
+                                     y = latitude, 
+                                     color = primary_fuel,
+                                     size = capacity_mw,
+                                     alpha = 0.3),
+                 shadowsize = 1,
+                 shadowalpha = 0.015) +
+  scale_color_manual(values = fuel_colors) +
+  scale_size_area(max_size = 5) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "GAS", 
+           color = fuel_colors["Gas"], size = 4.7, 
+           family = "audiowide")
+
+## HYDRO
+
+hydro_plants_2.1 <- ggplot() +
+ with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+             sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(),
+        panel.border = element_blank(),
+        plot.background = element_rect(fill = "#1A1E29", 
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_hydro, aes(x = longitude, 
+                                       y = latitude, 
+                                       color = primary_fuel,
+                                       size = capacity_mw,
+                                       alpha = 0.3),
+                 shadowsize = 0.75,
+                 shadowalpha = 0.002) +
+  scale_color_manual(values = fuel_colors) +
+  scale_size_area(max_size = 5) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "HYDRO", 
+           color = fuel_colors["Hydro"], size = 4.7, 
+           family = "audiowide")
+
+## NUCLEAR 
+
+nuclear_plants_2.1 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),     
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_nuclear, aes(x = longitude,
+                                         y = latitude, 
+                                         color = primary_fuel,
+                                         size = capacity_mw,
+                                         alpha = 0.3),
+                 shadowsize = 1.25,
+                 shadowalpha = 0.018) +
+  scale_color_manual(values = fuel_colors) +
+  scale_size_area(max_size = 5) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "NUCLEAR", 
+           color = fuel_colors["Nuclear"], size = 4.7, 
+           family = "audiowide")
+
+## OIL 
+
+oil_plants_2.1 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),     
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_oil, aes(x = longitude, 
+                                     y = latitude, 
+                                     color = primary_fuel,
+                                     size = capacity_mw,
+                                     alpha = 0.3),
+                 shadowsize = 1.3,
+                 shadowalpha = 0.018) +
+  scale_color_manual(values = fuel_colors) +
+  scale_size_area(max_size = 5) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "OIL", 
+           color = fuel_colors["Oil"], size = 4.7, 
+           family = "audiowide")
+
+## SOLAR
+
+solar_plants_2.1 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),     
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_solar, aes(x = longitude, 
+                                       y = latitude, 
+                                       color = primary_fuel,
+                                       size = capacity_mw,
+                                       alpha = 0.3),
+                 shadowsize = 0.75,
+                 shadowalpha = 0.002) +
+  scale_color_manual(values = fuel_colors) +
+  scale_size_area(max_size = 5) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "SOLAR", 
+           color = fuel_colors["Solar"], size = 4.7, 
+           family = "audiowide")
+
+## WIND
+
+wind_plants_2.1 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),     
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_wind, aes(x = longitude, 
+                                      y = latitude, 
+                                      color = primary_fuel,
+                                      size = capacity_mw,
+                                      alpha = 0.3),
+                 shadowsize = 1,
+                 shadowalpha = 0.002) +
+  scale_color_manual(values = fuel_colors) +
+  scale_size_area(max_size = 5) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "WIND", 
+           color = fuel_colors["Wind"], size = 4.7, 
+           family = "audiowide")
+
+## BIOMASS
+
+bio_plants_2.1 <- ggplot() +
+  with_shadow(geom_sf(data = FR, fill = "black", color = "black"),
+              sigma = 8) +
+  theme_void() + 
+  theme(panel.background = element_blank(), 
+        panel.border = element_blank(),     
+        plot.background = element_rect(fill = "#1A1E29",
+                                       color = NA),
+        legend.position = "none") +
+  geom_glowpoint(data = fra_bio, aes(x = longitude, 
+                                     y = latitude, 
+                                     color = primary_fuel,
+                                     size = capacity_mw,
+                                     alpha = 0.3),
+                 shadowsize = 1,
+                 shadowalpha = 0.015) +
+  scale_color_manual(values = fuel_colors) +
+  scale_size_area(max_size = 5) +
+  coord_sf(xlim = c(-6, 10), ylim = c(41, 52)) +
+  annotate("text", x = 2, y = 41.25, label = "BIOMASS", 
+           color = fuel_colors["Biomass"], size = 4.7, 
+           family = "audiowide")
+
+## ARRANGE MAP & TITLE
+
+arranged_maps_2.1 <- total_plants_2.1 + nuclear_plants_2.1 + 
+  hydro_plants_2.1 + oil_plants_2.1 + solar_plants_2.1 + wind_plants_2.1 + 
+  coal_plants_2.1 + bio_plants_2.1 + gas_plants_2.1 + 
+  plot_layout(design = layout)
+
+final_map_2.1 <- arranged_maps_2.1 + plot_annotation(
+  theme = theme(plot.background = element_rect(fill = "#1A1E29",
+                                               color = NA),
+                plot.caption = element_text(color = "white",
+                                            size = 50, 
+                                            hjust = 0.5, vjust = 0.5, 
+                                            margin = unit(c(0.3, 0, 0.3, 0), "cm"),
+                                            family = "audiowide")),
+  caption = "WHAT POWERS FRANCE?")
+
+final_map_2.1
+```
+
+Here is a side by side comparison of the original replication and the alternative version:
+
+```{r}
+wrap_plots(final_map, final_map_2.1)
+```
 
