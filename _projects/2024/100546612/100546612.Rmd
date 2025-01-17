@@ -1,7 +1,11 @@
 ---
 title: "Behind the numbers: comparing extreme poverty and GDP per capita by world regions"
 description: |
-  By recreating from group up a OurWorldinData chart about extreme poverty vs GDP per capita we look at the foundations of Data Visualisation techniques layer by layer. Further, this project also proposes 2 alternative representation for the original data to better understand the story behind the numbers. 
+  By recreating from group up a OurWorldinData chart about extreme poverty vs
+  GDP per capita we look at the foundations of Data Visualisation techniques
+  layer by layer. Further, this project also proposes 2 alternative
+  representation for the original data to better understand the story behin
+  the numbers.
 categories: "2024"
 author: Mafalda González-González
 date: "`r Sys.Date()`"
@@ -12,7 +16,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, fig.showtext = TRUE)
+knitr::opts_chunk$set(out.width="100%", fig.align="center", fig.showtext = TRUE)
 ```
 
 ## On Extreme poverty and GDP
@@ -32,12 +36,7 @@ Hence, to quote Max Roser, the author of this graph and corresponding article, "
 To replicate the graph, the below packages and font families were used. The fonts were retrieved, for free, from Google Fonts. The libraries are commented within the chunks they started being used.
 
 ```{r library}
-
-library(readxl) 
-library(tidyverse) 
-library(dplyr) 
-library(ggplot2)
-library(forcats)
+library(tidyverse) # readr, dplyr, ggplot2, forcats
 library(ggtext)
 library(grid)
 
@@ -54,17 +53,14 @@ showtext::showtext_auto()
 
 While OurWorldinData does normally provide a direct link to download the data used in their graphs, this specific one did not have such an option. While there is a newer, [updated version](https://ourworldindata.org/grapher/the-share-of-people-living-in-extreme-poverty-vs-gdp-per-capita) of the graph, I decided to email directly the creator, Max Roser, who indicated me to the [research done by the Organisation for Economic Co-operation and Development OECD](https://www.oecd.org/en/publications/how-was-life-volume-ii_3d96efc5-en/full-report/component-14.html#chapter-d1e59754). It used to be that the tables with the information about extreme poverty and GDP trends were easily accessible, but now one has to scan the whole article and find the tables like a needle in a hay stack.
 
-```{r data reading}
-# library(readxl)
-gdp <- read_xlsx(path = "GDP world.xlsx")
-
-poverty <- read_xlsx(path = "poverty world.xlsx")
-
+```{r data-reading}
+gdp <- read_csv("gdp_world.csv")
+poverty <- read_csv("poverty_world.csv")
 ```
 
 We have two data sets: gdp, 21 observations (years from 1820-2016 in arbitrary increases) over 10 variables (YEAR + country regions), and poverty, with 13 observations (years from 1820-2016 in arbitrary increases) over 9 variables (YEAR + country regions). We will go over the differences below, when we clean the data. First, we will make it tidy adhering to the idea one variable should be stored in one column. Hence, as the column names represet regions, we `pivot_longer` to create in both data sets a new columns where the region and the metric (GDP or extreme poverty index) is indicated. Finally, we `full_join` the data sets together and make GDP a numerical variable without spaces. We obtain a tibble with 221 observations over 4 variables: YEAR, region, GDP and poverty.
 
-```{r combine GDP and poverty}
+```{r combine-GDP-and-poverty}
 # library(tidyverse) 
 # library(dplyr) 
 
@@ -101,7 +97,7 @@ The first, and easier task, was to **clean the regions names**, as some had been
 
 In hindsight, the simplest solution would have been to clean the names before merging the data sets. However, as one does learn from their mistakes, I have left my creative, but extremely unnecessarily complicated approach to the task at hand. The idea was to extract the data that contained the wrong names into a "phantom data set", clean the names, merge the poverty and GDP information, and the re-join that phantom data set into the original data set.
 
-```{r data cleaning}
+```{r data-cleaning}
 # check name disparities
 unique(world$region)
 
@@ -151,7 +147,7 @@ world <- clean_world
 
 The second, also easy, task was to **rename** the "Western Offshoots" as our goal regions "Australia, New Zealand, USA and Canada" and World as "Global Average." This was not strictly necessary as the annotations of the regions in the final graph will be done manually, but it did improve clarity during the replication process.
 
-```{r recoding names}
+```{r recoding-names}
 # recode names 
 
 world <- world |> 
@@ -163,7 +159,7 @@ world <- world |>
 
 Finally, the last, and most time-consuming step in the cleaning process was **supplementing the data**. The hardship with this step was not its execution per se, but figuring out which data to use for the supplementation. The original article that provided the excel tables about the world GDP and poverty trends also included tables with information about 25 countries in both these metrics. Therefore, different questions arose: does GDP need supplementation, as it already has some information for its "Global Average" region? Is the supplementation done with the means of the observations out of 25 countries? Or with the means of the observations of the countries already grouped in regions? Or maybe a mix of both? These questions were answered by trial and error, as OurWorldinData had given me no information thereof nor was there any to find in the original source. Hence, I tried different approaches and looked at its impact in later stages of the replication process. It seemed to me that [the mean of the world regions had been used for supplementing the observations both for poverty and GDP]{.underline}, while excluding the already existing GDP information for the calculation of the average of the regions.
 
-```{r data supplementing}
+```{r data-supplementing}
 # calculate means for GDP and poverty by YEAR, excluding "World"
 world_mean <- world |> 
   filter(region != "Global Average") |> 
@@ -214,7 +210,7 @@ To understand how the data behaves the first step is to create **simple line gra
 
 This basic graph incorporates GDP in the x axis, poverty in the y axis and region into the colors in the `aesthetic` options. We use a `Log scale` for GDP, as in the original the x axis is not divided in equal spaces, and a `continuous scale` for the y axis, which already incorporates percentages in the labels.
 
-```{r basic line graph}
+```{r basic-line-graph}
 # library(ggplot2)
 plot_basic <- ggplot(world) +
   aes(x = GDP, y = poverty, color = region) + 
@@ -230,14 +226,14 @@ From this basic facet_wrap we can see that we are not done with the processing o
 
 [^1]: Reality check! The reason why I decided to include this final processing of the data in the replication process and not the data cleaning process is due to the importance I attribute to the active replication process in showing me, and me figuring out during it, what the problems were with the data. The *replication process is not a straightforward task, but it involves a lot of back and forth*, which I believe is important to pay attention to.
 
-```{r exclude NAs}
+```{r exclude-NAs}
 data_filtered <- world |>
   filter(!is.na(poverty) & !is.na(GDP)) 
 ```
 
 We also include now the **background lines** of each of the panels. For this, we duplicate the data set and create a second variable of region, "`region2`", deleting the original one.
 
-```{r duplicate data set}
+```{r duplicate-data-set}
 data_filtered_2 <- data_filtered |> 
   mutate(region2 = region, region = NULL) 
 ```
@@ -246,7 +242,7 @@ The lines will be inserted with `geom_path` indicating our new data set, its x a
 
 In addition, we can order the **regions** by `factoring` them so that they appear as in the original graph, and create a `colour scheme data set`. The colours were matched by using the colour eyedropper tool of Google docs.
 
-```{r regions order and colour}
+```{r regions-order-and-colour}
 # library(forcats)
 
 # order countries
@@ -277,7 +273,7 @@ colour_scheme <- c("Global Average" = "#840037",
 
 Finally, we also **start to approximate the** **theme** by taking away the legends, labs and individual graph titles as in the original graph, and including a minimal theme to provide us with a background similar to the original one.
 
-```{r initial graph}
+```{r initial-graph}
 plot_initial <- ggplot(data_filtered) +
   aes(x = GDP, y = poverty, color = region) + 
   scale_x_log10(labels = scales::comma) +  
@@ -329,7 +325,7 @@ The original graph's x axis `limits` does not start at 0 or end at the 50000 bre
 <aside>Explanation: even though we have set the scales free for all panels as a group in the `facet_wrap`, we have also pre-defined the scales for all panels individually in `scale_x_log10` and `scale_y_continuous`.</aside>
 
 
-```{r axes skeleton, layout="l-body-outset",  fig.width = 8, fig.height = 5.8, fig.dpi = 150}
+```{r axes-skeleton, layout="l-body-outset",  fig.width = 8, fig.height = 5.8, fig.dpi = 150}
 plot_axes <- ggplot(data_filtered) +
   aes(x = GDP, y = poverty, color = region) + 
 
@@ -374,7 +370,7 @@ With correct axis scales we can now create **custom grid lines** with `geom_segm
 
 <aside>Caution! Because we are currently layering two plots on top of each other, the custom grid lines appear on top of our geom_path lines due to the order of commands.</aside>
 
-```{r axes custom grid, layout="l-body-outset",  fig.width = 8, fig.height = 5.8, fig.dpi = 150}
+```{r axes-custom-grid, layout="l-body-outset",  fig.width = 8, fig.height = 5.8, fig.dpi = 150}
  
 plot_grid <- plot_axes +
   
@@ -576,7 +572,7 @@ plot_titles
 
 Finally, we insert the **annotations and descriptions** into the individual regions' panels. This task was a bit tiresome due to the sheer number of individual annotations that needed to be done, and as they are not standardized (e.g. all regions names in one corner), each annotation needed its own coordinates. It is important that this is our last step as it heavily relies on the exact coordinates for each annotation position. We use `geom_text` and not `annotate` because annotate does not allow us to filter which panel to annotate in, instead always conducting the command in all faceted graphs.
 
-```{r, layout="l-body-outset",  fig.width = 8, fig.height = 5.8, fig.dpi = 150}
+```{r final, layout="l-body-outset",  fig.width = 8, fig.height = 5.8, fig.dpi = 150}
 plot_final <- plot_titles +
   
   # years by region path 
@@ -808,7 +804,7 @@ Here the result of our replication (right) compared to the original graph:
 ::: {style="width: 50.5%;"}
 Original
 
-```{r original graph, echo=FALSE, out.width='100%'}
+```{r original-graph, echo=FALSE, out.width='100%'}
 knitr::include_graphics("Growth-and-poverty-since-1820.png")
 ```
 :::
