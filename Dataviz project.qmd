@@ -1,0 +1,740 @@
+---
+title: "Dataviz project"
+author: "Rocío Galeote"
+format: html
+editor: visual
+execute:
+  warning: false   # Suppress warnings
+---
+
+## 2024 World Press Freedom Index- journalism under political pressure
+
+Press freedom around the world is being threatened by the very people who should be its guarantors – political authorities. Reporters without Borders (RSF) conducts a global ranking of press freedom in each country every year, by analyzing several socioeconomic and political indicators.
+
+As they pose, the purpose of the World Press Freedom Index is to compare the level of freedom enjoyed by journalists and media in 180 countries and territories. What do they define as press freedom to conduct this analysis?
+
+“Press freedom is defined as the ability of journalists as individuals and collectives to select, produce, and disseminate news in the public interest independent of political, economic, legal, and social interference and in the absence of threats to their physical and mental safety.
+
+## Original plot
+
+```{r}
+#| eval: true
+#| echo: true
+#| code-fold: true
+
+knitr::include_graphics("originalplot.jpeg")
+```
+
+The graph is a stacked column chart that portrays the press freedom situation in each continent this year. For scores lower than 40, press freedom is considered a very serious situation; between 40 and 55, difficult; between 56 and 70, problematic; between 70 and 85, satisfactory; and from 85 to 100, good. 
+
+In the graph, the countries are divided into five zones: Europe - Central Asia, Americas, Africa, Asia - Pacific and Middle East - North Africa. These columns are filled with the percentages of countries in each zone within each situation category. Every category would go with different colors (from very serious situation in dark read to good situation in bright green). For this graph, only 2024 data is needed.
+
+## Replica
+
+```{r}
+#| eval: true
+#| echo: true
+#| code-fold: true
+
+library(tidyverse)
+library(ggplot2)
+library(gplots)
+library(dplyr)
+library(readxl)
+
+pressfreedom <- read_excel("pressfreedom24.xlsx")
+View(pressfreedom)
+```
+
+
+
+```{r}
+#| eval: true
+#| echo: true
+#| code-fold: true
+
+
+press_freedom_df <- data.frame(pressfreedom)
+
+press_freedom_df <- press_freedom_df |> 
+  mutate(Situation = case_when(
+    Score.N < 40 ~ "Very serious",
+    Score.N >= 40 & Score.N < 55 ~ "Difficult",
+    Score.N >= 55 & Score.N < 70 ~ "Problematic",
+    Score.N >= 70 & Score.N < 85 ~ "Satisfactory",
+    Score.N >= 85 ~ "Good"
+  ))
+
+# Calculate the percentage of countries in each situation category by zone
+percentage_data <- press_freedom_df |> 
+  group_by(Zone, Situation) |> 
+  summarise(count = n()) |> 
+  ungroup() |> 
+  group_by(Zone) |> 
+  mutate(percentage = count / sum(count) * 100) |> 
+  ungroup()
+
+zone_order <- c("Europe - Central Asia", "Americas", "Africa", "Asia - Pacific", "Middle East - North Africa")
+
+percentage_data$Zone <- factor(percentage_data$Zone, levels = zone_order)
+
+situation_order <- c("Good", "Satisfactory", "Problematic","Difficult","Very serious")
+
+percentage_data$Situation <- factor(percentage_data$Situation, levels = situation_order)
+
+```
+
+
+```{r, fig.width= 9, fig.height= 10}
+#| eval: true
+#| echo: true
+#| code-fold: true
+
+
+library(grid)
+library(ggplot2)
+library(dplyr)
+library(cowplot)
+library(magick)
+
+# Load the logo image (adjust path to the logo file as needed)
+logo <- image_read("RSFlogo.png")
+
+# Create the stacked column chart
+replicaplot <- ggplot(percentage_data, aes(x = Zone, y = percentage, fill = Situation)) +
+  geom_bar(stat = "identity", color = "white", size = 1.2, width = 0.75) +  # Thicker borders, reduced width
+  geom_text(aes(label = sprintf("%.2f%%", percentage)),
+            position = position_stack(vjust = 0.87),
+            color = "white", size= 4.5, fontface = "bold") +  # Bold values inside columns
+  
+    # Add labels on top of the columns
+  geom_text(data = percentage_data |> group_by(Zone) |> summarise(y = 105), 
+            aes(x = Zone, y = y, label = Zone),
+            inherit.aes = FALSE, hjust = 0.5, size = 3.5, fontface = "bold") +
+  
+  scale_y_continuous(breaks = seq(0, 100, 10), limits = c(0, 110),
+                     labels = scales::percent_format(scale = 1, suffix = "%")) +
+  
+  scale_fill_manual(values = c("Very serious" = "#81312F",
+                               "Difficult" = "#CF4520",
+                               "Problematic" = "#ECA154",
+                               "Satisfactory" = "#F3D03E",
+                               "Good" = "#CDEA80")) +
+  
+guides(fill = guide_legend(override.aes = list(shape = 15, size = 6, stroke = 0), # Smaller squares (size = 4)
+                             keywidth = 1, keyheight = 0.8, 
+                             title.position = "left",
+                             label.theme = element_text(size = 14))) +
+  
+  labs(title = "Press freedom in the world’s five regions in 2024",
+       x = "",
+       y = "",
+       fill = "Situation") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 18, margin = margin(b = 10)),  # Bold title, closer
+    plot.title.margin = margin(b = 20),
+    plot.title.position = "plot",  # Title aligns with plot area
+    axis.text.x = element_blank(),  # Remove x-axis labels (zones at bottom)
+    axis.ticks.x = element_blank(),
+    axis.title.y = element_text(size = 12),
+    panel.grid.major.x = element_blank(),  # Grid only between axis
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_line(color = "gray80", size = 0.5),  # Keep y-grid within axis
+    legend.position = "top",  # Move legend to the top
+    legend.justification = "left",  # Align legend to the left
+    legend.box.margin = margin(0, 0, -10, 0),  # Remove extra margins in legend
+    legend.title = element_text(face = "bold"), 
+    legend.margin = margin(t = 10),
+    plot.margin = margin(30, 10, 10, 10)  # Adjust margins to bring elements closer
+  ) +
+  # Add the secondary legend
+  annotation_custom(
+    grob = textGrob(
+      label = "Source: World Press Freedom Index, Link to share\n© Reporters Without Borders",
+      x = 0.85, y = -0.1, hjust = 1, vjust = 1,
+      gp = gpar(fontface = "italic", fontsize = 10)
+    )
+  ) 
+
+secondary_legend <- ggdraw() +
+  # Draw the text
+  draw_text(
+    text = "Source: World Press Freedom Index, Link to share\n© Reporters Without Borders",
+    x = 0.87,  # Move the text slightly to the left
+    y = 0.5,   # Center vertically
+    hjust = 1, # Align text to the right
+    size = 12
+  ) +
+  # Draw the logo next to the text
+  draw_image(
+    logo,
+    x = 0.67,    # Align logo just to the right of the text
+    y = 0.38,    # Align vertically with the text
+    width = 0.5, # Resize width
+    height = 0.5 # Resize height
+  )
+
+# Combine using cowplot's `plot_grid`
+final_plot <- plot_grid(
+  replicaplot +
+    theme(plot.margin = margin(0, 30, 0, 5)),  
+  secondary_legend,
+  ncol = 1,
+  rel_heights = c(0.87, 0.13)  # Adjust heights of the main plot and footer
+)
+
+final_plot
+
+ggsave(
+  filename = "replicaplot.jpeg", 
+  plot = final_plot, 
+  width = 9,        # Set width to accommodate all elements
+  height = 9,        # Set height to include the secondary legend
+  dpi = 300          # High resolution
+)
+```
+
+The study that RSF made has data from the year 2002 onwards. However, the data from 2002 to 2013 is not complete and not much information can be drawn from there. For that reason, I chose to gather the data only from 2013 onwards.
+
+The dataset consists of press freedom indexes from 2013 to 2024. For each year, we have the name of the countries, the zone where they are and their rank and score. 
+
+In order to produce the improvement, all the mentioned data:
+
+```{r}
+#| eval: true
+#| echo: true
+#| code-fold: true
+
+
+library(tidyverse)
+library(ggplot2)
+library(gplots)
+library(dplyr)
+library(readxl)
+
+pressfreedomall <- read_excel("pressfreedom.xlsx")
+pressfreedomall <- as.data.frame(pressfreedomall)
+View(pressfreedomall)
+```
+
+With this, we compute the percentage data for all years, like we did for the 2024 chart:
+
+```{r}
+#| eval: true
+#| echo: true
+#| code-fold: true
+
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+
+
+pressfreedomall2 <- pressfreedomall |> 
+  mutate(Situation = case_when(
+    Score < 40 ~ "Very serious",
+    Score >= 40 & Score < 55 ~ "Difficult",
+    Score >= 55 & Score < 70 ~ "Problematic",
+    Score >= 70 & Score < 85 ~ "Satisfactory",
+    Score >= 85 ~ "Good"
+  ))
+
+# Calculate the percentage of countries in each situation category by zone
+percentage_data_all <- pressfreedomall2 |> 
+  group_by(Year, Zone, Situation) |> 
+  summarise(count = n(), .groups = "drop") |> 
+  group_by(Year, Zone) |> 
+  mutate(percentage = count / sum(count) * 100) |> 
+  ungroup()
+
+zone_order <- c("Europe - Central Asia", "Americas", "Africa", "Asia - Pacific", "Middle East - North Africa")
+
+percentage_data_all$Zone <- factor(percentage_data_all$Zone, levels = zone_order)
+
+situation_order <- c("Good", "Satisfactory", "Problematic","Difficult","Very serious")
+
+percentage_data_all$Situation <- factor(percentage_data_all$Situation, levels = situation_order)
+
+
+```
+
+
+
+## Improvement
+
+**Sankey diagram**
+
+First, we ensure the data is correct and in the preferred order and we prepare it to visualize:
+
+```{r}
+#| eval: true
+#| echo: true
+#| code-fold: true
+
+library(tidyverse)
+library(ggalluvial)
+
+# Ensure `Year` is treated as a discrete variable
+pressfreedomallsankey <- pressfreedomall2 |> 
+  mutate(Year = as.factor(Year))  # Convert Year to a factor for discrete handling
+
+# Define the desired order for Situation categories
+situation_order <- c("Good", "Satisfactory", "Problematic", "Difficult", "Very serious")
+
+# Ensure the order is applied to the Situation variable
+pressfreedomallsankey <- pressfreedomallsankey |> 
+  mutate(Situation = factor(Situation, levels = situation_order))
+
+# Prepare the data for the Sankey diagram with Zone
+sankey_data <- pressfreedomallsankey |> 
+  select(Zone, EN_country, Year, Situation) |> 
+  group_by(Zone, EN_country, Year, Situation) |> 
+  summarise(count = n(), .groups = "drop")  # Summarize to ensure correct structure
+
+```
+
+Then, we generate the sankey diagram with individual axes per zone:
+
+```{r, fig.width= 12, fig.height= 16}
+#| eval: true
+#| echo: true
+#| code-fold: true
+
+sankey_plot <- ggplot(sankey_data, 
+                      aes(x = Year, stratum = Situation, alluvium = EN_country, 
+                          y = count, fill = Situation)) +
+  geom_flow(stat = "alluvium", aes(fill = Situation), alpha = 0.8, width = 0) +
+  facet_wrap(~Zone, ncol = 1, scales = "free_x") +  # Separate plots with their own x-axis
+  scale_x_discrete(expand = c(0.1, 0.1)) +  # Adjust spacing for better readability
+  scale_fill_manual(
+    values = c(
+      "Very serious" = "#81312F",
+      "Difficult" = "#CF4520",
+      "Problematic" = "#ECA154",
+      "Satisfactory" = "#F3D03E",
+      "Good" = "#CDEA80"
+    ),
+    breaks = situation_order  # Apply the custom order to the legend
+  ) +
+  labs(
+    title = "Changes in Press Freedom Situations Across Years by Zone",
+    x = "Year",
+    y = "Number of Countries",
+    fill = "Situation"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_blank(),  # Remove y-axis text for clarity
+    axis.ticks.y = element_blank(),  # Remove y-axis ticks
+    panel.grid = element_blank(),  # Remove grid lines
+    legend.position = "top",  # Place legend on top
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+    strip.text = element_text(size = 12, face = "bold"),  # Zone titles
+    panel.spacing = unit(1, "lines"),  # Increase spacing between facets
+    axis.title.y = element_text(size = 12),  # Ensure y-axis title is readable
+    axis.title.x = element_text(size = 12)
+  )
+
+# Remove the internal labels for the `Situation` stratum
+sankey_plot <- sankey_plot + 
+  geom_text(stat = "stratum", aes(label = ""), size = 0)  # Suppresses the labels
+
+
+print(sankey_plot)
+
+
+ggsave("sankey_diagram_by_zone_with_situation_order.jpeg", plot = sankey_plot, width = 12, height = 16, units = "in")
+
+
+```
+
+
+## Other options for improvements:
+
+
+**Stacked area charts grid**
+
+Like in the sankey diagram, this option is focused on letting you see the overall changes in the situation categories, rather than allowing you to check where the flows go over the years.
+
+```{r, fig.width= 14, fig.height= 16}
+#| eval: true
+#| echo: true
+#| code-fold: true
+
+library(tidyverse)
+library(patchwork)
+
+# Normalize percentages to ensure they don't exceed 100%
+percentage_data_all <- percentage_data_all |> 
+  group_by(Zone, Year) |> 
+  mutate(percentage = 100 * (percentage / sum(percentage))) |>  # Normalize to ensure total is 100%
+  ungroup()
+
+# Create a list to store individual area charts for each Zone
+zone_area_charts <- list()
+
+# Generate stacked area charts for each Zone
+for (zone in unique(percentage_data_all$Zone)) {
+  zone_area_chart <- percentage_data_all |> 
+    filter(Zone == zone) |> 
+    ggplot(aes(x = Year, y = percentage, fill = Situation)) +
+    geom_area(alpha = 0.8, size = 0.5, color = "white") +
+    scale_x_continuous(
+      breaks = seq(2013, 2024, by = 1),  # Ensure years are labeled
+      labels = as.character(seq(2013, 2024, by = 1))
+    ) +
+    scale_y_continuous(
+      limits = c(0, 100),  # Set limits to prevent overflow
+      labels = scales::percent_format(scale = 1)  # Show percentages cleanly
+    ) +
+    scale_fill_manual(values = c(
+      "Very serious" = "#81312F",
+      "Difficult" = "#CF4520",
+      "Problematic" = "#ECA154",
+      "Satisfactory" = "#F3D03E",
+      "Good" = "#CDEA80"
+    )) +
+    labs(
+      title = zone,
+      x = "Year",
+      y = "Percentage of Countries"
+    ) +
+    theme_minimal() +
+    theme(
+      legend.position = "none",  # Hide legend for individual charts
+      axis.text.y = element_text(size = 12),  # Adjust y-axis text for readability
+      axis.text.x = element_text(size = 12, angle = 45, hjust = 1),  # Rotate x-axis labels
+      axis.title = element_text(size = 14),  # Increase axis title size
+      plot.title = element_text(size = 16, face = "bold", hjust = 0.5)  # Center title
+    )
+  
+  zone_area_charts[[zone]] <- zone_area_chart
+}
+
+# Combine all zone area charts into a grid
+zone_area_grid <- wrap_plots(zone_area_charts, ncol = 2) +  # Adjust ncol for layout (2 charts per row)
+  plot_annotation(
+    title = "Fluctuation of Press Freedom Situations by Zone (2013–2024)",
+    theme = theme(
+      plot.title = element_text(size = 20, face = "bold", hjust = 0.5)  # Center the main title
+    )
+  )
+
+
+print(zone_area_grid)
+
+
+ggsave("zone_percentage_area_trends.jpeg", plot = zone_area_grid, width = 14, height = 16, units = "in")
+
+```
+
+Although I coded it so that I would not get this error, I was getting values over the 100% limit. I had to see then if there was weird data in the dataset:
+
+```{r}
+#| eval: true
+#| echo: true
+#| code-fold: true
+
+
+# Calculate total percentages for each Zone and Year
+diagnostic_data <- percentage_data_all |> 
+  group_by(Zone, Year) |> 
+  summarise(total_percentage = sum(percentage), .groups = "drop")
+
+# Find rows where total percentage is not 100%
+problematic_rows <- diagnostic_data |> 
+  filter(abs(total_percentage - 100) > 0.01)  # Allow a small tolerance for floating-point errors
+
+# Print problematic rows
+print(problematic_rows)
+
+```
+
+I did not find any problematic rows. For further inspection, I tried to make sure that every total percentage in each case sums 100%:
+
+```{r}
+#| eval: true
+#| echo: true
+#| code-fold: true
+
+library(tidyverse)
+
+# Summarize percentage of each Situation by Zone and Year
+percentage_table <- percentage_data_all |> 
+  select(Zone, Year, Situation, percentage) |> 
+  pivot_wider(
+    names_from = Situation, 
+    values_from = percentage, 
+    values_fill = 0  # Fill missing combinations with 0
+  ) |> 
+  mutate(
+    Total_Percentage = `Good` + `Satisfactory` + `Problematic` + `Difficult` + `Very serious`
+  ) |>  # Calculate the sum explicitly
+  arrange(Zone, Year)  # Arrange data for better readability
+
+
+print(percentage_table)
+
+```
+
+The percentages seem to all be 100%, so there is apparently no reason for the graph to show gaps.
+
+
+```{r, fig.width= 14, fig.height= 16}
+#| eval: true
+#| echo: true
+#| code-fold: true
+
+
+library(tidyverse)
+
+# Ensure all combinations of Zone, Year, and Situation are present
+complete_data <- percentage_data_all |> 
+  complete(
+    Zone, Year, Situation, 
+    fill = list(percentage = 0)  # Fill missing percentages with 0
+  )
+
+# Create stacked area charts again with the fixed data
+zone_area_charts <- list()
+
+for (zone in unique(complete_data$Zone)) {
+  zone_area_chart <- complete_data |> 
+    filter(Zone == zone) |> 
+    ggplot(aes(x = Year, y = percentage, fill = Situation)) +
+    geom_area(alpha = 0.8, size = 0.5, color = "white") +
+    scale_x_continuous(
+      breaks = seq(2013, 2024, by = 1),
+      labels = as.character(seq(2013, 2024, by = 1))
+    ) +
+    scale_y_continuous(
+      limits = c(0, 100),  # Explicitly set y-axis limits to avoid overflow
+      labels = scales::percent_format(scale = 1)
+    ) +
+    scale_fill_manual(values = c(
+      "Very serious" = "#81312F",
+      "Difficult" = "#CF4520",
+      "Problematic" = "#ECA154",
+      "Satisfactory" = "#F3D03E",
+      "Good" = "#CDEA80"
+    )) +
+    labs(
+      title = zone,
+      x = "Year",
+      y = "Percentage of Countries"
+    ) +
+    theme_minimal() +
+    theme(
+      legend.position = "none",
+      axis.text.y = element_text(size = 10),
+      axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+    )
+  
+  zone_area_charts[[zone]] <- zone_area_chart
+}
+
+# Combine charts into a grid
+zone_area_grid <- wrap_plots(zone_area_charts, ncol = 2) + 
+  plot_annotation(
+    title = "Fluctuation of Press Freedom Situations by Zone (2013–2024)",
+    theme = theme(
+      plot.title = element_text(size = 18, face = "bold", hjust = 0.5)
+    )
+  )
+
+print(zone_area_grid)
+
+
+ggsave("fixed_zone_area_trends.jpeg", plot = zone_area_grid, width = 14, height = 16, units = "in")
+
+```
+
+
+complete() Function:
+
+Ensures that every combination of Zone, Year, and Situation exists.
+Missing combinations are filled with percentage = 0.
+Stack Alignment:
+
+With complete data, every year's stack starts from 0%, eliminating visual gaps or overflows.
+Explicit y-Axis Limits:
+
+Setting limits = c(0, 100) ensures the chart does not display values beyond the intended range.
+Updated Appearance:
+
+The graph should now show smooth and accurate stacked areas without exceeding 100% or displaying unexpected gaps.
+
+
+```{r}
+#| eval: true
+#| echo: true
+#| code-fold: true
+
+
+missing_check <- percentage_data_all |> 
+  complete(Zone, Year, Situation, fill = list(percentage = 0)) |> 
+  filter(is.na(percentage))
+print(missing_check)
+
+```
+
+
+**Fluctuation plot**
+
+I was interested in seeing what countries had the highest score fluctuations over the years, so I coded an easy bar plot to see at a glance which ones they were:
+
+```{r, fig.width= 14, fig.height= 16}
+#| eval: true
+#| echo: true
+#| code-fold: true
+
+library(tidyverse)
+
+# Assuming your dataset is named 'rank_data' and contains: Year, Rank, Zone, EN_country
+
+# Calculate the fluctuation (difference between max and min rank) for each country
+fluctuation_data <- pressfreedomall |> 
+  group_by(EN_country) |> 
+  summarise(
+    max_rank = max(Rank),      # Find the highest rank for each country (worst position)
+    min_rank = min(Rank),      # Find the lowest rank for each country (best position)
+    rank_fluctuation = max_rank - min_rank  # Calculate the fluctuation (difference)
+  ) %>%
+  arrange(desc(rank_fluctuation))  # Sort by largest fluctuation (descending order)
+
+# Show the top 30 countries with the most fluctuation
+top_fluctuating_countries <- head(fluctuation_data, 30)
+
+# Print the result
+print(top_fluctuating_countries)
+
+# Visualize the fluctuation
+fluctuationplot <- ggplot(top_fluctuating_countries, aes(x = reorder(EN_country, rank_fluctuation), y = rank_fluctuation)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Flip the axes for better readability
+  labs(
+    title = "Top 30 Countries with the Most Fluctuating Press Freedom Ranks (2013-2024)",
+    x = "Country",
+    y = "Rank Fluctuation (Difference Between Max and Min Rank)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 30, hjust = 0.5, margin = margin(b = 15)),  # Bold and larger title
+    axis.title.x = element_text(size = 14),  # Increase axis title size
+    axis.title.y = element_text(size = 14),
+    axis.text = element_text(size = 12),    # Adjust axis text size
+    plot.margin = margin(t = 20, r = 30, b = 20, l = 30)  # Add spacing around the plot
+  )
+
+# Print the plot
+print(fluctuationplot)
+
+# Save the plot as a JPEG with adjusted dimensions
+ggsave(
+  filename = "fluctuationplot.jpeg", 
+  plot = fluctuationplot, 
+  width = 14,  # Smaller width
+  height = 16,  # Smaller height
+  units = "in", 
+  dpi = 300    # High resolution
+)
+
+```
+
+
+Then, to see it more visually, I coded a slope chart with the changes between 2013 and 2024 score values for all these countries, showing green lines for upward changes and red for downward. 
+
+
+```{r, fig.width= 15, fig.height= 20}
+#| eval: true
+#| echo: true
+#| code-fold: true
+
+library(tidyverse)
+
+top_countries_data <- pressfreedomall |> 
+  filter(EN_country %in% top_fluctuating_countries$EN_country)
+
+# Step 1: Filter the data to only include years 2013 and 2024
+filtered_data <- top_countries_data |> 
+  filter(Year %in% c(2013, 2024))  # Only keep data for the years 2013 and 2024
+
+# Step 2: Ensure there are both 2013 and 2024 data for each country
+filtered_data_complete <- filtered_data |> 
+  group_by(EN_country) |> 
+  filter(n() == 2) |>  # Keep only countries with exactly two rows (one for 2013 and one for 2024)
+  ungroup()
+
+# Step 3: Add a column to determine the direction of change (up or down)
+filtered_data_complete <- filtered_data_complete |> 
+  group_by(EN_country) |> 
+  arrange(Year) |> 
+  mutate(direction = ifelse(Rank[Year == 2024] < Rank[Year == 2013], "up", "down")) |> 
+  ungroup()
+
+# Step 4: Create the slope chart
+slopechart1324 <- ggplot(filtered_data_complete, aes(x = Year, y = Rank, group = EN_country)) +
+  geom_line(aes(color = direction), size = 1) +
+  geom_point(size = 4) +  # Make dots slightly larger
+  geom_text(
+    data = filtered_data_complete |> filter(Year == 2013),
+    aes(label = Rank, x = 2013), 
+    hjust = 1.6, size = 4  # Position numbers for 2013
+  ) +
+  geom_text(
+    data = filtered_data_complete |> filter(Year == 2024),
+    aes(label = Rank, x = 2024), 
+    hjust = -0.6, size = 4  # Position numbers for 2024
+  ) +
+  geom_text(
+    data = filtered_data_complete |> filter(Year == 2024),
+    aes(x = 2024 + 0.5, y = Rank, label = EN_country),  # Adjusted offset for country names
+    hjust = 0, size = 4, show.legend = FALSE
+  ) +  # Larger, aligned country names
+  scale_color_manual(values = c("up" = "green", "down" = "red")) +  # Custom colors for direction
+  scale_y_reverse(
+    breaks = NULL,  # Disable y-axis ticks
+    labels = NULL  # Disable y-axis labels
+  ) +
+  scale_x_continuous(
+    breaks = c(2013, 2024),
+    labels = NULL,  # Remove default axis labels
+    expand = c(0.1, 0.1)  # Reduce space between 2013 and 2024
+  ) +
+  labs(
+    title = "Rank Fluctuation of Top 10 Countries (2013-2024)",
+    x = NULL,
+    y = NULL
+  ) +
+  annotate("text", x = 2013, y = -5, label = "2013", size = 6, fontface = "bold") +  # Custom label for 2013
+  annotate("text", x = 2024, y = -5, label = "2024", size = 6, fontface = "bold") +  # Custom label for 2024
+  theme_minimal() +
+  theme(
+    axis.text.y = element_blank(),  # Remove y-axis text
+    axis.ticks.y = element_blank(),  # Remove y-axis ticks
+    axis.title.y = element_blank(),  # Remove y-axis title
+    axis.title.x = element_text(size = 14),  # Larger x-axis title
+    plot.title = element_text(size = 22, face = "bold", hjust = 0.5),  # Larger, centered title
+    legend.position = "none",  # Remove legend
+    panel.grid.major.y = element_blank(),  # Remove horizontal grid lines
+    panel.grid.minor = element_blank(),  # Remove minor grid lines
+    plot.margin = margin(20, 120, 20, 20)  # Adjust margin to make space for labels
+  )
+
+# Step 5: Display the plot
+print(slopechart1324)
+
+ggsave(
+  filename = "top_10_country_rank_fluctuation_2013_2024.jpeg", 
+  plot = slopechart1324, 
+  width = 15,  # Smaller width
+  height = 20,  # Smaller height
+  units = "in", 
+  dpi = 300    # High resolution
+)
+
+
+```
+
