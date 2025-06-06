@@ -21,7 +21,7 @@
 <style type="text/css">code{white-space: pre;}</style>
 <style type="text/css" data-origin="pandoc">
 pre > code.sourceCode { white-space: pre; position: relative; }
-pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span { line-height: 1.25; }
 pre > code.sourceCode > span:empty { height: 1.2em; }
 .sourceCode { overflow: visible; }
 code.sourceCode > span { color: inherit; text-decoration: inherit; }
@@ -32,7 +32,7 @@ div.sourceCode { overflow: auto; }
 }
 @media print {
 pre > code.sourceCode { white-space: pre-wrap; }
-pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+pre > code.sourceCode > span { display: inline-block; text-indent: -5em; padding-left: 5em; }
 }
 pre.numberSource code
   { counter-reset: source-line 0; }
@@ -118,7 +118,7 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
   <!--/radix_placeholder_rmarkdown_metadata-->
   
   <script type="text/json" id="radix-resource-manifest">
-  {"type":"character","attributes":{},"value":["01-goto_github.png","02-fork.png","03-copy_url.png","04-new_project.png","05-06-07-create_project.png","08-edit_yaml.png","09-remove_chunk.png","10-knit.png","11-stage.png","12-commit.png","13-commit.png","14-push.png","15-contribute.png","16-create_draft.png","project_files/anchor-4.2.2/anchor.min.js","project_files/bowser-1.9.3/bowser.min.js","project_files/distill-2.2.21/template.v2.js","project_files/header-attrs-2.19/header-attrs.js","project_files/jquery-3.6.0/jquery-3.6.0.js","project_files/jquery-3.6.0/jquery-3.6.0.min.js","project_files/jquery-3.6.0/jquery-3.6.0.min.map","project_files/popper-2.6.0/popper.min.js","project_files/tippy-6.2.7/tippy-bundle.umd.min.js","project_files/tippy-6.2.7/tippy-light-border.css","project_files/tippy-6.2.7/tippy.css","project_files/tippy-6.2.7/tippy.umd.min.js","project_files/webcomponents-2.0.0/webcomponents.js"]}
+  {"type":"character","attributes":{},"value":["01-goto_github.png","02-fork.png","03-copy_url.png","04-new_project.png","05-06-07-create_project.png","08-edit_yaml.png","09-remove_chunk.png","10-knit.png","11-stage.png","12-commit.png","13-commit.png","14-push.png","15-contribute.png","16-create_draft.png","project_files/anchor-4.2.2/anchor.min.js","project_files/bowser-1.9.3/bowser.min.js","project_files/distill-2.2.21/template.v2.js","project_files/jquery-3.6.0/jquery-3.6.0.js","project_files/jquery-3.6.0/jquery-3.6.0.min.js","project_files/jquery-3.6.0/jquery-3.6.0.min.map","project_files/popper-2.6.0/popper.min.js","project_files/tippy-6.2.7/tippy-bundle.umd.min.js","project_files/tippy-6.2.7/tippy-light-border.css","project_files/tippy-6.2.7/tippy.css","project_files/tippy-6.2.7/tippy.umd.min.js","project_files/webcomponents-2.0.0/webcomponents.js"]}
   </script>
   <!--radix_placeholder_navigation_in_header-->
   <!--/radix_placeholder_navigation_in_header-->
@@ -230,9 +230,21 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
     display: none !important;
   }
 
+  hr.section-separator {
+    border: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    margin: 0px;
+  }
+
+
+  d-byline {
+    border-top: none;
+  }
+
   d-article {
     padding-top: 2.5rem;
     padding-bottom: 30px;
+    border-top: none;
   }
 
   d-appendix {
@@ -327,6 +339,11 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
   d-article div.sourceCode pre {
     padding-left: 18px;
     font-size: 14px;
+  }
+
+  /* tweak for Pandoc numbered line within distill */
+  d-article pre.numberSource code > span {
+      left: -2em;
   }
 
   d-article pre {
@@ -1088,6 +1105,12 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
     // create d-title
     $('.d-title').changeElementType('d-title');
 
+    // separator
+    var separator = '<hr class="section-separator" style="clear: both"/>';
+    // prepend separator above appendix
+    $('.d-byline').before(separator);
+    $('.d-article').before(separator);
+
     // create d-byline
     var byline = $('<d-byline></d-byline>');
     $('.d-byline').replaceWith(byline);
@@ -1165,8 +1188,9 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
     $('.distill-force-highlighting-css').parent().remove();
 
     // remove empty line numbers inserted by pandoc when using a
-    // custom syntax highlighting theme
-    $('code.sourceCode a:empty').remove();
+    // custom syntax highlighting theme, except when numbering line
+    // in code chunk
+    $('pre:not(.numberLines) code.sourceCode a:empty').remove();
 
     // load distill framework
     load_distill_framework();
@@ -1192,12 +1216,13 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
       // add orcid ids
       $('.authors-affiliations').find('.author').each(function(i, el) {
         var orcid_id = front_matter.authors[i].orcidID;
+        var author_name = front_matter.authors[i].author
         if (orcid_id) {
           var a = $('<a></a>');
           a.attr('href', 'https://orcid.org/' + orcid_id);
           var img = $('<img></img>');
           img.addClass('orcid-id');
-          img.attr('alt', 'ORCID ID');
+          img.attr('alt', author_name ? 'ORCID ID for ' + author_name : 'ORCID ID');
           img.attr('src','data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAA2ZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYwIDYxLjEzNDc3NywgMjAxMC8wMi8xMi0xNzozMjowMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDo1N0NEMjA4MDI1MjA2ODExOTk0QzkzNTEzRjZEQTg1NyIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDozM0NDOEJGNEZGNTcxMUUxODdBOEVCODg2RjdCQ0QwOSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDozM0NDOEJGM0ZGNTcxMUUxODdBOEVCODg2RjdCQ0QwOSIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ1M1IE1hY2ludG9zaCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOkZDN0YxMTc0MDcyMDY4MTE5NUZFRDc5MUM2MUUwNEREIiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjU3Q0QyMDgwMjUyMDY4MTE5OTRDOTM1MTNGNkRBODU3Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+84NovQAAAR1JREFUeNpiZEADy85ZJgCpeCB2QJM6AMQLo4yOL0AWZETSqACk1gOxAQN+cAGIA4EGPQBxmJA0nwdpjjQ8xqArmczw5tMHXAaALDgP1QMxAGqzAAPxQACqh4ER6uf5MBlkm0X4EGayMfMw/Pr7Bd2gRBZogMFBrv01hisv5jLsv9nLAPIOMnjy8RDDyYctyAbFM2EJbRQw+aAWw/LzVgx7b+cwCHKqMhjJFCBLOzAR6+lXX84xnHjYyqAo5IUizkRCwIENQQckGSDGY4TVgAPEaraQr2a4/24bSuoExcJCfAEJihXkWDj3ZAKy9EJGaEo8T0QSxkjSwORsCAuDQCD+QILmD1A9kECEZgxDaEZhICIzGcIyEyOl2RkgwAAhkmC+eAm0TAAAAABJRU5ErkJggg==');
           a.append(img);
           $(this).append(a);
@@ -1475,7 +1500,7 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
   </script>
 
   <!--/radix_placeholder_distill-->
-  <script src="project_files/header-attrs-2.19/header-attrs.js"></script>
+  <script src="project_files/header-attrs-2.29/header-attrs.js"></script>
   <script src="project_files/jquery-3.6.0/jquery-3.6.0.min.js"></script>
   <script src="project_files/popper-2.6.0/popper.min.js"></script>
   <link href="project_files/tippy-6.2.7/tippy.css" rel="stylesheet" />
@@ -1507,6 +1532,7 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
 
 <div class="d-title">
 <h1>Creating and Submitting your Project</h1>
+
 <!--radix_placeholder_categories-->
 <div class="dt-tags">
 <div class="dt-tag">Project</div>
@@ -1530,24 +1556,24 @@ Pull Request workflow.</p></p>
 <nav class="l-text toc figcaption" id="TOC">
 <h3>Contents</h3>
 <ul>
-<li><a href="#prerequisites">Prerequisites</a></li>
-<li><a href="#creating-the-initial-skeleton">Creating the initial skeleton</a>
+<li><a href="#prerequisites" id="toc-prerequisites">Prerequisites</a></li>
+<li><a href="#creating-the-initial-skeleton" id="toc-creating-the-initial-skeleton">Creating the initial skeleton</a>
 <ul>
-<li><a href="#forking-the-source-code">Forking the source code</a></li>
-<li><a href="#creating-a-new-project">Creating a new project</a></li>
-<li><a href="#adding-your-own-article">Adding your own article</a></li>
-<li><a href="#committing-and-pushing-the-changes">Committing and pushing the changes</a></li>
-<li><a href="#contributing-your-article">Contributing your article</a></li>
+<li><a href="#forking-the-source-code" id="toc-forking-the-source-code">Forking the source code</a></li>
+<li><a href="#creating-a-new-project" id="toc-creating-a-new-project">Creating a new project</a></li>
+<li><a href="#adding-your-own-article" id="toc-adding-your-own-article">Adding your own article</a></li>
+<li><a href="#committing-and-pushing-the-changes" id="toc-committing-and-pushing-the-changes">Committing and pushing the changes</a></li>
+<li><a href="#contributing-your-article" id="toc-contributing-your-article">Contributing your article</a></li>
 </ul></li>
-<li><a href="#working-on-your-project">Working on your project</a>
+<li><a href="#working-on-your-project" id="toc-working-on-your-project">Working on your project</a>
 <ul>
-<li><a href="#the-pull-request-workflow">The Pull Request workflow</a></li>
-<li><a href="#adding-changes-to-the-article">Adding changes to the article</a></li>
+<li><a href="#the-pull-request-workflow" id="toc-the-pull-request-workflow">The Pull Request workflow</a></li>
+<li><a href="#adding-changes-to-the-article" id="toc-adding-changes-to-the-article">Adding changes to the article</a></li>
 </ul></li>
-<li><a href="#general-guidelines">General guidelines</a>
+<li><a href="#general-guidelines" id="toc-general-guidelines">General guidelines</a>
 <ul>
-<li><a href="#project-guidelines">Project guidelines</a></li>
-<li><a href="#presentation-guidelines">Presentation guidelines</a></li>
+<li><a href="#project-guidelines" id="toc-project-guidelines">Project guidelines</a></li>
+<li><a href="#presentation-guidelines" id="toc-presentation-guidelines">Presentation guidelines</a></li>
 </ul></li>
 </ul>
 </nav>
@@ -1610,11 +1636,11 @@ Pull Request workflow.</p></p>
 <li>Set the date as follows: <code>date: "`r Sys.Date()`"</code>. In this way, the date of the article will be the date of the last compilation, which is convenient.</li>
 <li>Add <code>toc: true</code> to the <code>distill_article</code> options.</li>
 </ol>
-<p>The header should look like this:</p>
+<p>The header <strong>must</strong> look like this:</p>
 <div class="layout-chunk" data-layout="l-body">
 <p><img src="08-edit_yaml.png" width="50%" style="display: block; margin: auto;" /></p>
 </div>
-<p>Also, remove the following part, because this prevents the R code chunks for being displayed in the article, and we want precisely the opposite:</p>
+<p>Also, <strong>remove the following part</strong>, because this prevents the R code chunks for being displayed in the article, and we want precisely the opposite:</p>
 <div class="layout-chunk" data-layout="l-body">
 <p><img src="09-remove_chunk.png" width="50%" style="display: block; margin: auto;" /></p>
 </div>
@@ -1665,7 +1691,7 @@ Pull Request workflow.</p></p>
 <li>A collaborator commits some changes and asks for feedback.</li>
 <li>The maintainer reviews the changes and proposes corrections.</li>
 </ol>
-<p>Note that, once the Pull Request is open, every commit that the collaborator pushes to their fork is automatically added to the Pull Request. So the cycle repeats until everybody is happy with the result, and the maintainer finally merges the Pull Request.</p>
+<p>Note that, <strong>once the Pull Request is open, every commit that the collaborator pushes to their fork is automatically added to the Pull Request</strong>. In other words, you do not need to open a new Pull Request (in fact, you cannot). So the cycle repeats until everybody is happy with the result, and the maintainer finally merges the Pull Request.</p>
 <h3 id="adding-changes-to-the-article">Adding changes to the article</h3>
 <p>The workflow is pretty straightforward:</p>
 <ol type="1">
@@ -1674,30 +1700,38 @@ Pull Request workflow.</p></p>
 <li>Mark as <em>Staged</em> in the Git pane all (<strong>and only</strong>) the files under <code>_projects/&lt;year&gt;/100xxxxxx/</code>.</li>
 <li>Commit (with a descriptive commit message) and push.</li>
 </ol>
+<aside>
+Don’t forget that <strong>commit messages are for future-you</strong>. Put something descriptive of what you have done, so that, if future-you finds an issue and wants to undo something, it is easy to remember what each commit did. If you want to communicate with me, commit messages are not a good way; instead, the PR has a nice web interface where you can add comments (with Markdown syntax, yay!).
+</aside>
 <p>Finally, when the project is finished, please click the <strong>“Ready for review”</strong> button in the Pull Request (at the bottom, on top of the comment box). Then I will check that everything is ok, ask for minor changes if required, and then merge the Pull Request and your project will be live!</p>
 <h2 id="general-guidelines">General guidelines</h2>
 <h3 id="project-guidelines">Project guidelines</h3>
 <ul>
-<li><p><strong>Commit messages are for future-you</strong>. Put something descriptive of what you have done, so that, if future-you finds an issue and wants to undo something, it is easy to remember what each commit did. If you want to communicate with me, commit messages are not a good way; instead, the PR has a nice web interface where you can add comments (with Markdown syntax, yay!).</p></li>
-<li><p><strong>Use level 2 headings (<code>## Title</code>) as the highest level for headings</strong>. In other words, please do not use level 1 headings in your posts (<code># Title</code>), because the title of the post is already level 1, so it looks nicer if sections start one level below.
-Note that you do not need to add <code>echo=TRUE</code> to every chunk, because they are shown by default.</p></li>
-<li><p>It is a good practice to set an initial chunk, right below the YAML header, as the following to ensure that images use the whole width available and are centered:</p></li>
-</ul>
+<li><p><strong>Use level 2 headings (<code>## Title</code>) as the highest level for headings</strong>. In other words, please do not use level 1 headings in your posts (<code># Title</code>), because the title of the post is already level 1, so it looks nicer if sections start one level below.</p></li>
+<li><p>Note that you <strong>do not</strong> need to add <code>echo=TRUE</code> to every chunk, because they are shown by default. And we want to show the code, so <strong>do not</strong> add <code>echo=FALSE</code> either unless you have a good reason to hide some special piece of code.</p></li>
+<li><p>It is a good practice to set an initial chunk, right below the YAML header, as the following to ensure that images use the whole width available and are centered. The <code>fig.showtext=TRUE</code> option is important only if you are using external fonts as described <a href="../05/#advanced-font-usage">here</a>.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="st">```</span><span class="at">{r setup, include=FALSE}</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="at">knitr::opts_chunk$set(out.width=&quot;100%&quot;, fig.align=&quot;center&quot;)</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="st">```</span></span></code></pre></div>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="at">knitr::opts_chunk$set(out.width=&quot;100%&quot;, fig.align=&quot;center&quot;, fig.showtext=TRUE)</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="st">```</span></span></code></pre></div></li>
+<li><p>Your first task is to show and discuss the chart you selected. For this, save a copy, put it close to the <code>Rmd</code> file, and then reference it with Markdown syntax as follows:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode markdown"><code class="sourceCode markdown"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="al">![Original chart. Source: &lt;the source&gt;](original-chart.png)</span>{.external width=&quot;100%&quot;}</span></code></pre></div></li>
+<li><p><strong>Load only the necessary libraries</strong>, i.e., the ones that you actually use. This is important because it makes the code cleaner and easier to understand, and prevents readers from installing a lot of packages that they will not use. Also note that, if you load the <code>tidyverse</code> package, a bunch of packages are loaded with it (such as <code>dplyr</code>, <code>ggplot2</code>… see the output from <code>tidyverse::tidyverse_packages()</code> for a complete list), so you do not need to load them separately.</p></li>
+<li><p>It is a good practice to name your chunks with a descriptive name, so that it is easier to understand what each chunk does. For example, if you are loading the data, you can name the chunk <code>load-data</code>.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="st">```</span><span class="at">{r load-data}</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="at">data &lt;- read.csv(&quot;mydata.csv&quot;)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="st">```</span></span></code></pre></div></li>
+<li><p>About the data, please <strong>include the required data</strong> (and only the required data) in the folder of your project. If the original dataset contains more than you need, please filter it (only the required rows and columns) and save it. Preferably, it should be a CSV or similar <strong>text-based format</strong> (if it’s another format, please load the data into R and then save it as CSV). If you need to use a large dataset, please let me know and we can discuss the best way to handle it. Then, you can read the data just using the name of your file, which should be close to the <code>Rmd</code> file. In other words, <strong>do not include paths from your own computer</strong>, because this is not going to work in everyone else’s computer.</p></li>
+<li><p>Naming the chunks is especially important for those that produce a chart, because the image file will have the name of the chunk as file name. Note also that chunk names should not contain spaces or special characters.</p></li>
+<li><p>Chunks that produce a chart should have the <code>fig.width</code> and <code>fig.height</code> options set to the desired size of the image (in inches; default values are 7 and 5 respectively). With these parameters, you can control the aspect ratio and also the relative size of the fonts. Play with them until you find a good balance.</p></li>
+<li><p>You <strong>should not</strong> change the <code>fig.dpi</code>. The default is more than enough for a webpage. If your fonts don’t look <em>sharp enough</em>, this can be solved by changing the size of the image (see the previous point).</p></li>
+<li><p>In <code>distill</code> articles, you can set images and tables that span a width larger than the text column. It looks nicer e.g. for images that are very wide. There are a couple of examples in the <a href="../../projects/gapminder/">Gapminder project</a>. See the <a href="https://rstudio.github.io/distill/figures.html">documentation</a> for further details.</p></li>
+<li><p>Note also the <code>preview=TRUE</code> option <a href="https://github.com/IBiDat/dataviz/blob/main/_projects/gapminder/gapminder.Rmd#L265">here</a>. Adding this option to a chunk makes the image produced by that chunk as the preview image for your article in the “Projects” gallery. See the <a href="https://rstudio.github.io/distill/metadata.html#preview-images">documentation</a> for further details.</p></li>
+<li><p><strong>Do not repeat yourself</strong>. If you find yourself writing the same code in multiple places, it is a good idea to <strong>refactor</strong> your code, so that, if you need to change something, you only need to change it in one place:</p>
 <ul>
-<li>It is a good practice to set the whole width in Markdown images:</li>
-</ul>
-<div class="sourceCode" id="cb2"><pre class="sourceCode markdown"><code class="sourceCode markdown"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="al">![This is a caption.](my-image.png)</span>{width=&quot;100%&quot;}</span></code></pre></div>
-<ul>
-<li>For external images (the ones that you downloaded from somewhere, such as the chart you are trying to replicate), it is a good practice to set the “external” class too:</li>
-</ul>
-<div class="sourceCode" id="cb3"><pre class="sourceCode markdown"><code class="sourceCode markdown"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="al">![This is another caption.](external-image.png)</span>{.external width=&quot;100%&quot;}</span></code></pre></div>
-<ul>
-<li><p>In <code>distill</code> articles, you can set images and tables that span a width larger than the text column. It looks nicer e.g. for images that are very wide. There are a couple of examples in the Gapminder project. You can see how this is done in the Rmd, <a href="https://github.com/IBiDat/dataviz/blob/main/_projects/gapminder/gapminder.Rmd#L265">here</a> and <a href="https://github.com/IBiDat/dataviz/blob/main/_projects/gapminder/gapminder.Rmd#L291">here</a>, just in case you want to use this feature.</p></li>
-<li><p>Note also the <code>preview=TRUE</code> option <a href="https://github.com/IBiDat/dataviz/blob/main/_projects/gapminder/gapminder.Rmd#L265">here</a>. Adding this option to a chunk makes the image produced by that chunk as the preview image for your article in the “Projects” gallery.</p></li>
-<li><p><strong>One of most important best practices is to limit the width of your code</strong>. If you write code lines that are very long, they are harder to read. And especially in this case, these long lines will jump the width of the post and will be lost in the margin, outside of the visible area. So in general it is a good idea to break your lines of code at a maximum width. The common practice is to use a maximum width of 80 characters. There is an option in RStudio to show a visual guide in the editor for this limit. You can activate this in <code>Tools &gt; Global Options &gt; Code &gt; Display &gt; Show margin</code>. There is also a package called <code>styler</code> that allows you to style your document automatically. After installing the package, if you click “Addins” in the RStudio toolbar, there is a new addin called “Style active file”. This could be a good starting point (although you may not like other styling options that this package applies).</p></li>
+<li>if the repeated piece of code is some data analysis, then you should <strong>write a function</strong> than you can apply in several places;</li>
+<li>if it’s a theme, some scales, annotations… that you keep adding to multiple charts, then you should <strong>add those layers together into a variable</strong>, then add that variable to subsequent charts (this is demonstrated in the <a href="../../projects/gapminder/">Gapminder project</a>).</li>
+</ul></li>
+<li><p><strong>One of most important best practices is to limit the width of your code</strong>. If you write code lines that are very long, they are harder to read. And especially in this case, these long lines will go off the page, and will be lost in the margin, outside of the visible area. So in general it is a good idea to break your lines of code at a maximum width. The common practice is to use a maximum width of <strong>80 characters</strong>. There is an option in RStudio to show a visual guide in the editor for this limit. You can activate this in <code>Tools &gt; Global Options &gt; Code &gt; Display &gt; Show margin</code>. There is also a package called <code>styler</code> that allows you to style your document automatically. After installing the package, if you click “Addins” in the RStudio toolbar, there is a new addin called “Style active file”. This could be a good starting point (although you may not like other styling options that this package applies).</p></li>
 </ul>
 <h3 id="presentation-guidelines">Presentation guidelines</h3>
 <ul>

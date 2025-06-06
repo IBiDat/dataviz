@@ -1,0 +1,968 @@
+---
+title: "Exploring the Global Link Between CO2 Consumption and GDP: A Visual Journey"
+description: |
+  This work explores the relationship between CO2 consumption per capita and GDP per capita worldwide, through a series of visualizations created using mainly the ggplot2 package in R. Starting with an original graph from Our World In Data, we replicate and enhance it. These improvements range from adjustments to labels and colors to the addition of reference lines to highlight trends and patterns. Throughout the process, key improvements are made to increase clarity, visual accessibility, and inclusivity, ensuring the graphics are easily interpretable by a diverse audience, including those with visual impairments. Lastly various types of plots such as other scatter plots, box plots, bar plots, and area plots are made with the same data base. 
+categories: "2024"
+author: Pablo Romero
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+## Introduction
+
+For my final Data Visualization task, I have chosen as a graph to replicate and, subsequently improve, one from the Our World In Data web repository. This website is in charge of using all the reliable information available on the internet and making relevant reports and visualizations about it. This is done with the goal of making the knowledge on the big problems accessible and understandable.
+
+There are two reasons why we have chosen to replicate and improve this graph: first, the idea offered by Our World In Data of visualizing different information with standardized graphs seems to me especially interesting and challenging, especially knowing that they use their own data visualization tool to do so. Secondly, the subject matter is particularly relevant, especially due to the unprecedented climate emergency we are facing, which is one of the great problems of the 21st century.
+
+As can be seen, the graph shown is a scatter plot visualizing the relationship between GDP per capita (x-axis) and co2 emissions, also per capita (y-axis).
+
+![Scatter plot measuring the relation between CO2 emmisions and GDP (per capita). Source: [Our World In Data] (<https://ourworldindata.org/>).](https://imagedelivery.net/qLq-8BTgXU8yG0N6HnOy8g/90d15fda-6339-4a68-6de3-846c09a07f00/w=1350.png){.external width="100%"}
+
+If we start to break down this chart, we observe that it is composed first of all, as we have already mentioned, of a scatter plot. The values that make up the scatter plot are in the shape of a sphere, which change size according to the country's population and color according to the continent in which it is located. Two purple and blue ellipses are added to this scatter plot, representing the countries with energy poverty and those with too high C02 emissions respectively. On the right side, in a greenish blue color, we can see those countries that, in terms of gdp per capita, could have energy access with net-zero COz emissions.
+
+Another relevant aspect of this, which escapes the traditional aspects of a scatter plot, are the two arrows in the footer of the graph, which provide relevant information on the subject that simplifies and visualizes. Thus, and after this first introductory section, we proceed to prepare the data to be able to replicate the aforementioned graph.
+
+## Getting started
+
+### Packages
+
+```{r, warning= FALSE, message=FALSE}
+
+library(tidyverse)
+library(ggrepel)
+library(countrycode)
+library(reprex)
+library(DataExplorer)
+library(grid)
+library(png)
+library(cowplot)
+library(ggforce)
+library(RColorBrewer)
+library(scales)
+
+```
+
+### Preparing the data and the graph
+
+First, we have to load the database we are going to work with. Fortunately, Our World In Data has the data it uses in its graphs available free of charge and without the need to ask for permissions to work with them. So, we download them from Our World In Data's own repository.
+
+```{r, message=FALSE}
+
+owid_co2_data <- read_csv(file = "owid-co2-data.csv")
+
+```
+
+If we visualize the table it generates, we observe a tibble of 47415 x 79 in which we find a relevant battery of information about COVID-19. Returning to the graph we proceed to replicate, secondly, we will perform a series of transformations and filtering steps on the CO2 consumption per capita dataset for the year 2020. The goal is to create a subset of countries based on their GDP per capita and CO2 consumption, with specific conditions derived from the data of Malawi and Singapore. The Malawi and Singapore situation is because, later, for the creation of the ellipses, we will need to take those countries as the limit for a correct visualization. Thus, the steps to be performed are as follows:
+
+-   [**Filter the dataset for the year 2020.**]{.underline}
+
+-   [**Select relevant columns:**]{.underline} we will then select the necessary columns from the original dataset: country, iso_code, year, population, gdp, and consumption_co2_per_capita. These are the key variables needed to replicate the chart.
+
+-   [**Calculate GDP per capita:**]{.underline} After that, we will create a new variable called gdp_per_capita. This will be calculated by dividing the GDP of each country by its population, allowing for comparisons of economic output per person.
+
+-   [**Add a continent variable:**]{.underline} we will use the countrycode function to add a new column called continent. This function will map the country’s ISO code to its corresponding continent, providing a geographic categorization for the countries in the dataset.
+
+-   [**Remove rows with missing continent data:**]{.underline} To ensure the dataset is clean, we will filter out any rows where the continent variable is NA, as these countries do not have a continent classification.
+
+-   [**Extract values for Malawi and Singapore:**]{.underline} Next, we will extract the GDP per capita and CO2 consumption per capita for Malawi and Singapore. These values will be used as reference points for the filtering criteria in the ellipses. Specifically, we will extract Malawi’s GDP per capita (malawi_gdp), Malawi’s CO2 consumption per capita (malawi_co2), and Singapore’s CO2 consumption per capita (singapore_co2).
+
+-   [**Filter countries based on GDP and CO2 consumption:**]{.underline} Finally, we will filter the dataset to include only those countries that meet the following conditions: The country’s gdp_per_capita is greater than or equal to Malawi’s gdp_per_capita and the country’s consumption_co2_per_capita is greater than or equal to Malawi’s consumption_co2_per_capita, but less than or equal to Singapore’s consumption_co2_per_capita.
+
+This will create a subset of countries with economic and environmental characteristics within the specified range of Malawi and Singapore. This is so that the points that appear in my graph are exactly the same as those presented in the original OWID graph.
+
+```{r}
+
+co2data <- owid_co2_data |> 
+  filter(year == 2020) |> 
+  select(country, iso_code, year, population, gdp, consumption_co2_per_capita) |> 
+  mutate(gdp_per_capita = gdp / population) |> 
+  mutate(continent = countrycode(sourcevar = iso_code,
+                                 origin = "iso3c", destination = "continent")) |> 
+  filter(!is.na(continent))
+
+malawi_gdp <- co2data |> 
+  filter(country == "Malawi") |> 
+  pull(gdp_per_capita)
+
+malawi_co2 <- co2data |> 
+  filter(country == "Malawi") |> 
+  pull(consumption_co2_per_capita)
+
+singapore_co2 <- co2data |> 
+  filter(country == "Singapore") |> 
+  pull(consumption_co2_per_capita)
+
+co2data <- co2data |> 
+  filter(
+    gdp_per_capita >= malawi_gdp,                          
+    consumption_co2_per_capita >= malawi_co2,              
+    consumption_co2_per_capita <= singapore_co2 
+  )
+
+```
+
+To continue replicating the original chart accurately, thirdly, we will use the **specific color scheme for each continent**, which matches the original chart’s color assignments. This ensures that our visualization maintains the same visual appearance, including the use of colors for the continents.
+
+In the original chart, each continent is assigned a particular color. By defining the continent_colors vector, we are directly applying these colors to the relevant continents in our dataset. This approach will ensure that when we visualize the data, the continents will be represented using the same color scheme as the original chart.
+
+```{r}
+
+continent_colors <- c(
+  "Africa" = "#a561a0",       
+  "Americas" = "#e16e6d",      
+  "Asia" = "#529a9d",         
+  "Europe" = "#6a778f",        
+  "Oceania" = "#a64f5a"       
+)
+
+```
+
+Also, in the original chart from Our World In Data (OWID), certain countries are labeled to highlight their specific data points, making them stand out in the visualization. To replicate this feature in our own plot, we select the same countries that were labeled in the OWID chart. This allows us to ensure that the labeled countries in our plot match the ones in the original chart, maintaining consistency and accuracy in our replication.The process:
+
+-   [**Selection of countries:**]{.underline} We begin by defining a vector called selected_countries, which contains the list of countries that were labeled in the original OWID chart. These countries are selected because they are the ones that the original chart focused on, either due to their notable data points or for visual clarity. By selecting these countries, we are replicating the choice made by the original chart.
+
+-   [**Labeling the countries in the dataset:**]{.underline} After selecting the countries, we create a new variable label_country in our dataset (co2data). This variable is generated using the ifelse function. It checks if each country in the dataset is in the selected_countries list: If the country is in the list, it will be labeled with its name in the label_country column. If the country is not, the value will be NA (not applicable).
+
+This allows us to focus only on the countries that need to be labeled, while other countries remain unlabelled, just like in the original chart.
+
+```{r}
+
+selected_countries <- c(
+  "Malawi", "Ethiopia", "Tanzania", "Pakistan", "India", "Guatemala",
+  "Ukraine", "Namibia", "Indonesia", "Singapore", "China", "Mexico",
+  "Turkey", "Spain", "France","Sweden", "Poland", "Russia",
+  "United Kingdom", "Israel", "Japan", "South Korea", "Switzerland",
+  "Canada", "United States")
+
+co2data$label_country <- ifelse(co2data$country %in% selected_countries,
+                                co2data$country, NA)
+
+```
+
+In the step, we will define two separate groups of countries for which we want to create ellipses on the plot. These groups are based on the original OWID dataset, which highlights certain countries in different colors (blue and purple). To ensure we are using the correct countries for each color, we will filter the dataset to include only those countries that belong to the blue and purple groups.
+
+-   [**The blue group**]{.underline} will consist of countries like the United States, Singapore, Canada, Switzerland, and others with higher GDP and CO2 consumption.
+
+-   [**The purple group**]{.underline} will include countries like China, Mexico, India, Pakistan, and others that typically have lower GDP and CO2 consumption.
+
+We need to select these countries first so that we can draw the ellipses for each group accurately, based on their GDP and CO2 consumption per capita. Next, we will apply filters on the gdp_per_capita and consumption_co2_per_capita variables to ensure that the data points for the countries in each group (blue and purple) fall within a relevant range. This step is essential for drawing the ellipses correctly. The filtering will allow us to focus on countries with:
+
+-   [**GDP per capita**]{.underline} greater than or equal to Malawi’s GDP and less than or equal to 150,000.
+
+-   [**CO2 consumption**]{.underline} per capita between 0 and 22.
+
+By applying these filters, we ensure that the ellipses we create will be well-defined and represent the correct regions of the original plot.
+
+```{r}
+
+bluevalues <- co2data |> 
+  filter(country %in% c("United States", "Singapore", "Canada",
+                        "Switzerland", "South Korea", "Japan", "Israel",
+                        "Russia", "Poland", "United Kingdom", "Sweden",
+                        "France", "Spain", "Turkey", "China", "Mexico",
+                        "Ukraine", "Namibia")) |> 
+  select(country, gdp_per_capita, consumption_co2_per_capita)  
+
+filtered_bluevalues <- bluevalues |> 
+  filter(
+    gdp_per_capita >= malawi_gdp & gdp_per_capita <= 150000,
+    consumption_co2_per_capita >= 0 & consumption_co2_per_capita <= 22
+  )
+
+purplevalues <- co2data |> 
+  filter(country %in% c("China", "Mexico", "Ukraine", "Namibia", "India", 
+                        "Pakistan", "Guatemala", "Indonesia", "Tanzania", 
+                        "Ethiopia", "Malawi")) |> 
+  select(country, gdp_per_capita, consumption_co2_per_capita)  
+
+filtered_purplevalues <- purplevalues |> 
+  filter(
+    gdp_per_capita >= malawi_gdp & gdp_per_capita <= 150000,
+    consumption_co2_per_capita >= 0 & consumption_co2_per_capita <= 22
+  )
+
+co2data <- co2data |> 
+  mutate(consumption_co2_per_capita = ifelse(country == "Singapore",
+                                             21, consumption_co2_per_capita))
+
+```
+
+Lastly, in the final step of this part, we will load the Our World In Data (OWID) logo image to include it in the plot. This is essential for replicating the original graphic, as it features the OWID logo prominently. To load the image, we use the readPNG() function to read the PNG file, and then we create a graphical object using rasterGrob() from the grid package. This object will allow us to position the logo on the plot later.
+
+```{r}
+
+logo <- readPNG("logo_owid.png")
+logo_grob <- rasterGrob(logo, interpolate = TRUE)
+
+```
+
+## Replica
+
+In this explanation, we will describe how we are replicating a plot from Our World In Data that visualizes the relationship between CO2 emissions per capita and GDP per capita. Our goal is to create a faithful reproduction of this original chart, with attention to detail in aspects like data representation, color schemes, annotations, and visual markers.
+
+### Setting Up the Base Plot
+
+To begin, we will load the data from the original dataset, which contains information on countries’ per capita GDP, per capita CO2 emissions, population, and continent. We will set up the base plot using the ggplot(co2data, aes(...)) function, where we map gdp_per_capita to the x-axis and consumption_co2_per_capita to the y-axis. We will size the points according to the population of each country and color the points based on the continent, using the continent variable for both the color and fill aesthetics. This setup reflects the structure of the original plot, which uses similar variables to communicate the relationship between economic output and environmental impact.
+
+### Customizing the Axes
+
+Then, in the original plot, the x-axis is presented on a logarithmic scale to better visualize the wide range of GDP per capita values. We will replicate this approach by applying scale_x_log10() to our plot. This will allow us to display countries with both low and high GDPs in a way that maintains the clarity of the data. We will set the axis breaks at values like 2000, 5000, 10000, and so on, and format these labels to show the GDP values in dollars using scales::dollar_format(). For the y-axis, we will use scale_y_continuous() to display CO2 emissions in a way that matches the original plot’s scale, with labels such as “0 t”, “2.5 t”, “5 t”, and “20 t” to help viewers interpret the emissions data more easily.
+
+### Adjusting Point Size and Color
+
+Following with the graph replica, to mimic the visual structure of the original plot, we will adjust the size of each data point based on the population of the country. Using the scale_size_area() function, we will size the points accordingly, setting a maximum point size and defining population ranges such as “10M”, “100M”, and “1B”. Additionally, we will color the points by continent, applying a custom color palette (continent_colors) to ensure that the countries are distinguishable by their geographic regions, just as in the original plot. This color scheme will be consistent with the one used in the Our World In Data chart to visually separate different continents.
+
+### Adding Country Labels
+
+Know, as you can see, country labels are placed near the corresponding data points to indicate which countries are represented. We will replicate this by adding text labels for each country using geom_text_repel(). This function will automatically adjust the positions of the labels to avoid overlap and ensure that all countries are labeled clearly. We will assign the text labels based on the label_country variable, which holds the names of the countries that appear in the original graph, and color the labels according to the continent.
+
+### Highlighting Key Insights with Annotations
+
+A major feature of the original plot is the use of annotations to highlight specific trends and key insights. We will replicate this by adding static text annotations to our plot. For example, we will add a label that reads “CO2 emissions are too high” in a prominent location on the graph. We will also add text annotations near the origin of the plot to explain the concepts of energy poverty and the goal of achieving net-zero emissions. These annotations will be carefully placed, ensuring that they don’t obstruct important data points but still convey essential messages to the viewer.
+
+### Visual Markers for Key Thresholds
+
+In the original plot, several lines and segments are used to visually represent key thresholds, such as the baseline for CO2 emissions and significant GDP per capita values. We will add a horizontal line at y = 0 using geom_hline() to indicate the baseline for CO2 emissions. Additionally, we will use geom_segment() to draw vertical lines at specific GDP per capita values, emphasizing key economic thresholds, just like in the original plot. These visual markers will help viewers focus on significant points in the data and better understand the relationship between economic development and environmental impact.
+
+### Highlighting Groups of Countries with Ellipses
+
+The original plot also uses ellipses to highlight specific groups of countries that share similar characteristics, such as those with relatively high or low CO2 emissions and GDP per capita. We will replicate this by using geom_mark_ellipse() to draw ellipses around specific sets of countries, identified by the bluevalues and filtered_purplevalues datasets. These ellipses will be semi-transparent, drawing attention to the countries within each group without obscuring the rest of the plot. This visual technique is consistent with the original chart, where ellipses help to illustrate clusters of countries with similar environmental and economic profiles.
+
+### Adding Curves to Represent Trends
+
+To further enhance the narrative of the plot, we will add curved arrows that represent the path toward sustainability. In the original plot, these arrows help communicate the idea that to end climate change, emissions must eventually reach zero. We will use geom_curve() to draw these arrows, illustrating the need to reduce emissions to a sustainable level. Along these curves, we will add text annotations to explain the significance of these trends, such as halving emissions to 2.4 tonnes per person. This will reinforce the message conveyed in the original plot and provide context for viewers.
+
+### Final Adjustments and Aesthetic Choices
+
+Finally, we will make several adjustments to the plot’s appearance to ensure that it closely matches the original. We will use coord_cartesian() to adjust the plot’s limits, ensuring that all data points and annotations are visible and properly positioned. The plot will be styled using theme_minimal(), which gives the chart a clean and modern look. We will further customize the fonts, axis labels, grid lines, and margins to match the original chart’s design. Special attention will be given to the title and subtitle, ensuring that the font, size, and alignment are consistent with the original plot’s aesthetics.
+
+### Adding Logo and Source Information
+
+In the final step, we will add the logo and source information to the plot, just as it appears in the original chart. Using ggdraw(), we will position the logo in the top-right corner of the plot and add text labels at the bottom to provide details about the data sources and licensing. This step will help give proper attribution to the data providers and maintain consistency with the visual style of the original plot.
+
+### Replica code and graph
+
+```{r, layout="l-page", fig.width=16, fig.height=10, warning=FALSE, preview=TRUE}
+
+main_plot <- ggplot(co2data, aes(
+  x = gdp_per_capita,
+  y = consumption_co2_per_capita,
+  size = population,
+  color = continent,
+  fill = continent
+)) +
+  geom_point(
+    alpha = 0.9,
+    shape = 21,
+    color = "black",
+    stroke = 0.7
+  ) +
+  scale_x_log10(
+    breaks = c(2000, 5000, 10000, 20000, 50000, 100000),
+    labels = scales::dollar_format(accuracy = 1)
+  ) +
+  scale_y_continuous(
+    breaks = c(0, 2.5, 5, 10, 15, 20, 22),
+    labels = c("0 t", "2.5 t", "5 t", "10 t", "15 t", "20 t", " ")
+  ) +
+  scale_size_area(
+    max_size = 20,
+    breaks = c(1e7, 1e8, 1e9),
+    labels = c("10M", "100M", "1B"),
+    guide = "none"
+  ) +
+  scale_color_manual(
+    values = continent_colors,
+    guide = "none"
+  ) +
+  scale_fill_manual(values = continent_colors) +
+  geom_text_repel(
+    aes(label = label_country, color = continent),  
+    size = 5,  
+    family = "Verdana",
+    box.padding = 0.1,
+    point.padding = 0.05,
+    force = 0.3,
+    max.overlaps = 40,
+    segment.color = NA,
+    segment.size = 0.2,
+    nudge_x = 0.1,
+    nudge_y = 0.1,
+  ) +
+  labs(
+    title = "CO2 Emissions per Capita vs GDP per Capita", 
+    subtitle = "Per capita consumption-based CO2 emissions", 
+    x = "GDP per capita (int. -$)",
+    y = NULL,
+    size = "Population"
+  ) +
+  geom_text(
+    aes(x = 25000, y = 17, label = "CO2 emissions\nare too high"),
+    family = "Verdana", 
+    size = 10, 
+    color = "#326495",
+    hjust = 1
+  ) +
+  geom_text(
+    aes(x = 30000, y = 2.5,
+        label = "Energy access with\nnet-zero CO2 emissions"),
+    family = "Verdana",
+    size = 9,
+    color = "#0f8b85",
+    hjust = 0
+  ) +
+  annotate("text", x = 2500, y = 7.5,
+           label = "Energy poverty",
+           family = "Verdana",
+           size = 10, color = "#b04b98") +
+  geom_hline(yintercept = 0, color = "#7f223f", size = 0.5) +
+  geom_segment(
+    aes(x = 25000, xend = Inf,
+        y = 0, yend = 0),
+    color = "#0e8c4f", size = 5
+  ) +
+  geom_segment(
+    aes(x = 25000, xend = Inf,
+        y = 0, yend = 0),
+    color = "#72ddd5", size = 3
+  ) +
+  geom_mark_ellipse(
+    data = bluevalues, 
+    aes(x = gdp_per_capita, y = consumption_co2_per_capita),
+    fill = "#006DBC", 
+    color = NA, size = 0.1, alpha = 0.2
+  ) +
+  geom_mark_ellipse(
+    data = filtered_purplevalues, 
+    aes(x = gdp_per_capita, y = consumption_co2_per_capita),
+    fill = "#BF98C7", 
+    color = NA, size = 0.1, alpha = 0.2
+  ) +
+  geom_curve(
+    aes(x = 0, xend = 0,
+        y = -4, yend = 0), 
+    arrow = arrow(type = "closed",
+                  length = unit(0.15, "inches")), 
+    color = "#3ba09c", size = 0.5,
+    curvature = -0.5
+  ) +
+  geom_curve(
+    aes(x = 0, xend = 0,
+        y = -5, yend = 2.4),
+    arrow = arrow(type = "closed",
+                  length = unit(0.15, "inches")),
+    color = "#95d8c3",
+    size = 0.5,       
+    curvature = -0.5    
+  ) +
+  annotate("text", x = 0, y = -4,
+           label = "To end climate change the long-run goal is that net-emissions decline to zero.",
+           family = "Verdana",
+           size = 5.2, color = "#4b4b4b", hjust = 0) +
+  annotate("text", x = 0, y = -5,
+           label = "Bringing emissions down to 2.4 tonnes per person would mean we have halved emissions from their current level (4.8t), a big milestone.",
+           family = "Verdana",
+           size = 5.2, color = "#4b4b4b", hjust = 0) +
+  coord_cartesian(
+    xlim = c(malawi_gdp, 150000),
+    ylim = c(0, 22),
+    clip = "off"
+  ) +
+  theme_minimal(base_family = "Arial") +
+  theme(
+    plot.title = element_text(
+      family = "Times New Roman", 
+      hjust = 0, 
+      size = 51, 
+      margin = margin(t = 0, r = 1, b = 20, l = 0),
+      color = "#555555"
+    ),
+    plot.subtitle = element_text(
+      family = "Verdana", 
+      hjust = 0,         
+      size = 18, 
+      margin = margin(t = 15, r =0,b = 0, l = 0),  
+      color = "#7f223f"
+    ),
+    axis.title.x = element_text(
+      family = "Verdana",
+      color = "gray50",
+      size = 15
+    ),
+    axis.text = element_text(
+      color = "gray50",
+      size = 20
+    ),
+    axis.text.y = element_text(color = "#7f223f", size = 20),
+    legend.position = "none",
+    panel.grid.major = element_line(
+      color = "gray80",
+      linetype = "dashed"
+    ),
+    panel.grid.minor = element_line(
+      color = "gray90",
+      linetype = "dotted"
+    ),
+    plot.margin = margin(t = 15, r = 35, b = 100, l = 35) 
+  )
+
+final_plot1 <- ggdraw(main_plot) +
+  draw_grob(logo_grob, x = 0.85, y = 0.89,
+            width = 0.18, height = 0.1)
+
+final_plot2 <- ggdraw() +
+  draw_plot(final_plot1) +
+  draw_label(
+    "Data: Global Carbon Project, UN Population, and World Bank.",
+    x = 0.02, y = 0.04, 
+    hjust = 0, fontfamily = "Verdana", size = 12, color = "gray50"
+  ) +
+  draw_label(
+    "OurWorldinData.org",
+    x = 0.02, y = 0.02, 
+    hjust = 0, fontfamily = "Verdana", size = 12, color = "#326495" 
+  ) +
+  draw_label(
+    "- Research and data to make progress against the world's largest problems.",
+    x = 0.13, y = 0.02, 
+    hjust = 0, fontfamily = "Verdana", size = 12, color = "gray50" 
+  ) +
+  draw_label(
+    "Licensed under CC-BY by the author Max Roser.",
+    x = 0.48, y = 0.02, 
+    hjust = -1, fontfamily = "Verdana", size = 12, color = "gray50"
+  )
+
+print(final_plot2)
+
+
+```
+
+As can be seen, an almost 100% faithful replica of the original has been achieved. The biggest problem has been found with the aspect related to the ellipses, since from R itself there is no option to make an ellipse like the one shown in the original graph. In the same way, we have tried to show the closest option to it. Thus, linking with what we have just commented, we want to refer that this section of the ellipses, and the one related to the arrows, has been the most difficult to replicate. This is due to the fact that, by default, when you try to draw things outside your x and y axis limits in a graphic, they are automatically eliminated. Luckily, there is coord_cartesian (clip = “off”), which solves this. The dilemma is that how this is solved is not entirely correct.
+
+## Enhancement
+
+Based on this original graph, we now proceed to make a series of modifications to it as our own proposal for improvement. We must recognize that OWID does an excellent job with its standardized graphs, but the task requires us to make a number of improvements. These have been grouped into four major groups:
+
+-   [**Minor Changes in Labels:**]{.underline} The label text is going to be adjusted in the second plot for clarity and readability. For instance, the labels related to CO2 emissions are going to be changed to “High CO2 emissions remain a challenge” and “Achieving energy access with minimal CO2 emissions.” These revisions will make the language more concise and directly convey the issues being discussed. Additionally, the new labels will be more aligned with a visual storytelling approach, highlighting the challenge of high emissions and the goal of achieving energy access with minimal CO2 emissions. Furthermore, the second plot is going to introduce annotations and labels with more thought-out positioning and font choices to improve readability and the overall flow of information.
+
+-   [**Color-Blind Friendly Colors:**]{.underline} In this second plot, the color palette for continents is going to be modified by using the Dark2 palette from the RColorBrewer package. This change will aim to make the visualization more accessible to individuals with color vision deficiencies. The original plot, which used a custom palette defined by continent_colors, might have contained colors that are harder to distinguish for color-blind users. The new color scheme is going to ensure better differentiation between continents, making the data clearer for a wider range of viewers.
+
+-   [**Visual Accessibility:**]{.underline} The second plot is also going to improve the overall visual accessibility by adjusting font sizes and colors to provide better contrast. For example, the title and subtitle will be larger and more distinguishable, with the subtitle receiving a bolder color to create a clearer visual hierarchy. The axis titles and text are going to be resized, and the y-axis text will be in a more contrasting color to ensure it stands out against the background. These visual tweaks are going to enhance readability for users with visual impairments or those viewing the plot on smaller screens. Additionally, more attention is going to be paid to the size of the point labels, which will be slightly reduced in the second plot (from size 5 to 3.5). This minor change is going to help avoid overcrowding and make the labels more legible without overwhelming the plot’s data points.
+
+-   [**Introduction of Reference Lines:**]{.underline} Another key improvement in the second plot is going to be the addition of reference lines. These lines will serve as helpful indicators for viewers to understand the average trends of the dataset: A dashed horizontal line indicating the mean CO2 emissions per capita and a vertical one indicating the mean GDP per capita. Each of these reference lines will be paired with an annotation that clearly labels the lines’ meanings, enhancing the interpretability of the plot. The colors of the reference lines are going to be chosen for high contrast and visibility. These adjustments are going to not only improve the clarity of the plot but also make it easier for the audience to understand key data trends.
+
+In summary, the second plot is going to introduce several crucial improvements: clearer and more concise labels, a color palette that is friendly to color-blind users, visual enhancements for accessibility, and informative reference lines. These changes will elevate the plot’s clarity, interpretability, and inclusiveness, ensuring that it reaches a broader and more diverse audience while effectively conveying the key messages.
+
+```{r, layout="l-page", fig.width=16, fig.height=10, warning=FALSE}
+
+continent_colors <- brewer.pal(n = 8, name = "Dark2")
+
+better_plot <- ggplot(co2data, aes(
+  x = gdp_per_capita,
+  y = consumption_co2_per_capita,
+  size = population,
+  color = continent,
+  fill = continent
+)) +
+  geom_point(
+    alpha = 0.9,
+    shape = 21,
+    color = "black",
+    stroke = 0.7
+  ) +
+  scale_x_log10(
+    breaks = c(2000, 5000, 10000, 20000, 50000, 100000),
+    labels = scales::dollar_format(accuracy = 1)
+  ) +
+  scale_y_continuous(
+    breaks = c(0, 2.5, 5, 10, 15, 20, 22),
+    labels = c("0 t", "2.5 t", "5 t", "10 t", "15 t", "20 t", " ")
+  ) +
+  scale_size_area(
+    max_size = 20,
+    breaks = c(1e7, 1e8, 1e9),
+    labels = c("10M", "100M", "1B"),
+    guide = "none"
+  ) +
+  scale_color_manual(
+    values = continent_colors, 
+    guide = "none"
+  ) +
+  scale_fill_manual(values = continent_colors) +
+  geom_text_repel(
+    aes(label = label_country, color = continent),
+    size = 3.5,
+    family = "Verdana",
+    box.padding = 0.1,
+    point.padding = 0.05,
+    force = 0.3,
+    max.overlaps = 40,
+    segment.color = NA,
+    segment.size = 0.2,
+    nudge_x = 0.1,
+    nudge_y = 0.1
+  ) +
+  labs(
+    title = "CO2 Emissions per Capita vs GDP per Capita",
+    subtitle = "Per capita consumption-based CO2 emissions", 
+    x = "GDP per capita (int. -$)",
+    y = NULL,
+    size = "Population"
+  ) +
+  geom_text(
+    aes(x = 20000, y = 17, label = "High CO2 emissions\nremain a challenge."),
+    family = "Verdana", 
+    size = 10, 
+    color = "#332288",
+    hjust = 1
+  ) +
+  geom_text(
+    aes(x = 25000, y = 2.5,
+        label = "Achieving energy access\nwith minimal CO2 emissions."),
+    family = "Verdana",
+    size = 10,
+    color = "#117733",
+    hjust = 0
+  ) +
+  annotate("text", x = 2500, y = 7.5,
+           label = "Energy poverty",
+           family = "Verdana",
+           size = 10, color = "#AA4499") +
+  geom_segment(
+    aes(x = 25000, xend = Inf,
+        y = 0, yend = 0),
+    color = "#117733", size = 5
+  ) +
+  geom_segment(
+    aes(x = 25000, xend = Inf,
+        y = 0, yend = 0),
+    color = "#44AA99", size = 3
+  ) +
+  geom_hline(
+  yintercept = mean(co2data$consumption_co2_per_capita, na.rm = TRUE),
+  linetype = "dashed",
+  color = "#F0E442",
+  size = 0.8
+  ) +
+  annotate(
+    "text", 
+    x = 11500, 
+    y = 6.5, 
+    label = "Mean CO2 per capita",
+    color = "#F0E442",
+    hjust = 1.2, 
+    size = 5,
+    fontface = "bold"
+  ) +
+  geom_vline(
+    xintercept = mean(co2data$gdp_per_capita, na.rm = TRUE),
+    linetype = "dashed",
+    color = "#D55E00", 
+    size = 0.8
+  ) +
+  annotate(
+    "text", 
+    x = mean(co2data$gdp_per_capita, na.rm = TRUE),
+    y = 20, 
+    label = "Mean GDP per capita",
+    color = "#D55E00",
+    hjust = -0.2, 
+    size = 5,
+    fontface = "bold"
+  ) +
+  geom_mark_ellipse(
+    data = bluevalues, 
+    aes(x = gdp_per_capita, y = consumption_co2_per_capita),
+    fill = "#88CCEE", 
+    color = NA, size = 1, alpha = 0.1
+  ) +
+  geom_mark_ellipse(
+    data = purplevalues, 
+    aes(x = gdp_per_capita, y = consumption_co2_per_capita),
+    fill = "#BF98C7", 
+    color = NA, size = 1, alpha = 0.1
+  ) +
+  coord_cartesian(
+    xlim = c(malawi_gdp, 150000),
+    ylim = c(0, 22),
+    clip = "off"
+  ) +
+  geom_curve(
+    aes(x = 0, xend = 0,
+        y = -5, yend = 0), 
+    arrow = arrow(type = "closed",
+                  length = unit(0.15, "inches")), 
+    color = "#CC6677", size = 1,
+    curvature = -0.5
+  ) +
+  geom_curve(
+    aes(x = 0, xend = 0,
+        y = -6, yend = 2.4),
+    arrow = arrow(type = "closed",
+                  length = unit(0.15, "inches")),
+    color = "#E69F9C",
+    size = 1,       
+    curvature = -0.5    
+  ) +
+  annotate("text", x = 0, y = -5,
+           label = "The goal to end climate change is to reduce net emissions to zero.",
+           family = "Verdana",
+           size = 5.2, color = "#4b4b4b", hjust = 0) +
+  annotate("text", x = 0, y = -6,
+           label = "Reducing emissions to 2.4 tonnes per person would halve current levels (4.8t), a major milestone.",
+           family = "Verdana",
+           size = 5.2, color = "#4b4b4b", hjust = 0) +
+  theme_minimal(base_family = "Arial") +
+  theme(
+    plot.title = element_text(
+      family = "Times New Roman", 
+      hjust = 0, 
+      size = 50, 
+      margin = margin(t = 0, r = 1, b = 20, l = 0),
+      color = "#555555"
+    ),
+    plot.subtitle = element_text(
+      family = "Verdana", 
+      hjust = 0,         
+      size = 30, 
+      margin = margin(t = 15, r =0,b = 0, l = 0),  
+      color = "#AA4499"
+    ),
+    axis.title.x = element_text(
+      family = "Verdana",
+      color = "gray50",
+      size = 25
+    ),
+    axis.text = element_text(
+      color = "gray50",
+      size = 20
+    ),
+    axis.text.y = element_text(
+      color = "#AA4499",
+      size = 25
+    ),
+    legend.position = "none",
+    panel.grid.major = element_line(
+      color = "gray80",
+      linetype = "dashed"
+    ),
+    panel.grid.minor = element_line(
+      color = "gray90",
+      linetype = "dotted"
+    ),
+    plot.margin = margin(t = 15, r = 35, b = 100, l = 35)
+  )
+
+better_plot1 <- ggdraw(better_plot) +
+  draw_grob(logo_grob, x = 0.85, y = 0.89,
+            width = 0.18, height = 0.1)
+
+better_plot2 <- ggdraw() +
+  draw_plot(better_plot1) +
+  draw_label(
+    "Data: Global Carbon Project, UN Population, and World Bank.",
+    x = 0.02, y = 0.04, 
+    hjust = 0, fontfamily = "Verdana", size = 12, color = "gray50"
+  ) +
+  draw_label(
+    "OurWorldinData.org",
+    x = 0.02, y = 0.02, 
+    hjust = 0, fontfamily = "Verdana", size = 12, color = "#326495" 
+  ) +
+  draw_label(
+    "- Research and data to make progress against the world's largest problems.",
+    x = 0.13, y = 0.02, 
+    hjust = 0, fontfamily = "Verdana", size = 12, color = "gray50" 
+  ) +
+  draw_label(
+    "Licensed under CC-BY by the author Max Roser.",
+    x = 0.48, y = 0.02, 
+    hjust = -1, fontfamily = "Verdana", size = 12, color = "gray50"
+  )
+
+print(better_plot2)
+
+```
+
+Although the original plot was already a strong visual representation, several key improvements were made to enhance its effectiveness further. The adjustments focus on optimizing the clarity and accessibility of the chart without compromising its initial strengths. By refining label language, using a more color-blind friendly palette, and fine-tuning font sizes and contrasts, the plot becomes even more inclusive and easier to interpret for a wider audience. Additionally, the inclusion of reference lines provides clearer context for the data, helping viewers grasp key trends with greater ease. These enhancements ensure the chart is not only visually appealing but also more informative and accessible, making it a more powerful tool for communicating insights.
+
+## Alternative Visualization
+
+Finally, as the third and last section related to the elaboration of graphs, we present a series of alternative visualizations in which, from the same data, we can generate attractive visualizations from another approach to the one proposed by OWID.
+
+### Scatter plot divided by continent
+
+```{r, , layout="l-screen", fig.width=30, fig.height=20, warning=FALSE}
+
+ggplot(co2data, aes(x = gdp_per_capita, y = consumption_co2_per_capita,
+                    color = continent)) +
+  geom_point(
+    alpha = 0.8, size = 5, shape = 21,  
+    fill = "white", stroke = 1.5
+  ) + 
+  scale_x_log10(labels = scales::label_comma()) + 
+  scale_y_continuous(labels = scales::comma_format()) +  
+  scale_color_manual(values = c(
+    "Africa" = "#8e44ad",       
+    "Americas" = "#e74c3c",      
+    "Asia" = "#1abc9c",         
+    "Europe" = "#3498db",        
+    "Oceania" = "#f39c12"
+  )) +  
+  facet_wrap(~ continent, scales = "free_y") +  
+  theme_minimal(base_family = "Arial") +  
+  theme(
+    plot.title = element_text(size = 30, face = "bold", color = "#2c3e50",
+                              hjust = 0.5, margin = margin(b = 20)),
+    axis.title.x = element_text(size = 17, color = "#2c3e50",
+                                face = "bold"),
+    axis.title.y = element_text(size = 17, color = "#2c3e50",
+                                face = "bold"),
+    axis.text = element_text(size = 12, color = "#34495e"),
+    axis.text.x = element_text(angle = 45, hjust = 1),  
+    strip.text = element_text(size = 16, face = "bold", color = "#2c3e50"),
+    legend.position = "none",  
+    panel.grid.major = element_line(color = "gray80", size = 0.5,
+                                    linetype = "solid"),  
+    panel.grid.minor = element_line(color = "gray85", size = 0.3,
+                                    linetype = "dotted"),
+    plot.margin = margin(t = 30, r = 20, b = 40, l = 20),  
+    panel.background = element_rect(fill = "white", color = "white"),
+    plot.caption = element_text(size = 15, face = "bold", color = "#2c3e50",
+                                hjust = 1, margin = margin(t = 20))
+  ) +
+  labs(
+    title = "Relationship Between GDP per Capita and CO2 Consumption per Capita",
+    x = "GDP per Capita (log scale)",
+    y = "CO2 Consumption per Capita (tons)",
+    caption = "Source: UN and World Bank data compiled by Our World In Data."
+  ) +
+  geom_hline(
+    yintercept = mean(co2data$consumption_co2_per_capita, na.rm = TRUE), 
+    color = "#FF69B4", linetype = "longdash"
+  ) +
+  geom_vline(
+    xintercept = mean(co2data$gdp_per_capita, na.rm = TRUE), 
+    color = "#32CD32", linetype = "longdash"
+  ) +
+  geom_text_repel(
+    aes(label = country), 
+    size = 5, box.padding = 0.5, max.overlaps = 10
+  )
+
+```
+
+When comparing this scatter plot to the original plot from Our World in Data (OWID), it’s clear that while both visualizations share the basic concept of illustrating the relationship between GDP per capita and CO2 consumption per capita, there are notable differences in design and approach that significantly impact the clarity and interpretability of the data.
+
+The OWID plot is a straightforward scatter plot with countries represented as points, but it does not incorporate the same level of information. One of the main differences lies in how the continents are handled. The OWID plot uses a global color palette that does not distinctly differentiate between continents, making it harder for viewers to quickly identify regional patterns. In contrast, the current plot employs a unique color for each continent, allowing for an immediate understanding of how each region performs in terms of GDP and CO2 consumption. This feature makes the current plot more user-friendly, especially for audiences trying to analyze continent-specific trends.
+
+Another key difference is in the use of reference lines. The OWID scatter plot might include a general trend or average lines, but the current plot goes a step further by adding both vertical and horizontal dashed lines to indicate the mean GDP per capita and CO2 consumption per capita. These lines help contextualize the data, providing clear benchmarks for comparison across countries. In addition, the inclusion of labels for countries with geom_text_repel in the current plot ensures that individual countries are easily identifiable without overlapping labels, which is a common issue in crowded scatter plots.
+
+From a design perspective, the current plot also focuses on visual accessibility more than the OWID plot. The use of a logarithmic scale for GDP on the x-axis and a linear scale for CO2 consumption on the y-axis helps improve the readability of the data, particularly when dealing with large discrepancies in values. Additionally, adjustments to font size, color contrast, and grid lines enhance the plot’s visual hierarchy, ensuring that the information is accessible to a wider range of viewers, including those with visual impairments.
+
+In summary, while the original OWID plot provides a solid foundation for visualizing the relationship between GDP and CO2 consumption, the current plot refines this concept by introducing key enhancements that improve its clarity, accessibility, and interpretability. These improvements make the plot not only more visually appealing but also more informative, ensuring that it effectively communicates the complex relationship between economic development and environmental impact across different continents.
+
+### Box plot
+
+```{r, , layout="l-page", fig.width=16, fig.height=10, warning=FALSE}
+
+ggplot(co2data, aes(x = continent, y = consumption_co2_per_capita,
+                    fill = continent)) +
+  geom_boxplot(
+    color = "black", 
+    size = 1,      
+    outlier.colour = "#e74c3c", 
+    outlier.size = 4,        
+    outlier.shape = 16,    
+    alpha = 0.8           
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Africa" = "#a561a0",       
+      "Americas" = "#e16e6d",      
+      "Asia" = "#529a9d",         
+      "Europe" = "#6a778f",        
+      "Oceania" = "#a64f5a"
+    )
+  ) +
+  theme_minimal(base_family = "Verdana") +  
+  theme(
+    plot.title = element_text(size = 24, face = "bold", color = "#333333",
+                              hjust = 0.5, margin = margin(b = 20)),
+    axis.title.x = element_text(size = 14, color = "#555555",
+                                face = "bold"),
+    axis.title.y = element_text(size = 14, color = "#555555",
+                                face = "bold"),
+    axis.text = element_text(size = 12, color = "#555555"),
+    axis.text.x = element_text(angle = 45, hjust = 1),  
+    legend.position = "none", 
+    panel.grid.major = element_line(color = "gray90", size = 0.5,
+                                    linetype = "dotted"),
+    panel.grid.minor = element_line(color = "gray95", size = 0.3,
+                                    linetype = "dotted"),
+    plot.margin = margin(t = 30, r = 20, b = 40, l = 20),
+    plot.caption = element_text(size = 10, face = "bold", color = "#2c3e50",
+                                hjust = 1, margin = margin(t = 20))
+  ) +
+  labs(
+    title = "Distribution of CO2 Consumption per Capita by Continent",
+    x = "Continent",
+    y = "CO2 Consumption per Capita (tons)",
+    caption = "Source: UN and World Bank data compiled by Our World In Data."
+  )
+
+```
+
+The box plot is another important visualization that will help to further explore the distribution of CO2 consumption per capita across continents. Unlike the scatter plot, which illustrates the relationship between GDP and CO2 consumption, the box plot will allow us to assess the spread, central tendency, and outliers of CO2 consumption within each continent.
+
+This plot improves upon the simplicity of the OWID visualization by enhancing the visual clarity and providing more detailed information. The box plot will show the median, quartiles, and outliers for each continent, offering a clear view of how CO2 consumption is distributed within each region. By using distinct colors for each continent, we can easily compare the distribution patterns across different regions. The inclusion of outlier points—highlighted in red—will also help to emphasize countries that significantly deviate from the average CO2 consumption, making these outliers easier to identify at a glance.
+
+Moreover, the use of a clean, minimalist theme and appropriate font sizes and contrasts will ensure the box plot is visually accessible. This will make it easier for viewers to interpret the data, whether they are looking for general trends or specific country comparisons. The upcoming box plot will offer a clearer and more nuanced understanding of CO2 consumption per capita by continent, providing an important complement to the scatter plot.
+
+### Bar plot
+
+```{r, , layout="l-page", fig.width=16, fig.height=10, warning=FALSE}
+
+ggplot(co2data, aes(x = continent, y = consumption_co2_per_capita,
+                    fill = continent)) +
+  geom_bar(
+    stat = "identity", position = "stack", color = "white", size = 1, 
+    alpha = 0.9
+  ) +  
+  scale_fill_manual(values = c(
+    "Africa" = "#a561a0",       
+    "Americas" = "#e16e6d",      
+    "Asia" = "#529a9d",         
+    "Europe" = "#6a778f",        
+    "Oceania" = "#a64f5a"
+  )) +  
+  theme_minimal(base_family = "Verdana") +  
+  theme(
+    plot.title = element_text(size = 24, face = "bold", color = "#333333",
+                              hjust = 0.5, margin = margin(b = 20)),
+    axis.title.x = element_text(size = 14, color = "#555555",
+                                face = "bold"),
+    axis.title.y = element_text(size = 14, color = "#555555",
+                                face = "bold"),
+    axis.text = element_text(size = 10, color = "#555555"),
+    axis.text.x = element_text(angle = 45, hjust = 1),  
+    legend.title = element_text(size = 14, face = "bold",
+                                color = "#333333"),
+    legend.text = element_text(size = 12, color = "#555555"),
+    legend.position = "none",  
+    strip.text = element_text(size = 14, face = "bold", color = "#333333"),
+    panel.grid.major = element_line(color = "gray90", size = 0.5,
+                                    linetype = "dotted"),
+    panel.grid.minor = element_line(color = "gray95", size = 0.3,
+                                    linetype = "dotted"),
+    plot.margin = margin(t = 30, r = 20, b = 40, l = 20),
+    panel.background = element_rect(fill = "white", color = "white"),
+    plot.caption = element_text(size = 10, face = "bold", color = "#2c3e50",
+                                hjust = 1, margin = margin(t = 20))
+  ) +
+  labs(
+    title = "Distribution of CO2 Consumption per Capita by Continent",
+    x = "Continent",
+    y = "CO2 Consumption per Capita (tons)",
+    caption = "Source: UN and World Bank data compiled by Our World In Data."
+  )
+
+```
+
+The bar plot serves as a powerful tool to provide a straightforward comparison of CO2 consumption per capita across continents. While the scatter and box plots give insight into relationships and distributions, the bar plot focuses on aggregating the data by continent, showing the average CO2 consumption per person in a more digestible format. By stacking the bars according to the continents and filling them with distinct colors, this visualization provides an immediate sense of which continents are leading or lagging in terms of CO2 consumption.
+
+This plot improves upon the OWID visualization by presenting a more accessible summary of the data. The bar plot format allows for easy comparison between continents, and the consistent color scheme ensures that viewers can quickly distinguish each continent. The plot’s minimalist design, with its clear labels and organized legend, enhances readability, making it suitable for a broad audience, regardless of their familiarity with the dataset. By focusing on the aggregate CO2 consumption, this plot provides a quick overview of the data and complements the more granular insights from the scatter and box plots, ultimately helping to paint a fuller picture of global CO2 consumption trends.
+
+### Area plot
+
+```{r, ,layout="l-page", fig.width=22, fig.height=10, warning=FALSE, message=FALSE}
+
+ggplot(co2data, aes(x = gdp_per_capita, y = consumption_co2_per_capita,
+                    fill = continent)) +
+  geom_area(
+    alpha = 0.6,               
+    color = "black",           
+    size = 0.8                 
+  ) +
+  scale_x_log10(
+    breaks = c(2000, 5000, 10000, 20000, 50000, 100000),
+    labels = scales::dollar_format(accuracy = 1)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Africa" = "#9b59b6",       
+      "Americas" = "#e74c3c",      
+      "Asia" = "#2ecc71",         
+      "Europe" = "#3498db",        
+      "Oceania" = "#f39c12"
+    )
+  ) +
+  theme_minimal(base_family = "Verdana") +  
+  theme(
+    plot.title = element_text(
+      size = 26, face = "bold", color = "#333333", hjust = 0.5,
+      margin = margin(b = 20)
+    ),
+    axis.title.x = element_text(
+      size = 16, color = "#555555", face = "bold", margin = margin(t = 10)
+    ),
+    axis.title.y = element_text(
+      size = 16, color = "#555555", face = "bold", margin = margin(r = 10)
+    ),
+    axis.text = element_text(size = 14, color = "#555555"),
+    axis.text.x = element_text(angle = 45, hjust = 1),  
+    legend.title = element_blank(),  
+    legend.text = element_text(size = 14, color = "#555555"),  
+    legend.position = "right",  
+    panel.grid.major = element_line(color = "gray90", size = 0.5,
+                                    linetype = "dotted"),
+    panel.grid.minor = element_line(color = "gray95", size = 0.3,
+                                    linetype = "dotted"),
+    plot.margin = margin(t = 30, r = 20, b = 40, l = 20),
+    plot.caption = element_text(size = 12, face = "bold", color = "#2c3e50",
+                                hjust = 1, margin = margin(t = 20))
+  ) +
+  labs(
+    title = "Comparing the distribution of CO2 consumption per capita across continents",
+    x = "GDP per Capita (int. -$)",
+    y = "CO2 Consumption per Capita (tons)",
+    caption = "Source: UN and World Bank data compiled by Our World In Data."
+  ) +
+  geom_hline(
+    yintercept = 0, color = "black", size = 0.8  
+  ) +
+  geom_smooth(
+    aes(group = continent), 
+    method = "loess", 
+    color = "white", 
+    size = 1, 
+    linetype = "dashed"  
+  )
+
+```
+
+The area plot presents a compelling visual representation of the relationship between GDP per capita and CO2 consumption per capita across continents. By using a smooth, continuous area chart, it effectively captures the overall distribution and trend, while providing a clear distinction between continents with the use of different fill colors. This plot not only showcases the differences between continents in terms of CO2 consumption but also highlights the trends within each continent with the added smoothed line, which helps identify patterns more easily.
+
+The area plot stands out from other visualizations, such as scatter and box plots, by combining the advantages of displaying cumulative data and emphasizing trends. It offers a clear overview of how CO2 consumption varies with GDP per capita across regions, and it’s easier to interpret for audiences interested in understanding the broad, underlying patterns rather than focusing on individual data points or specific statistical measures.
+
+Among all the visualizations, the area plot is arguably the best choice for this dataset. It effectively balances clarity and depth, making it an ideal choice for presenting the relationship between GDP and CO2 consumption in a visually engaging way. The smooth curves allow for a better understanding of the broader trends and distributions, while the area beneath the curve highlights the volume of CO2 consumption for each continent. The clear, distinct coloring by continent and the ability to compare multiple trends within one plot make it a powerful tool for both high-level analysis and deeper insights into the data. The design is aesthetically pleasing, and the use of a logarithmic scale for GDP per capita allows for a better understanding of how countries at different income levels relate to CO2 consumption.
+
+In summary, the area plot excels in conveying the relationship between GDP and CO2 consumption per capita across continents in an intuitive, easy-to-understand format. Its ability to showcase trends, distributions, and variations makes it the most effective visualization option for this data.
+
+## Final considerations
+
+This project of replicating and improving upon the original visualizations from Our World In Data has highlighted the immense value of effective data visualization in conveying complex datasets in an accessible and meaningful way. Data visualization plays a crucial role in transforming raw data into stories that are not only understandable but also insightful. Whether for an academic audience, policymakers, or the general public, the power of a well-constructed visual is unmatched in terms of both engagement and comprehension. The work done here, from the replication of the original scatter plot to the creation of alternative visualizations, underscores how visual design can make data more interpretable and persuasive.
+
+Using ggplot2 as the primary tool for creating these visualizations has been instrumental in enhancing the overall quality of the work. ggplot2, part of the tidyverse in R, is an exceptional package for creating aesthetically pleasing and highly customizable graphics. The ease of integration with other tools and libraries within the R ecosystem has further enriched the overall workflow, ensuring that the visualizations were not only informative but also visually appealing and professional.
+
+The process of improving the initial scatter plot and generating alternative visualizations, such as the box plot, bar plot, and area plot, has reinforced the idea that there is no one-size-fits-all solution in data visualization. Different types of plots serve different purposes, and their choice must be guided by the specific objectives of the analysis and the intended audience. The scatter plot provided a clear, precise look at the relationship between GDP per capita and CO2 consumption, but it lacked certain elements that could enhance clarity and accessibility. The introduction of custom labels, color-blind friendly palettes, reference lines, and annotations significantly improved the plot’s effectiveness. On the other hand, alternative visualizations like the area plot provided a clearer picture of the cumulative data and trends across continents, making it the best choice for a broader, more general audience.
+
+However, this work is not without areas for improvement. While the plots have been enhanced in terms of readability, accessibility, and visual appeal, future iterations could benefit from more interactivity. Adding interactive features through libraries like plotly would allow users to engage with the data, explore different regions, and zoom in on particular areas of interest. This would elevate the visualizations beyond static images and offer a richer, more immersive experience for the user. Furthermore, the addition of more explanatory elements, such as tooltips or legends that offer detailed context on the data points or trends, would make the visualizations even more informative.
+
+Looking ahead, there are several opportunities to build upon the work completed here. One potential direction is the integration of additional variables or datasets, such as energy consumption or population data, to deepen the analysis and explore how other factors might influence CO2 consumption. Additionally, comparing trends over time could provide an interesting dynamic, especially when considering global efforts to reduce emissions and transition to sustainable energy systems. Another avenue for future work would involve conducting more sophisticated statistical analyses, such as regression modeling or clustering, to uncover deeper insights from the data and visualize these findings in new ways.
+
+In conclusion, the journey of replicating, improving, and expanding upon the original Our World In Data visualizations has been a highly valuable exercise. It has reinforced the importance of thoughtful and purposeful data visualization in enhancing comprehension and decision-making. The use of ggplot2 has been instrumental in bringing these visualizations to life, and the iterative process of improving upon the original plots has emphasized the significance of continuous refinement and thoughtful design.

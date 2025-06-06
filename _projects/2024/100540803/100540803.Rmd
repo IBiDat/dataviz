@@ -1,0 +1,603 @@
+---
+title: "Global Fish Stock Overfishing Status"
+description: |
+  Replication of a chart illustrating fish capture and abundance relative to sustainable levels.
+categories: "2024"
+author: Linghan Zheng
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(out.width="100%", fig.align="center")
+```
+
+## Introduction
+
+Overfishing poses a significant threat to marine ecosystems by causing declining fish populations, reduced fish sizes, and even the potential extinction of species. A fish stock becomes overfished when its abundance (population size) falls below levels needed to sustain its **maximum sustainable yield (MSY)**—the largest amount of fish that can be sustainably captured over the long term.
+
+To better understand fish stock health, Kobe plots are used as a dynamic tool to evaluate the relationship between fish stock capture and abundance relative to the MSY.
+
+-   The *x-axis* represents fish stock abundance relative to the level that can produce the MSY.\
+-   The *y-axis* represents fish stock capture relative to the MSY.
+
+The plot divides fish stocks into four quadrants based on their abundance and capture levels:
+
+1.  **Overfished and currently overfishing**: *Low abundance* and *high capture*.\
+2.  **Not overfished but currently overfishing**: *High capture* but *sufficient abundance*.\
+3.  **Overfished but currently not overfishing**: *Low abundance* and *reduced capture*.\
+4.  **Not overfished and currently not overfishing**: *Sufficient abundance* and *low capture*.
+
+This framework, supported by data from the **US National Oceanic and Atmospheric Administration (NOAA)**, provides insights into long-term sustainability and helps guide fisheries management strategies.
+
+## Original graph
+
+![Kobe Plot 1](images/picture1.png){.external width="100%"} ![Kobe Plot 2](images/picture2.png){.external width="100%"} ![Kobe Plot3](images/picture3.png){.external width="100%"} *Note: The original graph can be found on the [World Bank SDG Atlas - Goal 14: Life Below Water](https://datatopics.worldbank.org/sdgatlas/goal-14-life-below-water/?lang=en#c14s1).*
+
+## Replication with data
+
+### Libraries and dataset
+
+The entire project, including the replication phase and later enhancements, will make use of the following libraries:
+
+```{r,message=FALSE, warning=FALSE}
+library(ggplot2)       
+library(plotly)        
+library(dplyr)         
+library(cowplot)       
+library(RColorBrewer)  
+library(stringr)       
+library(tidyr) 
+library(readxl)
+library(tibble)
+```
+
+The project begins with importing the necessary datasets. The read.csv function from the base R package is used for loading CSV files.
+
+```{r}
+data <- read.csv("goal14.kobe.csv")
+head(data)
+
+```
+
+## Building the graph
+
+### The first plot
+
+To begin the visualization, the x-axis and y-axis are established as the foundation of the plot. Orange points are plotted on the graph, representing specific data points, and two solid black lines are added at 𝑥=1 and 𝑦=1 to divide the plot into quadrants. These lines serve as reference thresholds, indicating the boundaries for key categories within the plot.
+
+```{r}
+ p1<-ggplot(data, aes(x = B_Bmsy, y = F_Fmsy)) +
+  geom_vline(xintercept = 1, linetype = "solid", color = "black") +
+  geom_hline(yintercept = 1, linetype = "solid", color = "black") +
+  geom_point(color = "white", size = 3.5, alpha = 0.9, shape = 21, fill = "#dc7118", stroke = 0.8, na.rm = TRUE)
+p1
+```
+
+Next, I enhance the visualization by adding special points to highlight specific data points. These points are emphasized by adjusting their size, color, and borders to make them visually distinct. Finally, I add a title, axis labels, and adjust the placement of elements to ensure the visualization is aesthetically pleasing and easy to interpret.
+
+```{r}
+special_points <- data.frame(
+  x = c(0.44, 1.18, 1.58, 0.29),
+  y = c(2.2, 1.61, 0.88, 0.47),
+  label = c("Red snapper", "Silky shark", "Pacific ocean perch", "Atlantic herring")
+)
+p1<-p1+geom_point(data = special_points, aes(x = x, y = y), size = 5.5, shape = 21, fill = NA, color = "black", stroke = 0.9, na.rm = TRUE) +
+  geom_point(data = special_points, aes(x = x, y = y), size = 3.5, shape = 21, fill = "#dc7118", color = NA, na.rm = TRUE) +
+  coord_cartesian(xlim = c(0, 3), ylim = c(0, 3)) +
+  scale_x_continuous(breaks = seq(0, 3, 0.5)) +
+  scale_y_continuous(breaks = seq(0, 3, 0.5)) +
+  labs(
+    title = "Understanding Overfishing Through Kobe Plot",
+    subtitle = "Dots represent fish stocks",
+    x = "Abundance (Relative to MSY target size) →",
+    y = "Capture (Relative to MSY ) →"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 18, hjust = 0.5, margin = margin(b = 10)),
+    plot.subtitle = element_text(size = 12, hjust = 0.5, margin = margin(b = 20)),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12)
+  )
+p1
+```
+
+At the end of the first plot, I added text labels for the special points to provide additional context. These labels identify the highlighted points with their respective names and are positioned carefully to ensure they are legible and aesthetically placed without overlapping other elements.
+
+```{r}
+p1<-p1+geom_text(
+    data = special_points,
+    aes(x = x, y = y, label = label),
+    color = "black",
+    fontface = "bold",
+    size = 4,
+    hjust = -0.1
+  )
+p1
+```
+
+### The second plot
+
+For the second plot, an interactive plot is created. The first step is to plot all the orange points, representing the dataset, and enable interactive hover functionality. This allows users to see additional information about each point when they hover their mouse over it. The hover text includes key details such as species name, geographic area, and relative abundance and capture metrics.
+
+```{r}
+p2 <- plot_ly() |>
+  add_trace(
+    data = data,
+    x = ~B_Bmsy,
+    y = ~F_Fmsy,
+    text = ~paste(
+      "<b style='font-size:16px;'>", toupper(species), "</b>",
+      "<br><b style='font-size:16px;'>", toupper(area), "</b>",
+      "<br><b style='font-size:16px;'>", round(F_Fmsy, 2), "</b>", "<br>Capture (Relative to MSY)",
+      "<br><b style='font-size:16px;'>", round(B_Bmsy, 2), "</b>", "<br>Abundance (Relative to MSY target size)"
+    ),
+    hoverinfo = "text",
+    type = 'scatter',
+    mode = 'markers',
+    marker = list(
+      color = '#dc7118',
+      size = 10,
+      opacity = 0.9,
+      line = list(color = 'white', width = 1)
+    )
+  )
+p2
+```
+
+To highlight the special points with a black border, the plot is constructed using three layers:
+
+Layer 1: Orange Points The base layer contains all the orange points representing the dataset.
+
+Layer 2: White Outline for Special Points A white outer circle is added around the special points to make them stand out visually.
+
+Layer 3: Black Highlight for Special Points The final layer adds a black border around the special points, ensuring they are clearly distinguished.
+
+```{r}
+p2 <- p2 |>
+  add_trace(
+    x = c(0.44, 1.18, 1.58, 0.29),
+    y = c(2.2, 1.61, 0.88, 0.47),
+    type = 'scatter',
+    mode = 'markers',
+    marker = list(
+      size = 16,
+      color = "rgba(0,0,0,0)",
+      line = list(color = "black", width = 2)
+    ),
+    hoverinfo = "skip"
+  )
+p2
+```
+
+To ensure that the special points are not overshadowed by the previously added black outer rings, I rendered them as solid orange circles, and when the mouse hovers over these points, a popup box displays detailed information, including the name, region, abundance, and capture values.
+
+```{r}
+p2 <- p2 |>
+  add_trace(
+    x = c(0.44, 1.18, 1.58, 0.29),
+    y = c(2.2, 1.61, 0.88, 0.47),
+    type = 'scatter',
+    mode = 'markers',
+    marker = list(
+      size = 10,
+      color = "#dc7118",
+      line = list(color = "white", width = 1)
+    ),
+    text = c(
+      "<b style='font-size:16px;'>RED SNAPPER</b><br><b style='font-size:16px;'>SOUTHERN ATLANTIC COAST</b><br><b style='font-size:16px;'>2.2</b><br>Capture (Relative to MSY)<br><b style='font-size:16px;'>0.44</b><br>Abundance (Relative to MSY target size)",
+      "<b style='font-size:16px;'>SILKY SHARK</b><br><b style='font-size:16px;'>CARIBBEAN SEA</b><br><b style='font-size:16px;'>1.61</b><br>Capture (Relative to MSY)<br><b style='font-size:16px;'>1.18</b><br>Abundance (Relative to MSY target size)",
+      "<b style='font-size:16px;'>PACIFIC OCEAN PERCH</b><br><b style='font-size:16px;'>NORTHERN PACIFIC</b><br><b style='font-size:16px;'>0.88</b><br>Capture (Relative to MSY)<br><b style='font-size:16px;'>1.58</b><br>Abundance (Relative to MSY target size)",
+      "<b style='font-size:16px;'>ATLANTIC HERRING</b><br><b style='font-size:16px;'>NORTHERN ATLANTIC</b><br><b style='font-size:16px;'>0.47</b><br>Capture (Relative to MSY)<br><b style='font-size:16px;'>0.29</b><br>Abundance (Relative to MSY target size)"
+    ),
+    hoverinfo = "text"
+  )
+p2
+```
+
+Labels such as "Red Snapper" and "Silky Shark" are added to each special point, positioned slightly to the right for better readability, with a consistent style in size, color, and font.
+
+```{r}
+p2 <- p2 |>
+  add_annotations(
+    x = c(0.44, 1.18, 1.58, 0.29),
+    y = c(2.2, 1.61, 0.88, 0.47),
+    text = c("<b>Red snapper</b>", "<b>Silky shark</b>", "<b>Pacific ocean perch</b>", "<b>Atlantic herring</b>"),
+    showarrow = FALSE,
+    xanchor = "left",
+    xshift = 10,
+    font = list(size = 12, color = "black", family = "Arial, sans-serif")
+  )
+p2
+```
+
+This code comprehensively adjusts the chart layout by setting the title, axis ranges, styles, and gridlines, as well as adding annotations for quadrant directions (e.g., "NOT OVERFISHED →"). It defines hover label styles, adds a gray rectangle and two black lines (x=1, y=1) to divide the quadrants, adjusts margins for better display, and hides the legend, ensuring the chart is clear, readable, and visually well-structured.
+
+```{r}
+p2 <- p2 |>
+  layout(
+    title = list(
+      text = "<b>Understanding Overfishing Through Kobe Plot</b><br><sub>Dots represent fish stocks</sub>",
+      font = list(size = 18, family = "Arial, sans-serif", color = "black"),
+      y=0.96
+    ),
+    xaxis = list(
+      title = "",
+      range = c(0, 3),
+      titlefont = list(size = 12, color = "#b0b0b0", family = "Arial, sans-serif"),
+      title_standoff = 15,
+      showline = TRUE,
+      linecolor = "#D3D3D3",
+      linewidth = 1,
+      zeroline = FALSE,
+      showgrid = TRUE,
+      gridcolor = "#D3D3D3"
+    ),
+    yaxis = list(
+      title = "",
+      range = c(0, 3),
+      titlefont = list(size = 12, color = "#b0b0b0", family = "Arial, sans-serif"),
+      showline = TRUE,
+      linecolor = "#D3D3D3",
+      linewidth = 1,
+      zeroline = FALSE,
+      showgrid = TRUE,
+      gridcolor = "#D3D3D3"
+    ),
+    shapes = list(
+      list(type = "rect",
+           x0 = 0, x1 = 3, y0 = 0, y1 = 3,
+           line = list(color = "#D3D3D3", width = 1)),
+      list(type = "line", x0 = 1, x1 = 1, y0 = 0, y1 = 3,
+           line = list(color = "black", dash = "solid"), layer = "below"),
+      list(type = "line", x0 = 0, x1 = 3, y0 = 1, y1 = 1,
+           line = list(color = "black", dash = "solid"), layer = "below")
+    ),
+    annotations = list(
+      list(
+        x = 1.01, y = 2.95,
+        text = "<b>NOT OVERFISHED →</b>",
+        showarrow = FALSE,
+        xanchor = "left",
+        font = list(size = 12, color = "black", family = "Arial, sans-serif")
+      ),
+      list(
+        x = 0.99, y = 2.95,
+        text = "<b>← OVERFISHED</b>",
+        showarrow = FALSE,
+        xanchor = "right",
+        font = list(size = 12, color = "black", family = "Arial, sans-serif")
+      ),
+      list(
+        x = 0.01, y = 0.95,
+        text = "<b>↓ NOT OVERFISHING</b>",
+        showarrow = FALSE,
+        xanchor = "left",
+        font = list(size = 12, color = "black", family = "Arial, sans-serif")
+      ),
+      list(
+        x = 0.01, y = 1.05,
+        text = "<b>↑ OVERFISHING</b>",
+        showarrow = FALSE,
+        xanchor = "left",
+        font = list(size = 12, color = "black", family = "Arial, sans-serif")
+      ),
+      list(
+        x = 0, y = 3,
+        text = "↑ Capture (Relative to MSY)",
+        showarrow = FALSE,
+        xanchor = "left",
+        yanchor = "bottom",
+        textangle = 0,
+        font = list(size = 12, color = "#808080", family = "Arial, sans-serif")
+      ),
+      list(
+        x = 1, y = -0.08,
+        xref = "paper", yref = "paper",
+        text = "Abundance (Relative to MSY target size) →",
+        showarrow = FALSE,
+        xanchor = "right",
+        yanchor = "middle",
+        font = list(size = 12, color = "#808080", family = "Arial, sans-serif")
+      )
+    ),
+    hoverlabel = list(
+      bgcolor = "white",
+      font = list(size = 14, family = "Arial, sans-serif", color = "black"),
+      bordercolor = "black",
+      align = "left"
+    ),
+    margin = list(t = 80, b = 70, l = 30, r = 30) ,
+    showlegend = FALSE
+  )
+
+p2
+```
+
+### The third plot
+
+The first segment of code for the third plot uses `ggplot2` to create a chart with the following features: orange circular points to represent valid data points, light-colored background fills for the four quadrants to distinguish different states (with colors sampled from the original plot), white-filled regions to hide areas outside the defined range, and vertical and horizontal black lines to divide the quadrants.
+
+```{r}
+p3 <- ggplot(data, aes(x = B_Bmsy, y = F_Fmsy)) +
+  geom_point(data = subset(data, B_Bmsy >= 0 & B_Bmsy <= 3 & F_Fmsy >= 0 & F_Fmsy <= 3),
+             color = "white", size = 3.5, alpha = 0.5, shape = 21, fill = "#dc7118", stroke = 0.8) +
+  geom_rect(aes(xmin = 0, xmax = 1, ymin = 1, ymax = 3), fill = "#F1cac9", alpha = 0.03) +
+  geom_rect(aes(xmin = 1, xmax = 3, ymin = 1, ymax = 3), fill = "#F9e4b5", alpha = 0.03) +
+  geom_rect(aes(xmin = 0, xmax = 1, ymin = 0, ymax = 1), fill = "#eecdb1", alpha = 0.03) +
+  geom_rect(aes(xmin = 1, xmax = 3, ymin = 0, ymax = 1), fill = "#b9d9e5", alpha = 0.03) +
+  annotate("rect", xmin = -Inf, xmax = 0, ymin = -Inf, ymax = Inf, fill = "white")+
+  annotate("rect", xmin = 3, xmax = Inf, ymin = -Inf, ymax = Inf, fill = "white") +
+  annotate("rect", xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = 0, fill = "white") +
+  annotate("rect", xmin = -Inf, xmax = Inf, ymin = 3, ymax = Inf, fill = "white") +
+  annotate("segment", x = 1, xend = 1, y = 0, yend = 3, color = "black", linewidth = 0.7) +
+  annotate("segment", x = 0, xend = 3, y = 1, yend = 1, color = "black", linewidth = 0.7)
+p3
+```
+
+The following code adds quadrant labels, adjusts coordinate ranges, defines axis ticks and labels, and refines the chart's appearance through title, subtitle, and theme settings, enhancing its clarity, visual appeal, and interpretability.
+
+```{r}
+p3<-p3+annotate("text", x = 0.5, y = 2, label = "Overfished and currently\noverfishing", size = 4, color = "black") +
+  annotate("text", x = 2, y = 2, label = "Not overfished but currently\noverfishing", size = 4, color = "black") +
+  annotate("text", x = 0.5, y = 0.5, label = "Overfished but currently not\noverfishing", size = 4, color = "black") +
+  annotate("text", x = 2, y = 0.5, label = "Not overfished and currently not\noverfishing", size = 4, color = "black") +
+
+  coord_cartesian(xlim = c(0, 3), ylim = c(0, 3), clip = "on") +
+  scale_x_continuous(breaks = seq(0, 3, 0.5)) +
+  scale_y_continuous(breaks = seq(0, 3, 0.5)) +
+  labs(
+    title = "Understanding Overfishing Through Kobe Plot",
+    subtitle = "Dots represent fish stocks",
+    x = "Abundance (Relative to MSY target size) →",
+    y = "Capture (Relative to MSY ) →"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 18, hjust = 0.5, margin = margin(b = 10)),
+    plot.subtitle = element_text(size = 12, hjust = 0.5, margin = margin(b = 20)),
+
+    axis.title.x = element_text(size = 12, color = "#808080", face = "bold"),
+    axis.title.y = element_text(size = 12, color = "#808080", face = "bold"),
+
+    axis.text.x = element_text(size = 12, color = "darkgray", margin = margin(t = 0)),
+    axis.text.y = element_text(size = 12, color = "darkgray", margin = margin(r = 0)),
+
+    axis.ticks.length = unit(-4, "pt"),
+
+    panel.grid.major = element_line(color = "#b0b0b0", linewidth = 0.5),
+    panel.grid.minor = element_blank()
+  )
+p3
+```
+
+### The fourth plot
+
+The fourth plot, created using `ggplot2`, is a static Kobe Plot that includes the following features: orange circular points representing valid data, light-colored quadrant backgrounds sampled from the original plot, two black dividing lines (x=1 and y=1), quadrant labels with light gray text (e.g., "Overfished and currently overfishing"), highlighted special points with orange fill, white outer rings, and black borders to ensure clarity, as well as clear text labels for the special points. Additionally, the chart is refined with adjusted axis ranges, scales, titles, and gridlines for improved clarity and aesthetics.
+
+```{r,message=FALSE, warning=FALSE,preview=TRUE}
+special_points2<- data.frame(
+  x = c(1.92, 1.91, 1.58, 0.21),
+  y = c(0.03, 0.52, 0.88, 1.09),
+  label = c("Pacific ocean perch", "Pacific ocean perch", "Pacific ocean perch", "Pacific bluefin tuna")
+)
+p4 <- ggplot(data, aes(x = B_Bmsy, y = F_Fmsy)) +
+  geom_point(data = subset(data, B_Bmsy >= 0 & B_Bmsy <= 3 & F_Fmsy >= 0 & F_Fmsy <= 3),
+             color = "white", size = 3.5, alpha = 0.3, shape = 21, fill = "#dc7118", stroke = 0.8) +
+  geom_rect(aes(xmin = 0, xmax = 1, ymin = 1, ymax = 3), fill = "#F1cac9", alpha = 0.03) + 
+  geom_rect(aes(xmin = 1, xmax = 3, ymin = 1, ymax = 3), fill = "#F9e4b5", alpha = 0.03) + 
+  geom_rect(aes(xmin = 0, xmax = 1, ymin = 0, ymax = 1), fill = "#eecdb1", alpha = 0.03) + 
+  geom_rect(aes(xmin = 1, xmax = 3, ymin = 0, ymax = 1), fill = "#b9d9e5", alpha = 0.03) + 
+  annotate("rect", xmin = -Inf, xmax = 0, ymin = -Inf, ymax = Inf, fill = "white")+
+  annotate("rect", xmin = 3, xmax = Inf, ymin = -Inf, ymax = Inf, fill = "white") +
+  annotate("rect", xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = 0, fill = "white") + 
+  annotate("rect", xmin = -Inf, xmax = Inf, ymin = 3, ymax = Inf, fill = "white") +
+  annotate("segment", x = 1, xend = 1, y = 0, yend = 3, color = "black", size = 0.7) + 
+  annotate("segment", x = 0, xend = 3, y = 1, yend = 1, color = "black", size = 0.7) + 
+annotate("text", x = 0.5, y = 2, label = "Overfished and currently\noverfishing",
+           size = 4, color = rgb(0, 0, 0, alpha = 0.25)) +
+  annotate("text", x = 2, y = 2, label = "Not overfished but currently\noverfishing",
+           size = 4, color = rgb(0, 0, 0, alpha = 0.25)) +
+  annotate("text", x = 0.5, y = 0.3, label = "Overfished but currently not\noverfishing",
+           size = 4, color = rgb(0, 0, 0, alpha = 0.25)) +
+  annotate("text", x = 2, y = 0.3, label = "Not overfished and currently not\noverfishing",
+           size = 4, color = rgb(0, 0, 0, alpha = 0.25))+
+  coord_cartesian(xlim = c(0, 3), ylim = c(0, 3), clip = "on") +
+  scale_x_continuous(breaks = seq(0, 3, 0.5)) +
+  scale_y_continuous(breaks = seq(0, 3, 0.5)) +
+  labs(
+    title = "Understanding Overfishing Through Kobe Plot",
+    subtitle = "Dots represent fish stocks",
+    x = "Abundance (Relative to MSY target size) →",
+    y = "Capture (Relative to MSY ) →"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 18, hjust = 0.5, margin = margin(b = 10)),
+    plot.subtitle = element_text(size = 12, hjust = 0.5, margin = margin(b = 20)),
+
+    axis.title.x = element_text(size = 12, color = "#808080", face = "bold"),
+    axis.title.y = element_text(size = 12, color = "#808080", face = "bold"),
+
+    axis.text.x = element_text(size = 12, color = "darkgray", margin = margin(b = 10)),
+    axis.text.y = element_text(size = 12, color = "darkgray", margin = margin(l = 10)),
+    axis.ticks.length = unit(-4, "pt"),
+    panel.grid.major = element_line(color = "#b0b0b0", size = 0.5),
+    panel.grid.minor = element_blank()
+  )+
+  geom_text(
+    data = special_points2,
+    aes(x = x, y = y, label = label),
+    color = "black",
+    fontface = "bold",
+    size = 4,
+    hjust = -0.1
+  )+
+  geom_point(data = special_points2, aes(x = x, y = y), color = "white", size = 3.5, alpha = 0.9, shape = 21, fill = "#dc7118", stroke = 0.8, na.rm = TRUE) +
+  geom_point(data = special_points2, aes(x = x, y = y), size = 5.5, shape = 21, fill = NA, color = "black", stroke = 0.9, na.rm = TRUE) +
+  geom_point(data = special_points2, aes(x = x, y = y), size = 3.5, shape = 21, fill = "#dc7118", color = NA, na.rm = TRUE)
+p4
+```
+
+### Limitations
+
+Issues in the First Two Plots: The first two plots suffer from insufficient information density, as they only display the distribution of data points without providing a quadrant background or labels to explain the meaning of the quadrants. Additionally, the special points are not prominent enough, making it challenging to draw the viewer's attention to them.
+
+Issues in the Third Plot (Quadrant Division): The third plot has several issues, including quadrant labels with high transparency, making them difficult to read. The background color classification lacks sufficient contrast, making it harder to distinguish between the quadrants. Furthermore, the color selection does not fully consider "eco-friendly" tones, which may not be intuitive or scientifically appropriate. Lastly, the plot does not include a legend to explain the meaning of each background color.
+
+Issues in the Fourth Plot (Special Point Annotation): In the fourth plot, the special point labels are too dense, which leads to visual clutter, especially in areas where many points are concentrated. Additionally, the background colors have high transparency, resulting in low contrast and reduced visual clarity, which diminishes the overall effectiveness of the plot.
+
+## Improvement
+
+As an improvement, the first step in this code defines a function, `get_ocean`, to categorize locations in the dataset into "Pacific Ocean," "Atlantic Ocean," or "Other" based on area names and stores the result in a new `Ocean` column. It then groups and sorts the data by species (`species`), year (`year`), and ocean region (`Ocean`), rearranging the columns to place `species` and `Ocean` at the front. Finally, it segments the data into time periods (e.g., `2006-2010`) and adds a new `year_range` column, providing well-structured spatial and temporal data for further analysis.
+
+```{r}
+get_ocean <- function(area) {
+  if (grepl("Pacific|Bering Sea|Aleutian Islands|Alaska|California|Washington|Oregon|Hawaii|Puget Sound|Central Valley|Columbia River|Bristol Bay|Saint Matthew Island|Pribilof Islands",
+            area, ignore.case = TRUE)) {
+    return("Pacific Ocean")
+  } else if (grepl("Atlantic|Gulf of Mexico|Mid-Atlantic|Georges Bank|Maine|Cape Cod|Puerto Rico|St\\. Croix|St\\. Thomas|Florida Keys|East Florida",
+                   area, ignore.case = TRUE)) {
+    return("Atlantic Ocean")
+  } else {
+    return("Other")
+  }
+}
+data$Ocean <- sapply(data$area, get_ocean)
+
+grouped_data <- data |>
+  group_by(species, year, Ocean) |>
+  arrange(year, Ocean) |>
+  ungroup() |>
+  mutate(Ocean = Ocean) |>
+  select(species, Ocean, everything()) |>
+  mutate(
+    year_range = cut(
+      year,
+      breaks = c(2005, 2010, 2015, 2020, Inf),
+      labels = c("2006-2010", "2011-2015", "2016-2020", "2021-Present"),
+      right = TRUE
+    ))
+```
+
+The PlotA code uses ggplot2 to create a static chart that visualizes the distribution of fishery resources across different time periods and ocean regions:
+
+Data Points: Points are plotted using geom_point, with position_jitter applied to add random offsets and prevent overlap.
+
+Colors: Classified by time periods: 2006-2010 in blue, 2011-2015 in green, 2016-2020 in orange, and 2021-Present in red.
+
+Shapes: Classified by ocean type: Pacific Ocean as circles and Atlantic Ocean as diamonds.
+
+Chart Styling: Titles, subtitles, axis labels, and legend styles are customized for clarity and visual appeal. This chart effectively illustrates the distribution of fishery resources and their classifications across different time periods and ocean regions.
+
+```{r}
+plotA <- ggplot(grouped_data, aes(x = B_Bmsy, y = F_Fmsy, color = year_range, shape = Ocean)) +
+  geom_vline(xintercept = 1, linetype = "solid", color = "black", size = 0.7) +
+  geom_hline(yintercept = 1, linetype = "solid", color = "black", size = 0.7) +
+  geom_point(position = position_jitter(width = 0.05, height = 0.05), size = 3, stroke = 1, alpha = 0.8) +
+  coord_cartesian(xlim = c(0, 3), ylim = c(0, 3)) +
+  scale_color_manual(values = c("2006-2010" = "#1f78b4",
+                                "2011-2015" = "#33a02c",
+                                "2016-2020" = "#ff7f00",
+                                "2021-Present" = "#e31a1c")) +
+  scale_shape_manual(values = c("Pacific Ocean" = 20, "Atlantic Ocean" = 4)) +
+  annotate("text", x = 1.05, y = 2.95, label = "NOT OVERFISHED →",
+           hjust = 0, fontface = "bold", size = 2.5, color = "black") +
+  annotate("text", x = 0.95, y = 2.95, label = "← OVERFISHED",
+           hjust = 1, fontface = "bold", size = 2.5, color = "black") +
+  annotate("text", x = 0.01, y = 0.95, label = "↓ NOT OVERFISHING",
+           hjust = 0, vjust = 1, fontface = "bold", size = 2.5, color = "black") +
+  annotate("text", x = 0.01, y = 1.05, label = "↑ OVERFISHING",
+           hjust = 0, vjust = 0, fontface = "bold", size = 2.5, color = "black") +
+  scale_x_continuous(breaks = seq(0, 3, 0.5)) +
+  scale_y_continuous(breaks = seq(0, 3, 0.5)) +
+  labs(
+    title = "",
+    subtitle = "Abundance vs. Capture Relative to MSY",
+    x = "Abundance (Relative to MSY target size) →",
+    y = "Capture (Relative to MSY) →",
+    color = "Year Range",
+    shape = "Ocean"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 18, hjust = 0.5, margin = margin(b = 10)),
+    plot.subtitle = element_text(size = 12, hjust = 0.5, margin = margin(b = 20)),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.position = "right",
+    legend.title = element_text(size = 10, face = "bold"),
+    legend.text = element_text(size = 9)
+  )
+plotA
+```
+
+The PlotB code uses `ggplot2` to create a faceted stacked bar chart that illustrates the changes in fish stock statuses across different ocean regions and time periods. The data is first classified into four statuses (e.g., "Healthy") based on `B_Bmsy` and `F_Fmsy`, then plotted as bars grouped by time periods and faceted by ocean regions.
+
+The chart uses a color palette to distinguish statuses, adds a dashed line for emphasis, and applies styling for clarity, effectively visualizing the trends in fish stock statuses over time and across regions.
+
+```{r}
+grouped_data <- grouped_data %>%
+  mutate(
+    status = case_when(
+      B_Bmsy < 1 & F_Fmsy > 1 ~ "Overfished & Overfishing",
+      B_Bmsy >= 1 & F_Fmsy > 1 ~ "Not Overfished & Overfishing",
+      B_Bmsy < 1 & F_Fmsy <= 1 ~ "Overfished but Not Overfishing",
+      B_Bmsy >= 1 & F_Fmsy <= 1 ~ "Healthy"
+    )
+  )
+plotB <- ggplot(grouped_data, aes(x = year_range, fill = status)) +
+  geom_bar(position = "stack", color = "white", width = 0.7) +
+  facet_wrap(~Ocean, scales = "free_x") +
+  scale_fill_brewer(palette = "Set2") +
+  annotate("segment", x = 5, xend = 5, y = 0, yend = Inf,
+           linetype = "dashed", color = "black", size = 1) +
+  labs(
+    title = " ",
+    subtitle = "Comparing Fish Stocks Status Across Oceans Over Time",
+    x = "Year Range",
+    y = "Count of Fish Stocks",
+    fill = "Status"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5, margin = margin(b = 10)),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+    axis.title = element_text(size = 12, face = "bold"),
+    legend.title = element_text(size = 10, face = "bold"),
+    legend.text = element_text(size = 9),
+    strip.text = element_text(size = 12, face = "bold"),
+    panel.spacing = unit(1, "lines")
+  )
+plotB
+```
+
+## Final graph
+
+This code combines two plots (`plotA` and `plotB`) into a single layout using `plot_grid`, arranging them side by side with two columns (`ncol = 2`). It then creates a title using `ggdraw` and `draw_label`, setting it with bold font, size 16, and centered alignment (`hjust = 0.5`). Finally, it combines the title and the plots into one final layout with `plot_grid`, stacking the title above the combined plots in a vertical arrangement, with the title taking 10% of the height and the plots taking the remaining 90%.
+
+```{r,fig.width=15, fig.height=10, out.width='100%',preview=TRUE}
+combined_plot<- plot_grid(
+  plotA, plotB,
+  ncol = 2
+)
+title <- ggdraw() + draw_label("Fish Stock Status by Year Range and Ocean", fontface = 'bold', size = 16, hjust = 0.5)
+p5<-plot_grid(title, combined_plot, ncol = 1, rel_heights = c(0.1, 1))
+p5
+```
+
+## Conclusion
+
+In this project, I successfully replicated and improved the original visualizations to better analyze and communicate the distribution and status of fish stocks over time and across ocean regions. The replication process ensured consistency with the original while establishing a foundation for enhancements.
+
+Key improvements included refining the visual clarity of quadrant divisions, making special points more prominent, and providing clearer labels and annotations. Additionally, I introduced more informative categorizations, such as time periods and ocean regions, and utilized color palettes that are visually intuitive and eco-friendly.
+
+These enhancements not only preserved the integrity of the original visualizations but also made them more interpretable and accessible for further analysis and decision-making.
+
+
+
