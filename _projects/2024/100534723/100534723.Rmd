@@ -1,9 +1,11 @@
 ---
-title: "Life expectancy and health expenditure"
+title: "The Price of a Longer Life"
 description: |
-  A short description of the post.
+  An exploration of how health spending correlates with life expectancy across
+  countries from 2000 to 2017, recreated and refined from an original New York
+  Times graphic.
 categories: "2024"
-author: Irantzu Lamarca Flores
+author: Irantzu Lamarca-Flores
 date: "`r Sys.Date()`"
 output:
   distill::distill_article:
@@ -11,9 +13,471 @@ output:
     toc: true
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(out.width="100%", fig.align="center", fig.showtext=TRUE)
+```
 
-Distill is a publication format for scientific and technical writing, native to the web.
+Understanding how health spending connects to health outcomes is a big topic in both public policy and global development. Life expectancy at birth is one of the most common ways to measure a country’s healthcare performance, since it gives a general idea of both the quality of medical care and the living conditions in a place.
 
-Learn more about using Distill at <https://rstudio.github.io/distill>.
+This project looks at a data visualization originally created by The New York Times, which compares health expenditure per person with life expectancy for a range of countries between 2000 and 2017. The chart shows a clear trend where more spending usually goes hand in hand with longer lives. 
 
+The aim of this project is not merely to replicate the visual appearance of the original chart, but also to improve the original design enhancing clarity, visual storytelling, and overall impact through better annotation, refined aesthetics, and more intuitive labeling. 
+
+
+## Original graph 
+
+The original graph, as mentioned before, displays how life expectancy at birth relates to healthcare spending per capita across different countries between 2000 and 2017. Using data from the World Bank, the graph plots countries’ trajectories over time, with the x-axis representing current health expenditure per capita and the y-axis showing life expectancy in years.
+
+While most countries show a positive relationship as higher spending tends to accompany longer lives, the United States stands out as a notable exception. Despite having by far the highest health expenditure, its life expectancy remains relatively low in comparison. This contrast is visually emphasized through color: the U.S. is shown in gold, key comparison countries are labeled in grey, and the rest appear in light grey to provide context without overwhelming the visual focus.
+
+![Original graph.](Graph.webp){.external width="100%"}
+
+## Libraries 
+
+To begin the replication process, the necessary R libraries were loaded. These packages play different but complementary roles: dplyr is used for cleaning and transforming the data; ggplot2 handles the core visualization; scales helps format numeric labels; and patchwork allows for combining multiple plots into one coherent layout. Additionally, showtext is used to import and apply custom Google Fonts, which is important for matching the original chart’s typographic style. Together, these libraries provide a flexible and powerful foundation for recreating the visual and analytical structure of the original graphic.
+
+```{r}
+library(ggplot2)
+library(dplyr)      
+library(patchwork)  
+library(scales)   
+library(showtext)   
+
+```
+
+## Getting the data
+
+The data consists of country-level information on life expectancy at birth and current health expenditure per capita, provided by the World Bank. The dataset covers multiple countries over a span of years and is structured in a wide format, where each row corresponds to a specific country and year.
+
+```{r}
+csv <- "life-expectancy-vs-healthcare-expenditure.csv" # load the dataset
+raw <- read.csv(csv, check.names = FALSE) # read the dataset
+head(raw) 
+```
+
+Let's look at the summary of the data:
+
+```{r}
+summary(raw)
+```
+
+The data includes demographic and economic indicators, however, for this project, only a subset of the data will be used. We need to clean the data before moving on to the replication. 
+
+## Data cleaning
+
+The first step in the cleaning process is to identify the relevant columns in the dataset. Since the original column names are long and not always consistent, the grepl() function is used to search for keywords like “life expect”, “health expenditure”, and “entity” or “country”. This makes the code more adaptable, avoiding the need to manually enter column names that could change slightly across versions of the dataset. 
+
+```{r}
+life_exp_col <- names(raw)[grepl("life.*expect",  names(raw), TRUE)][1]
+
+health_exp_col <- names(raw)[grepl("current.*health.*expenditure.*capita", names(raw), TRUE)][1]
+
+entity_col <- names(raw)[grepl("^(Entity|Country)$", names(raw), TRUE)][1]
+```
+
+It is also necessary to check that the required columns (life expectancy, health expenditure, and country) are correctly identified in the dataset. If any of them are missing, the script stops and returns an error message to avoid issues later in the analysis.
+
+```{r}
+if (anyNA(c(life_exp_col, health_exp_col, entity_col)))
+  stop("Columns not found; check names(raw)")
+```
+
+Once the correct columns have been identified, we will rename them to shorter and more manageable names to help simplify the rest of the workflow. 
+
+Moreover, to ensure smooth processing and avoid errors during plotting, both LifeExpectancy and HealthExpenditure will be converted to numeric values. We will also filter the dataset  to include only data from the year 2000 onward, as this is the time range shown in the original visualization. Additionally, rows with NA's in either life expectancy or health expenditure will be removed to ensure the plot would not be distorted by incomplete data.
+
+Lastly, a new variable called Highlight will be created using case_when(). This variable assigns countries to one of three categories: “US” for the United States (which is highlighted in gold in the original graph), “Key” for a selected group of countries (the ones that are in dark grey), and “Rest” for all remaining countries (light grey). This distinction is important later when customizing line colors and label visibility in the plot.
+
+```{r}
+df <- raw %>%
+  rename(Country = all_of(entity_col),
+         LifeExpectancy = all_of(life_exp_col),
+         HealthExpenditure = all_of(health_exp_col)) %>%
+  mutate(across(c(LifeExpectancy, HealthExpenditure), as.numeric)) %>%
+  filter(Year >= 2000, !is.na(LifeExpectancy), !is.na(HealthExpenditure)) %>%
+  mutate(Highlight = case_when(
+    Country == "United States" ~ "US",
+    Country %in% c("Switzerland","Japan","Italy","France","Canada","Germany",
+                   "China","Brazil","Saudi Arabia","Ukraine","Russian Federation","India") ~ "Key",
+    TRUE ~ "Rest"))
+```
+
+### Manual labels
+
+We will manually create a small table to define the positions of specific country labels in the final plot, as, while creating it, we have had some trouble with them. This is necessary because, for some countries, the automatic placement of labels might not be clear or may overlap with others. 
+
+```{r}
+manual_labels <- tibble::tribble(
+  ~Country,             ~HealthExpenditure, ~LifeExpectancy,
+  "United States",                 8000 ,            79,
+  "Japan",                          4000 ,            84,
+  "Russian Federation",             1500 ,            72
+)
+```
+
+## Some additional adjustments
+
+Before building the body of the graph, we need to define some aesthetics. In this part of the code, we are setting up a custom font for the plot. The font_add_google() function loads the Source Sans Pro font directly from Google Fonts and assigns it the nickname "ssp" for easy reference in the rest of the code. The showtext_auto() function then activates the showtext package, which ensures that this font is properly rendered in the plots. This helps match the typography of the original graph.
+
+```{r}
+font_add_google("Source Sans Pro", "ssp", regular.wt = 400, bold.wt = 700)
+showtext_auto()
+```
+
+We also need to define the font sizes for the country labels that will appear on the plot. Specifically, size_us sets the label size for the United States (highlighted in gold), while size_key sets the size for the other selected countries. 
+
+```{r}
+size_us   <- 6   # United States 
+size_key  <- 6
+```
+
+Finally, we will define the custom breaks and labels for the x-axis of the plot. The brks object creates a sequence of values from 0 to 10,000 in increments of 1,000, which will serve as the tick marks. The labels object formats these values using commas, with a custom label for the last value as "$10,000". 
+
+```{r}
+brks   <- c(seq(0, 9000, 1000), 10000)
+labels <- c(label_comma()(seq(0, 9000, 1000)), "$10,000")
+```
+
+## Building the graph 
+
+### Creating the plot
+
+We will first create the plot using the ggplot2 package. We will display HealthExpenditure on the x-axis and LifeExpectancy on the y-axis. This code does not yet draw anything, it just sets up the coordinate system and mapping.
+
+```{r}
+main <- ggplot(df, aes(HealthExpenditure, LifeExpectancy, group = Country))
+
+main
+```
+
+### Background Annotations
+
+We will now add a background rectangle behind the data points. Horizontally, it will move from 0 to 10,000 (the full x-range of health expenditure) and vertically from 66 to 84 (the y-range of life expectancy). 
+
+```{r}
+main <- main +
+  annotate("rect", xmin = 0, xmax = 10000, ymin = 66, ymax = 84, fill = "grey95")
+
+main
+```
+
+### Main data lines
+
+In here, we will draw three different types of lines for three groups of countries:
+
+- "Rest" countries (gray, thin lines): These represent countries not considered key or the US. They are shown in very light gray to provide background context without visual dominance.
+
+- "Key" countries (slightly darker gray): These are important for comparison, with a bit more emphasis than the rest.
+
+- United States: This line is highlighted with a dynamic color gradient and alpha transparency based on health expenditure. This makes the US visually pop out as the main subject of the chart.
+
+```{r}
+main <- main +
+  geom_line(data = filter(df, Highlight == "Rest"), colour = "grey90", linewidth = 0.75, alpha = .6) +
+  geom_line(data = filter(df, Highlight == "Key"),  colour = "grey70", linewidth = 0.85, alpha = .8) +
+  geom_line(data = filter(df, Highlight == "US"),
+            aes(colour = HealthExpenditure, alpha = HealthExpenditure / max(HealthExpenditure)),
+            linewidth = 1.5)
+
+```
+
+### Country labels
+
+Moving on, we can now add text labels to the lines on the chart. The US label is in bold goldenrod to match its line and highlight it as the focus. Key countries have their names added in gray. For Canada, the label is manually nudged upward (-0.7) to avoid overlapping with the line. This ensures the viewer can quickly identify important countries without needing a legend.
+
+```{r}
+main <- main +
+  geom_text(data = subset(manual_labels, Country == "United States"),
+            aes(x = HealthExpenditure, y = LifeExpectancy, label = Country),
+            hjust = 0, vjust = 0, size = size_us, family = "ssp", fontface = "bold", colour = "goldenrod") +
+  
+  geom_text(data = df %>% filter(Highlight == "Key", Country != "United States") %>%
+              group_by(Country) %>% slice_max(Year) %>%
+              mutate(nudge = ifelse(Country == "Canada", -0.7, 0)),
+            aes(label = Country, y = LifeExpectancy + nudge),
+            hjust = 0, vjust = 0, size = size_key,
+            family = "ssp", fontface = "bold", colour = "grey70") +
+  
+  geom_text(data = subset(manual_labels, Country != "United States"),
+            aes(x = HealthExpenditure, y = LifeExpectancy, label = Country),
+            hjust = 0, vjust = 0, size = size_key, family = "ssp", fontface = "bold", colour = "grey70")
+
+```
+
+### Axes and scales 
+
+In this section, we define how both axes and visual encodings behave to convey meaning clearly and intuitively. The scale_colour_gradient() function creates a smooth color transition from grey to goldenrod, which is applied only to the United States line. In parallel, the scale_alpha() setting adjusts the transparency of the line based on expenditure, with higher values appearing more solid.
+
+For the horizontal axis, the chart displays health expenditure per capita, ranging from 0 to 10,000 dollars. The axis includes custom tick marks and labels that help guide the viewer’s understanding of the scale. On the vertical axis, life expectancy is shown, ranging from 66 to 84 years, with regular intervals every two years.
+
+
+```{r}
+main <- main +
+  scale_colour_gradient(low = "grey80", high = "goldenrod", guide = "none") +
+  scale_alpha(range = c(.3, 1), guide = "none") +
+  scale_x_continuous(breaks = brks, labels = labels, limits = c(0, 10000), expand = expansion(add = c(0, 100))) +
+  scale_y_continuous(breaks = seq(66, 84, 2), limits = c(66, 84), expand = expansion(add = c(0, 1)))
+
+main
+```
+
+### Visual Theme and Styling
+
+We can move on to the definition of the look and feel of the chart. We use theme_void() to remove all gridlines, background, and default axis elements. Custom styling is applied to axis labels and tick marks in a subtle gray. And, plot.margin ensures there’s enough space on the right for labels to fit without being cut off.
+
+```{r}
+main <- main +
+  theme_void(base_family = "ssp") +
+  theme(
+    axis.text.x = element_text(color = "grey70", size = 16, margin = margin(t = 5)),
+    axis.text.y = element_text(color = "grey70", size = 16, margin = margin(r = 5)),
+    axis.ticks.length.x = unit(3, "pt"),
+    axis.ticks.length.y = unit(3, "pt"),
+    axis.ticks.x = element_line(color = "grey80", size = .3),
+    axis.ticks.y = element_line(color = "grey80", size = .3),
+    panel.grid = element_blank(),
+    plot.margin = margin(t = 5, r = 35, b = 5, l = 5)
+  )
+
+main
+```
+
+
+### Text Annotations
+
+Final labels are added outside the main plotting area to help guide interpretation. 
+
+```{r}
+main <- main +
+  annotate("text", x = 0, y = 64, label = "0", family = "ssp", colour = "grey40") +
+  annotate("text", x = 9900, y = 66.5, label = "Health expenditure per capita",
+           hjust = 1, family = "ssp", colour = "grey70", size = 5.5) +
+  annotate("text", x = 0, y = 84, label = "Life expectancy at birth",
+           hjust = 0, vjust = -1, family = "ssp", colour = "grey70", size = 5.5)
+
+```
+
+### Additional note
+
+At the bottom of the visualization, a note is added to provide important context about the data. It is carefully positioned slightly outside the main plotting area, with added margin space to the right to prevent clipping. 
+
+```{r}
+note <- ggplot() +
+  annotate(
+    "text",
+    x = -0.05, y = .7,
+    label = paste(
+      "Note: Current health expenditure per capita, purchasing power parity,",
+      "reflects current international dollars. Both\n",
+      "measures span 2000–2017. Source: World Bank"
+    ),
+    hjust = 0, vjust = 1,
+    family = "ssp", colour = "grey50", size = 6, lineheight = 1.1
+  ) +
+  coord_cartesian(xlim = c(0, 1), clip = "off") +
+  theme_void(base_family = "ssp") +
+  theme(plot.margin = margin(r = 35))
+```
+
+## Final version
+
+And this is how the replication looks like: 
+
+```{r final-plot, fig.width=12, fig.height=8, preview=TRUE}
+main / note + plot_layout(heights = c(10, 1.5))
+```
+
+## Improved version
+
+While the original chart is already effective in communicating the overall trend, there are several ways of improving its clarity and visual impact. We will try to introduce a series of design improvements aimed at making the data more accessible, the message more accurate, and the presentation more visually attractive. 
+
+We will first need to load some additional libraries
+
+```{r}
+library(readr)
+library(countrycode)
+library(ggtext)
+```
+
+The readr package is used to efficiently load the dataset from a CSV file. countrycode simplifies the task of mapping country names to their corresponding continents, enabling regional grouping for analysis and visualization. Finally, ggtext enhances the visual expressiveness of the chart by allowing styled text elements through markdown and HTML rendering directly within the plot.
+
+We will also add some specific fonts, as we have done in the previous replication.
+
+```{r}
+font_add_google("IBM Plex Sans", "plex")
+showtext_auto()
+```
+
+As we need to add a new variable and clean the data again, we will upload the data again from 0 in order to avoid any problems with the data. 
+
+```{r}
+df <- read_csv("life-expectancy-vs-healthcare-expenditure.csv") # read the data
+
+colnames(df) <- c("country", "code", "year", "life_exp", "health_exp", "population", "region") # rename columns
+```
+
+
+The dataset is now refined to prepare it for analysis. The variables for life expectancy and health expenditure are converted to numeric values to ensure consistency. Each country is then assigned to a continent based on its name, with a manual adjustment that separates North and South America (placing the United States, Canada, and Mexico in the former, and all other American countries in the latter) as we want to make 6 small plots to ensure the visual harmony. Finally, the data is filtered to include only the years between 2000 and 2017 and to exclude any rows with missing values in key variables, ensuring that the dataset is clean and complete for visualization.
+
+
+```{r}
+df <- df %>%
+  mutate(
+    life_exp = as.numeric(life_exp),
+    health_exp = as.numeric(health_exp),
+    continent = countrycode(country, "country.name", "continent"),
+    continent = case_when(
+      country %in% c("United States", "Canada", "Mexico") ~ "North America",
+      continent == "Americas" & !country %in% c("United States", "Canada", "Mexico") ~ "South America",
+      TRUE ~ continent
+    )
+  ) %>%
+  filter(year >= 2000 & year <= 2017, !is.na(life_exp), !is.na(health_exp), !is.na(continent))
+```
+
+A specific color is assigned to each continent in order to visually differentiate them in the final plot. We have tried to use colorblind-friendly palette, as all colors have high contrast and are easily distinguishable in most types of colorblindness.
+
+```{r}
+continent_colors <- c(
+  "Africa" = "#66c2a5",        # teal
+  "Asia" = "#fc8d62",          # orange
+  "Europe" = "#8da0cb",        # light blue
+  "North America" = "#e78ac3", # pink
+  "Oceania" = "#a6d854",       # lime green
+  "South America" = "#ffd92f"  # yellow
+)
+```
+
+Moving on, the next step is to identify the top 10 countries in each continent based on their average life expectancy between 2000 and 2017. First, the data is grouped by country and continent, and the mean life expectancy is calculated for each country. Then, within each continent, the ten countries with the highest average life expectancy are selected. The goal of it is to highlight those nations that consistently perform best in terms of health outcomes. Including only the top performers helps reduce visual clutter in the chart, making the trends easier to interpret while still capturing meaningful geographic variation. 
+
+```{r}
+top10 <- df %>%
+  group_by(country, continent) %>%
+  summarise(mean_life = mean(life_exp), .groups = "drop") %>%
+  group_by(continent) %>%
+  slice_max(mean_life, n = 10) %>%
+  pull(country)
+```
+
+We also want to identify the country in each continent that experienced the largest change in health expenditure per capita between 2000 and 2017. 
+
+```{r}
+destacado <- df %>%
+  group_by(country, continent) %>%
+  summarise(variacion = max(health_exp) - min(health_exp), .groups = "drop") %>%
+  group_by(continent) %>%
+  slice_max(variacion, n = 1, with_ties = FALSE) %>%
+  pull(country)
+```
+
+Each country in the dataset is categorized based on its relevance in the visualization. Countries that experienced the highest change in health expenditure within their continent are labeled as highlighted. Those that belong to the top 10 in average life expectancy per continent are marked as top10. All remaining countries are grouped under the rest category. This classification allows for differentiated styling in the plot, helping to visually emphasize the most significant countries while maintaining context with the rest.
+
+
+```{r}
+df <- df %>%
+  mutate(categoria = case_when(
+    country %in% destacado ~ "highlighted",
+    country %in% top10 ~ "top10",
+    TRUE ~ "rest"
+  ))
+```
+
+We also need to prepare the position of the country labels that will appear on the plot. It selects only the countries classified as highlightedand filters them for the most recent year available (2017). Then, for each of these countries, custom x and y coordinates are calculated to fine-tune the placement of their labels.These manual adjustments ensure that the labels are clearly visible and do not overlap with data lines, improving the readability of the final visualization.
+
+```{r}
+
+labels <- df %>%
+  filter(categoria == "highlighted", year == 2017) %>%
+  mutate(
+    label_x = case_when(
+      country == "United States" ~ health_exp + 600,  # more to the right
+      country == "Cuba" ~ health_exp - 300,           # more to the left
+      TRUE ~ health_exp + 150
+    ),
+    label_y = case_when(
+      country == "United States" ~ life_exp + 1,      # higher
+      country == "Cuba" ~ life_exp + 1.2,             # higher
+      TRUE ~ life_exp
+    )
+  )
+```
+
+It is necessary to calculate the vertical limits for the y-axis by finding the range of life expectancy values and adding some extra space above and below. 
+
+```{r}
+min_y <- min(df$life_exp)
+max_y <- max(df$life_exp)
+range_y <- max_y - min_y
+y_lim <- c(min_y - 0.2 * range_y, max_y + 0.05 * range_y)
+```
+
+In here, we want to create a custom label style for the facet titles by assigning each continent a specific color and bold text. 
+
+```{r}
+color_labeller <- labeller(
+  continent = function(x) {
+    colors <- c(
+      "Africa" = "#66c2a5",        # teal
+      "Asia" = "#fc8d62",          # orange
+      "Europe" = "#8da0cb",        # light blue
+      "North America" = "#e78ac3", # pink
+      "Oceania" = "#a6d854",       # lime green
+      "South America" = "#ffd92f"  # yellow
+    )
+    paste0("<span style='color:", colors[x], "'><b>", x, "</b></span>")
+  }
+)
+
+```
+
+Finally, this section builds the final version of the improved visualization. The plot shows the relationship between health expenditure and life expectancy across countries, grouped by continent. Different line colors and styles are used to distinguish between three categories of countries: "rest" (shown in light gray for context), "top10" (in darker gray to highlight strong performers), and "highlighted" (in color, representing countries with the greatest change in spending). Each line represents the historical evolution of a country from 2000 to 2017. Overall, this block brings together all elements of the improved design, emphasizing key insights while maintaining a visually appealing and accessible presentation.
+
+```{r fig.width=20, fig.height=12, layout="l-page"}
+
+ggplot(df, aes(x = health_exp, y = life_exp, group = country)) +
+  geom_line(data = df %>% filter(categoria == "rest"),
+            color = "grey80", size = 0.4, alpha = 0.3) +
+  geom_line(data = df %>% filter(categoria == "top10"),
+            color = "grey40", size = 0.5, alpha = 0.7) +
+  geom_line(data = df %>% filter(categoria == "highlighted"),
+            aes(color = continent), size = 1.2) +
+  geom_text(data = labels,
+            aes(x = label_x, y = label_y, label = country, color = continent),
+            size = 4, fontface = "bold", hjust = 0, family = "plex") +
+  scale_color_manual(values = continent_colors) +
+  facet_wrap(~ continent, scales = "free", labeller = color_labeller) +
+  coord_cartesian(ylim = c(60, max(df$life_exp, na.rm = TRUE))) +
+  scale_x_continuous(expand = expansion(mult = c(0.02, 0.2))) +
+  theme_minimal(base_family = "plex", base_size = 18) +
+  labs(
+    title = "Evolution of life expectancy vs healthcare expenditure (2000-2017)",
+    subtitle = "Light gray: other countries | Dark gray: top 10 life expectancy | Color: most changing country",
+    x = "Health expenditure per capita ($)",
+    y = "Life expectancy",
+    caption = "Source: World Bank | Irantzu Lamarca"
+  ) +
+  theme(
+    legend.position = "none",
+    plot.background = element_rect(fill = "#ffffff", color = NA),
+    panel.background = element_rect(fill = "#f7f7f7", color = "grey85"),
+    panel.grid.major = element_line(color = "grey85", size = 0.3, linetype = "dashed"),
+    panel.grid.minor = element_blank(),
+    axis.text = element_text(family = "plex", color = "black", size = 12),
+    axis.text.x = element_text(margin = margin(t = 5)),
+    axis.text.y = element_text(margin = margin(r = 5)),
+    axis.ticks.length = unit(0.2, "lines"),
+    axis.ticks = element_line(color = "grey60"),
+    strip.text = element_markdown(size = 16, face = "bold", family = "plex"),
+    panel.spacing = unit(0.4, "lines"),
+    plot.title = element_text(size = 22, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 16, hjust = 0.5),
+    axis.title = element_text(size = 14, family = "plex"),
+    plot.caption = element_text(size = 14, hjust = 0.5, face = "italic", family = "plex")
+  )
+
+
+
+```
+
+This final visualization clearly illustrates the relationship between healthcare spending and life expectancy across different world regions from 2000 to 2017. By categorizing countries into three distinct groups the chart effectively highlights both global trends and regional nuances. The use of colorblind-friendly colours and styled facet titles enhances readability and accessibility, while the clean design and thoughtful label positioning ensure that key insights are immediately visible. Overall, the improved chart not only replicates the original graphic’s core message but also elevates it by adding clarity, depth, and inclusivity to the visual storytelling.
 
