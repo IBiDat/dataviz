@@ -1,4 +1,4 @@
-# Data visualization (19139)
+# Data Visualization (19139)
 
 Homepage and materials for the course on
 [data visualization](https://aplicaciones.uc3m.es/cpa/generaFicha?est=375&asig=19139&idioma=2),
