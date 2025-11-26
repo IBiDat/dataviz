@@ -22,7 +22,8 @@ library(tidyverse)
 library(osmdata)
 library(geojsonsf) # Used function geojson_sf to convert geojson into sf
 library(glossa) # Used function invert_polygon (idea didn't work)
-library(sf) # Used function st_intersection REDUNDANT?
+library(sf) # Used function st_intersection
+library(funkyheatmap) # Used function geom_rounded_rect
 ```
 
 
@@ -101,8 +102,6 @@ calgary_legendless # To see it
 
 ## Plotting first legend
 
-I used What The Font to guess what the font in the original plot is. It is StudioSans, not freely available. The closest one i could find in Google fonts was Noto Sans. So I'll use that one. I'll start with the "main" legend with blue dot.
-
 In order to change line spacing see [here](https://stackoverflow.com/questions/39721772/line-height-spacing-for-text-in-ggplot)
 
 In order to see the options for the point annotation see [this](https://ggplot2.tidyverse.org/articles/ggplot2-specs.html)
@@ -112,7 +111,7 @@ I got the coordinates for calgary tower from [OSM](https://www.openstreetmap.org
 
 ```{r plot_legend1}
 # We add the font:
-sysfonts::font_add_google("Noto Sans", family = "noto_sans")
+sysfonts::font_add_google("Atkinson Hyperlegible", family = "atkinson")
 showtext::showtext_auto()
 
 # We see what the bbox coordinates are and be able to adjust the annotation:
@@ -122,7 +121,7 @@ st_bbox(hexroads_intersection) # REMOVE FOR FINAL VERSION?
 calgary_legend1 <- calgary_legendless + 
   annotate( # The main text
     "text",
-    x = -114.3130, 
+    x = -114.3100, 
     y = 50.9790,
     label = paste("This map shows the difference",
                   "in the time it takes to reach the",
@@ -130,15 +129,15 @@ calgary_legend1 <- calgary_legendless +
                   "transit on a weekday morning.",
                   sep="\n"),
     hjust = 0, # Align left
-    family = "noto_sans",
-    size = 12.5,
-    lineheight = 1.1, # Line spacing
+    family = "atkinson",
+    size = 12.9,
+    lineheight = 1.05, # Line spacing
     color = "#000000"
   ) + 
    annotate(  # The blue point in the legend
     "point",
-    x = -114.2470, 
-    y = 50.97490,  
+    x = -114.2450, ##################### LAST: +10
+    y = 50.97495,  
     shape = 21, # Has to be one between 21 and 25 (according to documentation)
     size = 8.25,
     color = "#000000",
@@ -148,7 +147,7 @@ calgary_legend1 <- calgary_legendless +
   annotate(  # The blue point in the map (Calgary Tower)
     "point",
     x = -114.0631, 
-    y = 51.04460,
+    y = 51.04465,
     shape = 21, # Has to be one between 21 and 25 (according to documentation)
     size = 8.25,
     color = "#000000",
@@ -158,11 +157,11 @@ calgary_legend1 <- calgary_legendless +
   
 calgary_legend1 # To seeit
   
-  ggsave(
+ggsave(
   "calgary_02.png",
-  width = 15,
-  height = 15,
-  dpi = 300,
+  width = 34.375,
+  height = 34.375,
+  dpi = 96,
   bg = "white"
 )
 ```
@@ -182,16 +181,22 @@ Another possibility for rounded corners is package `funkyheatmap` see [this](htt
 
 
 ```{r plot_legend2}
-library(funkyheatmap)
-
 # To make it easier to manually adjust, i will set the settings for the
 # rectangle sizes like this, and the plot calling this objects:
-rectangle_top <- 50.9600
-rectangle_left <- -114.3130
+# Rectangles:
+rectangle_left <- -114.3080
+rectangle_top <- 50.9490 
 rectangle_width <- 0.0250
 rectangle_height <- 0.0050
-rectangle_space <- 0.0010
-rectangle_color <- c("#aa5312", "#c88c47", "#b7a6ac", "#a36f96", "#6a4886")
+rectangle_space <- 0.0005
+rectangle_color <- c("#d26716", "#f8ad58", "#e3cdd5", "#ca8aba", "#8359a6")
+# Minutes:
+minute_separation <- 1.6 # Relative to rectangle_height
+minute_size <- 10 # In points, not relativ to the map
+minute_color <- "#000000"
+minute_font <- "atkinson"
+
+  
 # THE COLORS ARE TOO DARK, PICK DIRECTLY FROM ORIGINAL LEGEND (NOT SAME TONE
 # AS THE ROADS)
 
@@ -215,6 +220,20 @@ legend_rectangles <- tibble(
 
 legend_rectangles # To see tibble, REMOVE IN FINAL VERSION!!!!!!!!!!!
 
+# Create the dataframe for the minutes relative to previous:
+legend_minutes <- tibble(
+  label = c("30", "10", "10", "30"),
+  x = c(
+    rectangle_left + rectangle_width + (0.5*rectangle_space),
+    rectangle_left + (2*rectangle_width) + (1.5*rectangle_space),
+    rectangle_left + (3*rectangle_width) + (2.5*rectangle_space),
+    rectangle_left + (4*rectangle_width) + (3.5*rectangle_space)
+    ), 
+  y = rectangle_top - rectangle_height * minute_separation)
+
+legend_minutes # To see the tibble QUITALO EN LA VERSIÓN FINAL!!!!!!!!!!
+
+
 # Plot rounded rectangles for legend:
 calgary_legend2 <- calgary_legend1 +
   geom_rounded_rect(
@@ -226,12 +245,29 @@ calgary_legend2 <- calgary_legend1 +
     color = NA,  # No border
     show.legend = FALSE
   ) +
-  scale_fill_identity() # So that the fill with rectangle_color
+  scale_fill_identity() + # So that the fill with rectangle_color
                         # isn't treated as characters, but as the colors
                         # EXPLAIN BETTER WITH DOCUMENTATION FOR FINAL VERSION
+    # Now plot the minute numbers:
+  geom_text(
+    data = legend_minutes,
+    aes(x = x, y = y, label = label),
+    size = minute_size,
+    color = minute_color, 
+    family = minute_font)
 
 calgary_legend2
-## CONTINUE ADDING TEXT HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE####
 
+## CONTINUE ADDING TEXT HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE####
+##########################################################################
+####### MORE SPECIFICALLY: ADD THE FASTER BY BIKE AND AND FASTER BY TRANSIT LABELS
+
+ggsave(
+  "calgary3.png",
+  width = 34.375,
+  height = 34.375,
+  dpi = 96,
+  bg = "white"
+)
 
 ```
