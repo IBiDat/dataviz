@@ -11,7 +11,12 @@ output:
 ---
 
 
-```{r}
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(out.width = "100%", fig.align = "center",
+  fig.showtext = TRUE, fig.width = 34.375, fig.height = 34.375)
+```
+
+```{r libraries}
 library(tidyverse)
 library(osmdata)
 library(geojsonsf) # Used function geojson_sf to convert geojson into sf
@@ -19,587 +24,35 @@ library(glossa) # Used function invert_polygon (idea didn't work)
 library(sf) # Used function st_intersection
 ```
 
-# First steps
 
-## How do i get the data?
-
-
-I started by investigating how to get the data from Open Street Maps (OSM). Some quick searches helped me learnt about the existence of an r package called `osmdata`. I learnt about it reading:
-
-- Its [CRAN webpage](https://cran.r-project.org/web/packages/osmdata/readme/README.html)
-
-- The [package's webpage](https://docs.ropensci.org/osmdata/)
-
-This package will allow me to get data in various formats (sf between them, which Iñaki said is the way to go in class). 
-
-I also read a bit more about Overpass API (mentioned in the previous pages):
-
-- OSM wiki [Overpass API page](https://wiki.openstreetmap.org/wiki/Overpass_API)
-
-## Getting the "frame" (streets and water) data.
-
-I started by reading `opq` documentation. Then thought it might be a good idea to read `getbb` documentation, since that may help get a "default" area for Calgary, which may be what the area used in the original map. I also read about `add_osm_feautre` and `osmdata_sf`, since those functions are used in the documentation for `opq` and it seems like they could be relevant to me.
-
-
-I first tried getting the coordinates for the area using getbb(), since that could save some time trying to get the exact area by hand.
-
-```{r, fig.width=50, fig.height=50}
-# We get the bounding box (bb) for Calgary
-calgary_bb <- getbb("Calgary")
-
-# Get the data for that bounding box:
-calgary_opq <- opq(
-  bbox = calgary_bb) |>  # We define the bb
-  add_osm_feature(key = "highway",
-                  value = c("motorway", "trunk", "primary", "secondary",
-                            "tertiary", "unclassified", "residential",
-                            "motorway_link", "trunk_link", "primary_link",
-                            "secondary_link", "tertiary_link"))
-                            # We get the street features
-# I chose these values manually, with just "key = highway" i got too much data
-# and couldn't work with the object without my computer crashing.+
-# The documentation of add_osm_feature has a link a list of possible features
-
-# We convert the osm data into an object in sf format.
-calgary_sf <- osmdata_sf(calgary_opq)
-
-# ggplot(calgary_sf) +
-#   geom_sf() +
-#   theme_bw()
-# I inititally tried to visualize it like this, but it returns the error "
-# `data` must be a <data.frame>, or an object coercible by `fortify()`, or a 
-# valid <data.frame>-like object coercible by `as.data.frame()`
-
-# After looking at the structure of calgary_sf i see there's three elements
-# that are data frames: $osm_points; $osm_lines; and $osm_polygons,
-# so I extract those and try plotting them:
-
-calgary_street_points <- calgary_sf$osm_points
-calgary_street_lines <- calgary_sf$osm_lines
-calgary_street_polygons <- calgary_sf$osm_polygons
-
-# Plot points
-ggplot(calgary_street_points) +
-  geom_sf() +
-  theme_bw() 
-
-# Plot lines
-ggplot(calgary_street_lines) +
-  geom_sf() +
-  theme_bw() # Succes
-
-# Plot polygons
-ggplot(calgary_street_polygons) +
-  geom_sf() +
-  theme_bw()
-
-# After plotting the three objects we got from gathering street data,
-# it seems like calgary_street_lines is the object we're interested in.
-```
-
-We now have the basic "frame", but our map is still lacking two things in order to look like the original one: a) the river and other water bodies; and, more importantly, b) the data that will allow us to color the streets the way we need. We will first try to get the data for the water bodies, since that's probably easier, we just need to repeat the process we did in order to get the streets.
-
-```{r, fig.width=50, fig.height=50}
-# We obtain the data:
-calgary_opq_water <- opq(
-  bbox = calgary_bb) |>  # We define the bb
-  add_osm_feature(key = "water") # To get data on water
-
-calgary_sf_water <- osmdata_sf(calgary_opq_water)
-
-# We get the dataframe and plot it:
-calgary_water_lines <- calgary_sf_water$osm_lines
-
-ggplot(calgary_water_lines) +
-  geom_sf() +
-  theme_bw() # Lines doesn't seem to be the one we want this time.
-             # Very few water bodies represented.
-
-# So I check:
-calgary_sf_water # To see what data we got
-
-# Seems like this time we have data on points, polygons, but also multipolygons.
-# I will try plotting those three and see which one can work our purposes.
-
-calgary_water_points <- calgary_sf_water$osm_points
-calgary_water_polygons <- calgary_sf_water$osm_polygons
-calgary_water_multipolygons <- calgary_sf_water$osm_multipolygons
-
-ggplot(calgary_water_points) +
-  geom_sf() +
-  theme_bw() #Not what we want
-
-ggplot(calgary_water_polygons) +
-  geom_sf() +
-  theme_bw() # Not what we want (mostly good, but big water mass is  missing,
-             # and there's lots of small ones)
-
-ggplot(calgary_water_multipolygons) +
-  geom_sf() +
-  theme_bw() # Not what we want 8 (big water mass is represented, and main 
-             # rivers too, but we're lacking some connections between the main
-             # rivers [they cut], and some smaller water bodies)
-
-# I'll try a combination of last two, since they seem to include all the
-# water we need (actually more than we need)
-ggplot() +
-  geom_sf(data = calgary_water_polygons) +
-  geom_sf(data = calgary_water_multipolygons) +
-  theme_bw()
-
-```
-
-We are now close to having the water representations we need. In fact, we have more than we need, so we need to specify only the values of specific waterbodies:
-
-
-```{r}
-# We obtain the data only for specific water bodies:
-calgary_opq_water <- opq(
-  bbox = calgary_bb) |>  # We define the bb
-  add_osm_feature(key = "water",
-                  value = c("river", "oxbow", "lake", "reservoir",
-                            "wate_water")) # To get data on water, refined by
-                                           # trial and error
-                            # OTHER VALUES: 
-                            # "canal" changes nothing
-                            # "ditch" changes nothing
-                            # "lock" changes nothing
-                            # "fish_pass" changes nothing
-                            # "pond" returns too many small ones
-                            # "basin" returns too many small ones
-                            # "lagoon" changes nothing
-                            # "stream_pool" changes nothing
-                            # "reflecting_pool" changes nothing
-                            # "moat" changes nothing
-                            # "waste_water" changes nothing
-
-calgary_sf_water <- osmdata_sf(calgary_opq_water)
-
-# We get the dataframes and plot the map to see if we got what we wanted:
-calgary_water_polygons <- calgary_sf_water$osm_polygons
-calgary_water_multipolygons <- calgary_sf_water$osm_multipolygons
-
-compare <- ggplot() +
-  geom_sf(data = calgary_water_polygons) +
-  geom_sf(data = calgary_water_multipolygons) +
-  theme_bw() # This is the closest I can get to the original picture by
-             # retrewing osmdata key = water
-```
-This is the closest I can get to the original picture by retrewing osmdata with key = water. Some key differences are: 
-
-- We have some smaller water bodies that aren't there in the original picture.
-
-- We're missing a big(ish) water body in the southwest part of the main river. 
-
-- The secondary river at the southwest of the main river is cut in the original plot (it can be clearly seen by the streets layout that there's a river there, but for some reason the river wasn't plot by the original author; we are getting data to plot that river without cutting it, which seems like an improvement, but doesn't allow us to exactly replicate the original plot).
-
-**Unrelated:** Looking at the picture more closely, I realized the original author is ploting waterbodies on top of streets (when most likely the streets go ever the water bodies).
-
-I'll try to get data for other types of features and see if I can find the big(ish) water body I'm missing.
-
-```{r}
-calgary_opq_waterway <- opq(
-  bbox = calgary_bb) |>  # We define the bb
-  add_osm_feature(key = "waterway")
-
-calgary_waterway_sf <- osmdata_sf(calgary_opq_waterway)
-
-calgary_waterway_lines <- calgary_waterway_sf$osm_lines
-calgary_waterway_polygons <- calgary_waterway_sf$osm_polygons
-calgary_waterway_multipolygons <- calgary_waterway_sf$osm_multipolygons
-
-# We add the new data we got from looking for waterway.
-ggplot() +
-  geom_sf(data = calgary_water_polygons) +
-  geom_sf(data = calgary_water_multipolygons) +
-  geom_sf(data = calgary_waterway_polygons) +
-  geom_sf(data = calgary_waterway_multipolygons) +
-  theme_bw() 
-```
-We don't get what we were looking for, this way we are only addind some very small water bodies which we don't need. So we won't use waterway features. I thought I should be misssing something, so I manually searched "Calgary" in osm, discovered that the big missing waterbody is called 'Priddis Slough', a quick search returned that it is a wetland. Checking the osm features page, I discovered that wetlands are an independent feature apart from water, so we need to account for that:
-
-```{r}
-calgary_opq_wetland <- opq(
-  bbox = calgary_bb) |>  # We define the bb
-  add_osm_feature(key = "natural", value = "wetland")
-
-calgary_wetland_sf <- osmdata_sf(calgary_opq_wetland)
-
-calgary_wetland_polygons <- calgary_wetland_sf$osm_polygons
-calgary_wetland_multipolygons <- calgary_wetland_sf$osm_multipolygons
-
-# We add the new data we got from adding wetlands
-ggplot() +
-  geom_sf(data = calgary_water_polygons) +
-  geom_sf(data = calgary_water_multipolygons) +
-  geom_sf(data = calgary_wetland_polygons) + # Contains a big water body,
-                                             # but not Priddis Slough
-                                             # It also contains smaller
-                                             # ponds that the original
-                                             # plot shows.
-  #geom_sf(data = calgary_wetland_multipolygons) + # Nothing relevant
-  theme_bw() 
-```
-
-We still don't have all the Priddis Slough. What kind of waterbody can it be, if not wetland? 
-
-I learnt I can leftclick on it in openstreetmap.org, and query for features. It shows the tag "water = slough". I'll try repeating the process I did before, even if "slough" doesn't appear a as a feature in osm features webpage.
-
-```{r, fig.width=50, fig.height=50}
-# We obtain the data only for specific water bodies:
-calgary_opq_water <- opq(
-  bbox = calgary_bb) |>  # We define the bb
-  add_osm_feature(key = "water",
-                  value = c("river", "oxbow", "lake", "reservoir",
-                            "slough")) # To get data on water, refined by
-                                       # trial and error
-                            # I added slough even if it doesn't appear in OSM's
-                            # feature webpage
-
-                            # OTHER VALUES: 
-                            # "canal" changes nothing
-                            # "ditch" changes nothing
-                            # "lock" changes nothing
-                            # "fish_pass" changes nothing
-                            # "pond" returns too many small ones
-                            # "basin" returns too many small ones
-                            # "lagoon" changes nothing
-                            # "stream_pool" changes nothing
-                            # "reflecting_pool" changes nothing
-                            # "moat" changes nothing
-                            # "waste_water" changes nothing
-
-calgary_sf_water <- osmdata_sf(calgary_opq_water)
-
-# We get the dataframes and plot the map to see if we got what we wanted:
-calgary_water_polygons <- calgary_sf_water$osm_polygons
-calgary_water_multipolygons <- calgary_sf_water$osm_multipolygons
-
-ggplot() +
-  geom_sf(data = calgary_water_polygons) +
-  geom_sf(data = calgary_water_multipolygons) +
-  theme_bw() # I now have Priddis Slough!
-```
-
-
-
-We now have data that includes all the water bodies we need to include in our plot to replicate the original one. The only problem being we have some extra water bodies:
-
-- We have some small water bodies which should be shown in order to make a perfect replica.
-
-- We have the full river courses (while the original plot only has some sections of some rivers, which seems like a mistake in the original plot).
-
-## Summary: "frame" (streets + water)
-
-Just as a summary of the work done so far, I'll write the code necessary to plot the streets and water bodies, and plot them together.
-
-```{r, fig.width=40, fig.height=40}
-# Get the bounding box for Calgary
-calgary_bb <- getbb("Calgary")
-
-#================
-# GET STREET DATA
-#================
-
-# Get the street osm data
-calgary_opq <- opq(
-  bbox = calgary_bb) |>  # We define the bb
-  add_osm_feature(key = "highway",
-                  value = c("motorway", "trunk", "primary", "secondary",
-                            "tertiary", "unclassified", "residential",
-                            "motorway_link", "trunk_link", "primary_link",
-                            "secondary_link", "tertiary_link"))
-# Convert into sf
-calgary_sf <- osmdata_sf(calgary_opq) 
-
-# Extract relevant dataframe
-calgary_street_lines <- calgary_sf$osm_lines 
-
-#===============
-# GET WATER DATA
-#===============
-
-# A) WATER DATA
-
-# Get the water osm data
-calgary_opq_water <- opq(bbox = calgary_bb) |>
-  add_osm_feature(key = "water",
-                  value = c("river", "oxbow", "lake", "reservoir",
-                            "slough"))
-# Convert into sf
-calgary_sf_water <- osmdata_sf(calgary_opq_water)
-
-# Extract relevant dataframes
-calgary_water_polygons <- calgary_sf_water$osm_polygons
-calgary_water_multipolygons <- calgary_sf_water$osm_multipolygons
-
-# B) WETLAND DATA
-
-# Get the wetland osm data
-calgary_opq_wetland <- opq(bbox = calgary_bb) |>
-  add_osm_feature(key = "natural", value = "wetland")
-
-# Convert into sf
-calgary_wetland_sf <- osmdata_sf(calgary_opq_wetland)
-
-# Extract relevant dataframe
-calgary_wetland_polygons <- calgary_wetland_sf$osm_polygons
-
-#=========================
-# Plot everything together
-#=========================
-summary_streets_water <- ggplot() +
-  geom_sf(data = calgary_water_polygons, fill = "black") +
-  geom_sf(data = calgary_water_multipolygons, fill = "black") +
-  geom_sf(data = calgary_wetland_polygons, fill = "black") +
-  geom_sf(data = calgary_street_lines) +
-  theme_minimal()
-
-summary_streets_water # To see it
-
-ggsave("calgary_skeleton.png", height = 40, width = 40)
-```
-
-# How to get travel times data
-
-I could use [this website](https://maps.openrouteservice.org/#/reach/Calgary%20Tower,Calgary,AB,Canada/data/55,130,32,198,15,97,4,224,38,9,96,59,2,24,5,192,166,6,113,0,184,64,90,1,25,8,5,128,58,0,24,3,96,25,144,128,153,232,6,128,86,67,41,36,250,4,224,3,132,38,32,32,0,117,79,2,34,108,57,64,2,242,128,22,215,33,94,131,135,64,128,12,222,0,27,116,184,66,198,143,0,27,146,0,230,248,0,89,158,48,36,52,100,136,207,160,15,170,128,39,176,189,120,199,203,216,33,201,219,192,27,89,66,130,128,23,80,73,3,26,24,217,27,73,87,130,128,23,197,40,0,0)
-
-
-# I got the database from the author
-
-## What did I get? How do I work with it?
-
-The original author was kind enough to send me the database he worked with. I now have to check if I can work with that data in R, and what kind of conversions should I do (if needed).
-
-- Two of the files are .csv with bike and car travel times.
-
-- The other three are .geojson files
-
-**What are .geojson files?** I read about it in [Wikipedia](https://en.wikipedia.org/wiki/GeoJSON) and h
-
-**How to work with .geojson files in R?** I read about it in [r-graph-gallery.com](https://r-graph-gallery.com/325-background-map-from-geojson-format-in-r.html)
-
-**How do i read the file?** The package `geojsonsf` is mentioned [here](https://stackoverflow.com/questions/64602323/read-geojson-file-using-sf-library). I learn more about [here](https://www.rdocumentation.org/packages/geojsonsf/versions/2.0.3)
 
 ## Loading and plotting (checking json files)
 
-```{r, fig.width=40, fig.height=40}
-# Checking hexagons.geojson
+```{r load_data}
+# Loading travel times
 hexagons <- geojson_sf("original_data/hexagons.geojson")
-hexagons # To see data structure
 
-ggplot(hexagons) +
-  geom_sf() +
-  theme_void()
-
-# Checking all_roads_dissolved.geojson
+# Loading roads
 all_roads_dissolved <- geojson_sf("original_data/all_roads_dissolved.geojson")
-all_roads_dissolved # To see data structure
 
-ggplot(all_roads_dissolved) +
-  geom_sf() +
-  theme_void()
-
-# Checking water.geojson
+# Loading water
 water <- geojson_sf("original_data/water.geojson")
-water # To see data structure
-
-ggplot(water) +
-  geom_sf() +
-  theme_void()
-
-# Water and roads together:
-ggplot() +
-  geom_sf(data = all_roads_dissolved) +
-  geom_sf(data = water) +
-  theme_void()
 ```
 
-## Checking .csv files
 
-```{r}
-# Checking bike_times.csv
-bike_times <- read_csv("original_data/bike_times.csv")
-bike_times # To see data structure
+**EXPLAIN THIS BETTER IN THE FINAL VERSION** The id range in `hexagons`, `bike_times`, and `transit_times` are the same. Since the `hexagons` dataset includes `bike_times` and `transit_times`, it is most likely an object created by: 1) dividing the map area in hexagons, 2) getting the travel times for those Hexagons, 3) joining those two databases using the id column. I might be able **I REMOVED THE EXPLANATION OF WHY I WAS TRYING TO CONVERT MULTILINESTRING INTO POLYGON** When searching how to convert a multilinestring into a polygon, I came across [this post](https://stackoverflow.com/questions/69224441/find-intersection-between-multilinestring-and-polygons-sf-r), which mentions the funcion `st_intersection()`. This made me think i can maybe get an object that is the intersection between `hexagons` and `all_roads_dissolved`. Maybe I can plot this directly (not a full hexagon layer underneath). But if that doesn't work, the background hexagons idea can still work. In the documentation for st_intersection() there are other functions that may be helpful.
 
-# Checking transit_times.csv
-transit_times <- read_csv("original_data/transit_times.csv")
-transit_times # T see data structure
-```
-
-Looking at the data structure, it stands out that 4 of the files have an id variable (`hexagons`, `bike_times`, `transit_times` and `water`).
-
-```{r}
-range(hexagons$id)
-range(bike_times$from_id)
-range(transit_times$from_id)
-range(water$id)
-range(water$fid)
-```
-The id range in `hexagons`, `bike_times`, and `transit_times` are the same. Since the `hexagons` dataset includes `bike_times` and `transit_times`, it is most likely an object created by: 1) dividing the map area in hexagons, 2) getting the travel times for those Hexagons, 3) joining those two databases using the id column.
-
-Knowing this, I'm guessing the way the original plot was created by plotting:
-
- - A background layer with the hexagons filled in the corresponding color (depending on travel times).
- 
- - A layer on top of that with the roads transparent and what isn't roads white
- 
- - A layer on top of that with the water (water appears over the roads)
- 
-There might be another way to do it (somehow matching the roads with the hexagons and filling the roads directly), but I don't know how can that be done. **I SHOULD ASK IÑAKI!**
-
-In the mean time, I'll try to do the process i described, but just filling the hexagons in red, if it works, I'll make the needed conversions to get the colors right.
-
-## Trying the hexagon bacground idea
-
-```{r, fig.width=40, fig.height=40}
-ggplot() +
-  geom_sf(data = hexagons,
-          fill = "red", # For the hexagons to be red
-          color = NA # To get rid of the hexagon borders
-          ) +
-  theme_void() +
-  geom_sf(data = all_roads_dissolved)
-```
-This doesn't work this way, we only fill the roads (but we don't get a new "background" just for th roads layer that covers what aren't roads). I need to investigate how to create a negative of the roads object.
-
-After some googling, searching for "inverse sf r" lead me to [this webpage](https://www.rdocumentation.org/packages/glossa/versions/1.2.2/topics/invert_polygon) where i learnt about `invert_polygon` in the package `glossa`. As the documentation says, "this function inverts a polygon by calculating the difference between the bounding box and the polygon", this is exactly what I need. 
-
-```{r, fig.width=40, fig.height=40}
-inverse_roads <- invert_polygon(all_roads_dissolved)
-
-ggplot() +
-  geom_sf(data = hexagons,
-          fill = "red", # For the hexagons to be red
-          color = NA # To get rid of the hexagon borders
-          ) +
-  theme_void() +
-  geom_sf(data = inverse_roads,
-          fill = "black")
-```
-This didn't work, it just returned the bounding box. The problem probably is that the 
-I first need to convert the the `all_roads_dissolved` object into a polygon (it's geometry type is: MULTILINESTRING).
-
-
-## Change of plan (st_intersection): 
-
-When searching how to convert a multilinestring into a polygon, I came across [this post](https://stackoverflow.com/questions/69224441/find-intersection-between-multilinestring-and-polygons-sf-r), which mentions the funcion `st_intersection()`. This made me think i can maybe get an object that is the intersection between `hexagons` and `all_roads_dissolved`. Maybe I can plot this directly (not a full hexagon layer underneath). But if that doesn't work, the background hexagons idea can still work. In the documentation for st_intersection() there are other functions that may be helpful.
-
-```{r, fig.width=40, fig.height=40}
+```{r prepare_data}
 # This took several minutes to run, so I'll save the object and
-# avoid running it again.
+# avoid running the line again.
 # hexroads_intersection <- st_intersection(all_roads_dissolved, hexagons)
-
+# SHOULD I LEAVE IT WITHOUT SAVE/LOAD IN THE FINAL VERSION? PROBABLY
 # save(hexroads_intersection, file = "hexroads_intersection.RData")
-
 load("hexroads_intersection.RData")
 
-hexroads_intersection # To see how the object looks
-
-ggplot() +
-  geom_sf(data = hexroads_intersection) +
-  theme_void()
-```
-We have an object that includes the roads and travel times, so we may be able to plot the colors with this, let's try:
-
-```{r, fig.width=40, fig.height=40}
-ggplot() +
-  geom_sf(data = hexroads_intersection,
-          aes(color = ifelse(travel_time > 50, "blue", "red")),
-  ) +
-  theme_void()
-```
-
-
-It works! Now we need to create a column that computes the differences between travel times by bike and by car, and color accordingly. 
-
-## Creating difference column in hexroads_intersection and plotting
-
-**Note:** I'm computing time_difference as time by bike minus time by transit. That means that:
-
-- Negative numbers = faster by bike
-
-- Positive numbers = faster by transit
-
-
-```{r, fig.width=40, fig.height=40}
-hexroads_intersection <- hexroads_intersection |> 
-  mutate("time_difference" = b_travel_time - travel_time)
-
-
-hexroads_intersection # To check if it worked. It did!
-
-# Cheking if I can plot it: I can!
-ggplot() +
-  geom_sf(data = hexroads_intersection,
-          aes(color = ifelse(time_difference > 0, "blue", "red")),
-  ) +
-  theme_void()
-
-
-```
-Now I need to make a factor with the adecuate ranges and color accordingly.
-
-## Converting into a factor and plotting correct colors.
-
-```{r, fig.width=40, fig.height=40}
-hexroads_intersection <- hexroads_intersection |>
-  mutate(
-    "time_color" = case_when(
-      time_difference <= -30 ~ "-2", # Bike 30 or more minutes faster
-      time_difference <= -10 ~ "-1", # Bike 10 or more minutes faster (<30)
-      time_difference < 10 ~ "0", # Between -10 and 10 (10 not included)
-      time_difference >= 30 ~ "2", # Transit 30 or more minutes faster 
-      time_difference >= 10 ~ "1" # Transit 10 or more minutes faster (<30)
-    )
-  )
-
-hexroads_intersection |> 
-  filter(time_color == "2")
-
-ggplot() +
-  geom_sf(
-    data = hexroads_intersection,
-    aes(color = time_color)
-  ) +
-  scale_color_manual(
-    values = c(
-      "-2" = "#d26716",   # bike >30 min faster
-      "-1" = "#f8ad58",   # bike 10–30 min faster
-      "0"  = "#e3cdd5",   # similar travel time
-      "1"  = "#ca8aba",   # transit 10–30 min faster
-      "2"  = "#8359a6"    # transit >30 min faster
-    )
-  ) +
-  theme_void()
-```
-Got it! 
-
-# Summary roads + water (without legend)
-
-```{r, fig.width=40, fig.height=40}
-# Travel times data:
-hexagons <- geojson_sf("original_data/hexagons.geojson")
-hexagons
-# Road data:
-all_roads_dissolved <- geojson_sf("original_data/all_roads_dissolved.geojson")
-
-# Water data:
-water <- geojson_sf("original_data/water.geojson")
-
-
-# We have the time travel data and road data separated, we need to manipulate
-# it to be able to plot it. We will compute their intersection of both:
-
-# hexroads_intersection <- st_intersection(all_roads_dissolved, hexagons)
-
-# The previous line takes quite a while to run, so i save the object:
-# save(hexroads_intersection, file = "hexroads_intersection.RData")
-# and load it when needed:
-load("hexroads_intersection.RData")
-
-# Now we compute the difference of travel times, and create a factor column
-# to assign the colors adecuately:
+# NOTE: I'm computing time_difference as time by bike minus time by transit. That means that:
+# - Negative numbers = faster by bike
+# - Positive numbers = faster by transit
 hexroads_intersection <- hexroads_intersection |> 
   mutate(
     "time_difference" = b_travel_time - travel_time,
@@ -610,11 +63,17 @@ hexroads_intersection <- hexroads_intersection |>
       time_difference >= 30 ~ "2", # Transit 30 or more minutes faster 
       time_difference >= 10 ~ "1") # Transit 10 or more minutes faster (<30)
     )
+```
 
+## Plotting map
+
+```{r plot_legendless_map}
+# Just the map, without legend
 calgary_legendless <- ggplot() +
   geom_sf( # We plot the roads:
     data = hexroads_intersection,
     aes(color = time_color),
+    linewidth = 1.1,  # To make roads thicker
     show.legend = FALSE
   ) +
   scale_color_manual(
@@ -629,53 +88,39 @@ calgary_legendless <- ggplot() +
   geom_sf( # We plot the water:
     data = water,
     fill = "#a6b0b9",
-    color = "#a6b0b9" # If i don't use border, it looks slimer than original
+    color = "#a6b0b9",
+    linewidth =1.1 # To make water thicker
     ) +
   theme_void()
 
 calgary_legendless # To see it
-
-ggsave(
-  "calgary_01.png",
-  width = 5000,
-  height = 5000,
-  units = "px",
-  dpi = 300,
-  bg = "white"
-)
 ```
 
+## Plotting first legend
 
-
-
- 
-# Annotations
-
-I used What The Font to guess what the font in the original plot is. It is StudioSans, not freely available. The closest one i could find in Google fonts was Noto Sans Japanese. So I'll use that one. I'll start with the "main" legend with blue dot.
+I used What The Font to guess what the font in the original plot is. It is StudioSans, not freely available. The closest one i could find in Google fonts was Noto Sans. So I'll use that one. I'll start with the "main" legend with blue dot.
 
 In order to change line spacing see [here](https://stackoverflow.com/questions/39721772/line-height-spacing-for-text-in-ggplot)
 
 In order to see the options for the point annotation see [this](https://ggplot2.tidyverse.org/articles/ggplot2-specs.html)
 
-I got the coordinates for calgary tower from [OSM](https://www.openstreetmap.org/way/25719793)
+I got the coordinates for calgary tower from [OSM](https://www.openstreetmap.org/way/25719793), and finetuned manually.
 
 
-```{r, fig.width=15, fig.asp=1, dpi=300}
+```{r plot_legend1}
 # We add the font:
 sysfonts::font_add_google("Noto Sans", family = "noto_sans")
 showtext::showtext_auto()
 
 # We see what the bbox coordinates are and be able to adjust the annotation:
-st_bbox(hexroads_intersection)
-
-
+st_bbox(hexroads_intersection) # REMOVE FOR FINAL VERSION?
 
 # And then annotate accordingly
 calgary_legend1 <- calgary_legendless + 
   annotate( # The main text
     "text",
-    x = -114.3058,
-    y = 50.9785,
+    x = -114.3130, 
+    y = 50.9790,
     label = paste("This map shows the difference",
                   "in the time it takes to reach the",
                   "Calgary Tower     by bike and by",
@@ -683,19 +128,18 @@ calgary_legend1 <- calgary_legendless +
                   sep="\n"),
     hjust = 0, # Align left
     family = "noto_sans",
-    size = 15.95,
-    lineheight = 0.375, # Line spacing
-    
+    size = 12.5,
+    lineheight = 1.1, # Line spacing
     color = "#000000"
   ) + 
    annotate(  # The blue point in the legend
     "point",
-    x = -114.2425, 
-    y = 50.97452,
+    x = -114.2470, 
+    y = 50.97490,  # LAST: + 10
     shape = 21, # Has to be one between 21 and 25 (according to documentation)
-    size = 3.75,
+    size = 8.25,
     color = "#000000",
-    stroke = 2,
+    stroke = 4.75,
     fill = "#69eafe"
   ) +
   annotate(  # The blue point in the map (Calgary Tower)
@@ -703,14 +147,14 @@ calgary_legend1 <- calgary_legendless +
     x = -114.0631, 
     y = 51.04460,
     shape = 21, # Has to be one between 21 and 25 (according to documentation)
-    size = 3.75,
+    size = 8.25,
     color = "#000000",
-    stroke = 2,
+    stroke = 4.75,
     fill = "#69eafe"
   )
   
-calgary_legend1
-
+calgary_legend1 # To seeit
+  
   ggsave(
   "calgary_02.png",
   width = 15,
@@ -720,9 +164,11 @@ calgary_legend1
 )
 ```
 
-Almost perfect fit. The only feasable thing i can do is increase the separation between words (since I can't StudioSans). But I've already spent too much time trying to make it fit perfectly comparing in gimp, if i get a few extra hours, i can try to increase the spacing between words and fit everything again.  
+Almost perfect fit. Comparing with gimp changing opacity, it is really really close. I'm not sure I can get closer without using the same font as the original plot (which I cant). Maybe i could make the blue dot in the legend a little bit smaller, just to make it visually more similar.
 
-Then the second legend:
+## Plotting second legend
+
+**CONTINUE FROM HERE**
 
 ```{r}
 
