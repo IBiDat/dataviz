@@ -10,18 +10,19 @@ output:
     self_contained: false
 ---
 
+I'm setting the chunk size to 34.375 because that will allow me to create a file the same height (3300px) as the original one (given default dpi for rmd in html is 96 [3300/96=34.375])
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(out.width = "100%", fig.align = "center",
   fig.showtext = TRUE, fig.width = 34.375, fig.height = 34.375)
 ```
 
-```{r libraries}
+```{r load_libraries}
 library(tidyverse)
 library(osmdata)
 library(geojsonsf) # Used function geojson_sf to convert geojson into sf
 library(glossa) # Used function invert_polygon (idea didn't work)
-library(sf) # Used function st_intersection
+library(sf) # Used function st_intersection REDUNDANT?
 ```
 
 
@@ -60,8 +61,10 @@ hexroads_intersection <- hexroads_intersection |>
       time_difference <= -30 ~ "-2", # Bike 30 or more minutes faster
       time_difference <= -10 ~ "-1", # Bike 10 or more minutes faster (<30)
       time_difference < 10 ~ "0", # Between -10 and 10 (both not included)
-      time_difference >= 30 ~ "2", # Transit 30 or more minutes faster 
-      time_difference >= 10 ~ "1") # Transit 10 or more minutes faster (<30)
+      time_difference < 30 ~ "1", # Transit 10 or more minutes faster (<30)
+      time_difference >= 30 ~ "2"), # Transit 30 or more minutes faster 
+    "time_color" = fct( # We make it factor 
+                   time_color, levels = c("-2", "-1", "0", "1", "2"))
     )
 ```
 
@@ -74,7 +77,7 @@ calgary_legendless <- ggplot() +
     data = hexroads_intersection,
     aes(color = time_color),
     linewidth = 1.1,  # To make roads thicker
-    show.legend = FALSE
+    show.legend = TRUE
   ) +
   scale_color_manual(
     values = c(
@@ -135,7 +138,7 @@ calgary_legend1 <- calgary_legendless +
    annotate(  # The blue point in the legend
     "point",
     x = -114.2470, 
-    y = 50.97490,  # LAST: + 10
+    y = 50.97490,  
     shape = 21, # Has to be one between 21 and 25 (according to documentation)
     size = 8.25,
     color = "#000000",
@@ -164,13 +167,71 @@ calgary_legend1 # To seeit
 )
 ```
 
+
+
+
 Almost perfect fit. Comparing with gimp changing opacity, it is really really close. I'm not sure I can get closer without using the same font as the original plot (which I cant). Maybe i could make the blue dot in the legend a little bit smaller, just to make it visually more similar.
 
 ## Plotting second legend
 
 **CONTINUE FROM HERE**
 
-```{r}
+Found about how to create rounded corners [here](https://albert-rapp.de/posts/ggplot2-tips/11_rounded_rectangles/11_rounded_rectangles.html) package `ggchiklet`. Seems like it is not available for the current version of R.
+
+Another possibility for rounded corners is package `funkyheatmap` see [this](https://search.r-project.org/CRAN/refmans/funkyheatmap/html/geom_rounded_rect.html)
+
+
+```{r plot_legend2}
+library(funkyheatmap)
+
+# To make it easier to manually adjust, i will set the settings for the
+# rectangle sizes like this, and the plot calling this objects:
+rectangle_top <- 50.9600
+rectangle_left <- -114.3130
+rectangle_width <- 0.0250
+rectangle_height <- 0.0050
+rectangle_space <- 0.0010
+rectangle_color <- c("#aa5312", "#c88c47", "#b7a6ac", "#a36f96", "#6a4886")
+# THE COLORS ARE TOO DARK, PICK DIRECTLY FROM ORIGINAL LEGEND (NOT SAME TONE
+# AS THE ROADS)
+
+# Create a data frame for legend rectangles according to settings:
+legend_rectangles <- tibble(
+  xmin = c(
+    rectangle_left,
+    rectangle_left + (rectangle_width + rectangle_space),
+    rectangle_left + 2*(rectangle_width + rectangle_space),
+    rectangle_left + 3*(rectangle_width + rectangle_space),
+    rectangle_left + 4*(rectangle_width + rectangle_space)),
+  xmax = c(
+    rectangle_left + rectangle_width,
+    rectangle_left + rectangle_width + (rectangle_width + rectangle_space),
+    rectangle_left + rectangle_width + (2*(rectangle_width + rectangle_space)),
+    rectangle_left + rectangle_width + (3*(rectangle_width + rectangle_space)),
+    rectangle_left + rectangle_width + (4*(rectangle_width + rectangle_space))),
+  ymin = rectangle_top - rectangle_height,
+  ymax = rectangle_top,
+  fill_color = rectangle_color)
+
+legend_rectangles # To see tibble, REMOVE IN FINAL VERSION!!!!!!!!!!!
+
+# Plot rounded rectangles for legend:
+calgary_legend2 <- calgary_legend1 +
+  geom_rounded_rect(
+    data = legend_rectangles,
+    aes(xmin = xmin, xmax = xmax,
+        ymin = ymin, ymax = ymax, 
+        fill = rectangle_color,
+        radius = 0.3),
+    color = NA,  # No border
+    show.legend = FALSE
+  ) +
+  scale_fill_identity() # So that the fill with rectangle_color
+                        # isn't treated as characters, but as the colors
+                        # EXPLAIN BETTER WITH DOCUMENTATION FOR FINAL VERSION
+
+calgary_legend2
+## CONTINUE ADDING TEXT HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE####
+
 
 ```
-
