@@ -1784,7 +1784,7 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
 4 &quot;30&quot;         -114.  50.9   0.5
 5 &quot;   minutes&quot; -114.  50.9   0  </code></pre>
 <div class="sourceCode">
-<pre class="sourceCode r"><code class="sourceCode r"><span><span class='co'># Create the dataframe for the faster by relative to previous:</span></span>
+<pre class="sourceCode r"><code class="sourceCode r"><span><span class='co'># Create the tibble for the faster by relative to previous:</span></span>
 <span><span class='va'>legend_faster</span> <span class='op'>&lt;-</span> <span class='fu'><a href='https://tibble.tidyverse.org/reference/tibble.html'>tibble</a></span><span class='op'>(</span></span>
 <span>  label <span class='op'>=</span> <span class='fu'><a href='https://rdrr.io/r/base/c.html'>c</a></span><span class='op'>(</span><span class='st'>"faster by bike"</span>, <span class='st'>"|"</span>, <span class='st'>"faster by transit"</span><span class='op'>)</span>,</span>
 <span>  x <span class='op'>=</span> <span class='fu'><a href='https://rdrr.io/r/base/c.html'>c</a></span><span class='op'>(</span></span>
@@ -1840,41 +1840,110 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
 </div>
 <p>We now have the first two legends, they fit almost perfectly when comparing in Gimp. Now i need to add the arrow pointing north with scale underneath.</p>
 <h2 id="plotting-third-legend">Plotting third legend</h2>
-<p>Searching in duckduckgo “how to add north arrow ggplot” i find <a href="https://stackoverflow.com/questions/61809382/how-can-i-put-a-scalebar-and-a-north-arrow-on-the-map-ggplot">here</a> package <code>ggspacial</code>. I read more about <a href="https://cran.r-universe.dev/ggspatial/doc/manual.html">here</a>. But ggspatial defaults don’t work. I don’t find other packages that could be useful, I’ll have to do it manually. Actually, it shouldn’t be too hard adding a triangle and a rounded rectangle with a box around them. Searching “add arrow ggplot” i find <a href="https://www.statology.org/ggplot-arrows/">here</a> and <a href="https://teunbrand.github.io/ggarrow/">here</a> there’s function <code>arrow</code> already within ggplot, it can be used with geom_segment. I’ll try using that one.</p>
+<p>Searching in duckduckgo “how to add north arrow ggplot” i find <a href="https://stackoverflow.com/questions/61809382/how-can-i-put-a-scalebar-and-a-north-arrow-on-the-map-ggplot">here</a> package <code>ggspacial</code>. I read more about <a href="https://cran.r-universe.dev/ggspatial/doc/manual.html">here</a>. But ggspatial defaults don’t work. I don’t find other packages that could be useful, I’ll have to do it manually. Actually, it shouldn’t be too hard adding a triangle and a rounded rectangle with a box around them. Searching “add arrow ggplot” i find <a href="https://www.statology.org/ggplot-arrows/">here</a> and <a href="https://teunbrand.github.io/ggarrow/">here</a> there’s function <code>arrow</code> already within ggplot, it can be used with geom_segment. I’ll try using that one. It doesn’t really work, can only make rounded arrows with this size (I think it is because of the stroke.)</p>
+<p>There’s a weird behaviour with geom_rounded_rectangle(), when linewidth increases it breack the shape. Since I can’t match the linewdith that way, I will plot two rounded_rectangles, a white one on top of a bigger black one, to get the desired effect.</p>
 <div class="layout-chunk" data-layout="l-body">
 <div class="sourceCode">
 <pre class="sourceCode r"><code class="sourceCode r"><span><span class='co'>######## Settings to make it easier to manually adjust ###########</span></span>
-<span><span class='co'># Arrow</span></span>
-<span><span class='va'>arrow_x</span> <span class='op'>&lt;-</span> <span class='op'>-</span><span class='fl'>114.2450</span></span>
-<span><span class='va'>arrow_bottom</span> <span class='op'>&lt;-</span> <span class='fl'>50.8490</span></span>
-<span><span class='va'>arrow_width</span> <span class='op'>&lt;-</span> <span class='fl'>0.0250</span></span>
-<span><span class='va'>arrow_height</span> <span class='op'>&lt;-</span> <span class='fl'>0.0500</span></span>
+<span><span class='co'>######## I also think the code is more readable this way, but maybe</span></span>
+<span><span class='co'>######## I shouldn't do settings -&gt; tibble -&gt; ggplot</span></span>
+<span><span class='co'>######## and should do settings -&gt; ggplot, or ggpplot directly, but gets messy</span></span>
+<span><span class='co'>######## ASK IÑAKI!</span></span>
+<span></span>
+<span><span class='va'>arrow_color</span> <span class='op'>&lt;-</span> <span class='st'>"red"</span></span>
+<span></span>
+<span><span class='co'># Arrow triangle </span></span>
+<span><span class='va'>triangle_tip_x</span> <span class='op'>&lt;-</span> <span class='op'>-</span><span class='fl'>114.2680</span> <span class='co'>######## LAST +5</span></span>
+<span><span class='va'>triangle_half_width</span> <span class='op'>&lt;-</span> <span class='fl'>0.0076</span> <span class='co'>####### Last: +1</span></span>
+<span><span class='va'>triangle_bottom_y</span> <span class='op'>&lt;-</span> <span class='fl'>50.9067</span> <span class='co'>######## last +1</span></span>
+<span><span class='va'>triangle_height</span> <span class='op'>&lt;-</span> <span class='fl'>0.0048</span> <span class='co'>### last:-1</span></span>
+<span><span class='co'># Arrow rectangle:</span></span>
+<span><span class='va'>arrow_rectangle_width</span> <span class='op'>&lt;-</span> <span class='fl'>0.45</span> <span class='co'># Relative to triangle width</span></span>
+<span><span class='va'>arrow_rectangle_height</span> <span class='op'>&lt;-</span> <span class='fl'>1.49</span> <span class='co'># Relative to triangle height</span></span>
+<span><span class='va'>arrow_rectangle_radius</span> <span class='op'>&lt;-</span> <span class='fl'>0.24</span> <span class='co'>#</span></span>
+<span><span class='co'># North text:</span></span>
+<span><span class='va'>space</span> <span class='op'>&lt;-</span> <span class='fl'>0.55</span> <span class='co'># Relative to triangle height</span></span>
+<span><span class='va'>north_size</span> <span class='op'>&lt;-</span> <span class='fl'>9</span></span>
+<span><span class='co'># Box (around the arrow):</span></span>
+<span><span class='va'>box_width</span> <span class='op'>&lt;-</span> <span class='fl'>2.20</span> <span class='co'># Relative to triangle width</span></span>
+<span><span class='va'>box_height</span> <span class='op'>&lt;-</span> <span class='fl'>2.43</span> <span class='co'># Relative to triangle height</span></span>
+<span><span class='va'>box_radius</span> <span class='op'>&lt;-</span> <span class='fl'>0.20</span></span>
+<span><span class='va'>box_y_position</span> <span class='op'>&lt;-</span> <span class='fl'>0.255</span> <span class='co'># Relative to triangle tip (measured in triangle height)</span></span>
+<span><span class='va'>box_color</span> <span class='op'>&lt;-</span> <span class='st'>"#6f6f6f"</span></span>
+<span><span class='va'>box_line_width</span> <span class='op'>&lt;-</span> <span class='fl'>0.7</span></span>
 <span></span>
 <span></span>
-<span></span>
-<span><span class='co'>#################### THIS LOOKED LIKE A GOOD START, BUT I CAN'T FIND A WAY TO </span></span>
-<span><span class='co'>#################### MAKE THE ARROW LOOK SHARP. IF I DON'T FIND IT, I CAN DO</span></span>
-<span><span class='co'>#################### A TRIANGLE ON TOP OF A ROUNDED RECTANGLE.</span></span>
-<span><span class='co'>#################### ACTUALLY, NOW THAT I THINK ABOUT IT, IT MIGHT BE LESS CODE </span></span>
-<span><span class='co'>#################### TO JUST DO A TRIANGLE ON TOP OF ROUNDED RECTANGLE</span></span>
-<span><span class='co'>#################### THINK ABOUT THAT</span></span>
-<span></span>
-<span><span class='va'>calgary_legend3</span> <span class='op'>&lt;-</span> <span class='va'>calgary_legend2</span> <span class='op'>+</span></span>
-<span>  <span class='fu'><a href='https://ggplot2.tidyverse.org/reference/annotate.html'>annotate</a></span><span class='op'>(</span></span>
-<span>    <span class='st'>"segment"</span>, </span>
-<span>    x <span class='op'>=</span> <span class='va'>arrow_x</span>, xend <span class='op'>=</span> <span class='va'>arrow_x</span>,</span>
-<span>    y <span class='op'>=</span> <span class='va'>arrow_bottom</span>, yend <span class='op'>=</span> <span class='op'>(</span><span class='va'>arrow_bottom</span> <span class='op'>+</span> <span class='va'>arrow_height</span><span class='op'>)</span>,</span>
-<span>    color <span class='op'>=</span> <span class='st'>"#e3cdd5"</span>,</span>
-<span>    linewidth <span class='op'>=</span> <span class='fl'>30</span>,</span>
-<span>    lineend <span class='op'>=</span> <span class='st'>"butt"</span>,</span>
-<span>    arrow <span class='op'>=</span> <span class='fu'><a href='https://rdrr.io/r/grid/arrow.html'>arrow</a></span><span class='op'>(</span></span>
-<span>      angle <span class='op'>=</span> <span class='fl'>30</span>,</span>
-<span>      length <span class='op'>=</span> <span class='fu'><a href='https://rdrr.io/r/grid/unit.html'>unit</a></span><span class='op'>(</span><span class='fl'>10</span>, <span class='st'>"lines"</span><span class='op'>)</span>, <span class='co'># If I interpret documentation correctly,</span></span>
-<span>                                  <span class='co'># will resize as text does</span></span>
-<span>      type <span class='op'>=</span> <span class='st'>"closed"</span><span class='op'>)</span></span>
-<span>  <span class='op'>)</span></span>
-<span></span>
+<span><span class='co'>######### Create tibble according to settins ##########################</span></span>
+<span><span class='co'># Create triangle tibble according to settings:</span></span>
+<span><span class='va'>triangle_polygon</span> <span class='op'>&lt;-</span> <span class='fu'><a href='https://tibble.tidyverse.org/reference/tibble.html'>tibble</a></span><span class='op'>(</span></span>
+<span>  x <span class='op'>=</span> <span class='fu'><a href='https://rdrr.io/r/base/c.html'>c</a></span><span class='op'>(</span></span>
+<span>    <span class='va'>triangle_tip_x</span>, <span class='co'># Tip x</span></span>
+<span>    <span class='va'>triangle_tip_x</span> <span class='op'>-</span> <span class='va'>triangle_half_width</span>, <span class='co'># Left corner x</span></span>
+<span>    <span class='va'>triangle_tip_x</span> <span class='op'>+</span> <span class='va'>triangle_half_width</span> <span class='co'># Right corner x</span></span>
+<span>  <span class='op'>)</span>,</span>
+<span>  y <span class='op'>=</span> <span class='fu'><a href='https://rdrr.io/r/base/c.html'>c</a></span><span class='op'>(</span></span>
+<span>    <span class='va'>triangle_bottom_y</span> <span class='op'>+</span> <span class='va'>triangle_height</span>, <span class='co'># Tip y </span></span>
+<span>    <span class='va'>triangle_bottom_y</span>, <span class='co'># Left corner y</span></span>
+<span>    <span class='va'>triangle_bottom_y</span><span class='op'>)</span><span class='op'>)</span> <span class='co'># Right corner y</span></span>
 <span>  </span>
+<span><span class='co'># Create rectangle tibble according to settings:</span></span>
+<span><span class='va'>arrow_rectangle</span> <span class='op'>&lt;-</span> <span class='fu'><a href='https://tibble.tidyverse.org/reference/tibble.html'>tibble</a></span><span class='op'>(</span></span>
+<span>  xmin <span class='op'>=</span> <span class='va'>triangle_tip_x</span> <span class='op'>-</span> <span class='op'>(</span><span class='va'>triangle_half_width</span><span class='op'>*</span><span class='va'>arrow_rectangle_width</span><span class='op'>)</span>, <span class='co'># Left</span></span>
+<span>  xmax <span class='op'>=</span> <span class='va'>triangle_tip_x</span> <span class='op'>+</span> <span class='op'>(</span><span class='va'>triangle_half_width</span><span class='op'>*</span><span class='va'>arrow_rectangle_width</span><span class='op'>)</span>, <span class='co'># Right</span></span>
+<span>  ymin <span class='op'>=</span> <span class='va'>triangle_bottom_y</span> <span class='op'>-</span> <span class='op'>(</span><span class='va'>triangle_height</span><span class='op'>*</span><span class='va'>arrow_rectangle_height</span><span class='op'>)</span>, <span class='co'># Bottom</span></span>
+<span>  ymax <span class='op'>=</span> <span class='va'>triangle_bottom_y</span> <span class='op'>+</span> <span class='op'>(</span><span class='fl'>0.25</span><span class='op'>*</span><span class='va'>triangle_height</span><span class='op'>)</span><span class='op'>)</span> <span class='co'># Top, i add 0.25 of the</span></span>
+<span>                                                     <span class='co'># the triangle height to</span></span>
+<span>                                                     <span class='co'># hide curve on top</span></span>
+<span>  </span>
+<span><span class='co'># Create the tibble for "north" text relative to previous:</span></span>
+<span><span class='va'>north</span> <span class='op'>&lt;-</span> <span class='fu'><a href='https://tibble.tidyverse.org/reference/tibble.html'>tibble</a></span><span class='op'>(</span></span>
+<span>  label <span class='op'>=</span> <span class='st'>"North"</span>,</span>
+<span>  x <span class='op'>=</span> <span class='va'>triangle_tip_x</span>,</span>
+<span>  y <span class='op'>=</span> <span class='va'>triangle_bottom_y</span> <span class='op'>+</span> <span class='va'>triangle_height</span> <span class='op'>+</span> <span class='va'>space</span><span class='op'>*</span><span class='va'>triangle_height</span>,</span>
+<span><span class='op'>)</span></span>
+<span></span>
+<span><span class='co'># Create the tibble for the box around the arrow:</span></span>
+<span><span class='va'>arrow_box</span> <span class='op'>&lt;-</span> <span class='fu'><a href='https://tibble.tidyverse.org/reference/tibble.html'>tibble</a></span><span class='op'>(</span></span>
+<span>  xmin <span class='op'>=</span> <span class='va'>triangle_tip_x</span> <span class='op'>-</span> <span class='op'>(</span><span class='va'>triangle_half_width</span><span class='op'>*</span><span class='va'>box_width</span><span class='op'>)</span>, <span class='co'># Left</span></span>
+<span>  xmax <span class='op'>=</span> <span class='va'>triangle_tip_x</span> <span class='op'>+</span> <span class='op'>(</span><span class='va'>triangle_half_width</span><span class='op'>*</span><span class='va'>box_width</span><span class='op'>)</span>, <span class='co'># Right</span></span>
+<span>  ymin <span class='op'>=</span> <span class='va'>triangle_bottom_y</span> <span class='op'>-</span> <span class='op'>(</span><span class='va'>triangle_height</span><span class='op'>*</span><span class='va'>box_height</span><span class='op'>)</span> <span class='op'>+</span></span>
+<span>    <span class='op'>(</span><span class='va'>triangle_height</span><span class='op'>*</span><span class='va'>box_y_position</span><span class='op'>)</span>, <span class='co'># Bottom</span></span>
+<span>  ymax <span class='op'>=</span> <span class='va'>triangle_bottom_y</span> <span class='op'>+</span> <span class='op'>(</span><span class='va'>triangle_height</span><span class='op'>*</span><span class='va'>box_height</span><span class='op'>)</span> <span class='op'>+</span></span>
+<span>    <span class='op'>(</span><span class='va'>triangle_height</span><span class='op'>*</span><span class='va'>box_y_position</span><span class='op'>)</span><span class='op'>)</span> <span class='co'># Top</span></span>
+<span></span>
+<span></span>
+<span></span>
+<span><span class='co'>##### PLOTTING NORTH ARROW #####</span></span>
+<span><span class='va'>calgary_legend3</span> <span class='op'>&lt;-</span> <span class='va'>calgary_legend2</span> <span class='op'>+</span></span>
+<span>  <span class='fu'><a href='https://ggplot2.tidyverse.org/reference/geom_polygon.html'>geom_polygon</a></span><span class='op'>(</span> <span class='co'>#### Plot the arrow triangle ####</span></span>
+<span>    data <span class='op'>=</span> <span class='va'>triangle_polygon</span>,</span>
+<span>    <span class='fu'><a href='https://ggplot2.tidyverse.org/reference/aes.html'>aes</a></span><span class='op'>(</span>x <span class='op'>=</span> <span class='va'>x</span>, y <span class='op'>=</span> <span class='va'>y</span><span class='op'>)</span>,</span>
+<span>    fill <span class='op'>=</span> <span class='va'>arrow_color</span>,</span>
+<span>    color <span class='op'>=</span> <span class='cn'>NA</span><span class='op'>)</span> <span class='op'>+</span> <span class='co'># No border</span></span>
+<span>  <span class='fu'><a href='https://funkyheatmap.github.io/funkyheatmap/reference/geom_rounded_rect.html'>geom_rounded_rect</a></span><span class='op'>(</span> <span class='co'>#### Plot the arrow "body" ####</span></span>
+<span>    data <span class='op'>=</span> <span class='va'>arrow_rectangle</span>,</span>
+<span>    <span class='fu'><a href='https://ggplot2.tidyverse.org/reference/aes.html'>aes</a></span><span class='op'>(</span>xmin <span class='op'>=</span> <span class='va'>xmin</span>, xmax <span class='op'>=</span> <span class='va'>xmax</span>,</span>
+<span>        ymin <span class='op'>=</span> <span class='va'>ymin</span>, ymax <span class='op'>=</span> <span class='va'>ymax</span><span class='op'>)</span>,</span>
+<span>    radius <span class='op'>=</span> <span class='va'>arrow_rectangle_radius</span>,</span>
+<span>    fill <span class='op'>=</span> <span class='va'>arrow_color</span>,</span>
+<span>    color<span class='op'>=</span> <span class='cn'>NA</span><span class='op'>)</span> <span class='op'>+</span> <span class='co'># No border</span></span>
+<span>  <span class='fu'><a href='https://ggplot2.tidyverse.org/reference/geom_text.html'>geom_text</a></span><span class='op'>(</span> <span class='co'>#### Plot "North" text ####</span></span>
+<span>    data <span class='op'>=</span> <span class='va'>north</span>,</span>
+<span>    <span class='fu'><a href='https://ggplot2.tidyverse.org/reference/aes.html'>aes</a></span><span class='op'>(</span>x <span class='op'>=</span> <span class='va'>x</span>, y <span class='op'>=</span> <span class='va'>y</span>, label <span class='op'>=</span> <span class='va'>label</span><span class='op'>)</span>,</span>
+<span>    size <span class='op'>=</span> <span class='va'>north_size</span>,</span>
+<span>    fontface <span class='op'>=</span> <span class='st'>"bold"</span>,</span>
+<span>    color <span class='op'>=</span> <span class='st'>"red"</span>, </span>
+<span>    family <span class='op'>=</span> <span class='st'>"atkinson"</span><span class='op'>)</span><span class='op'>+</span></span>
+<span>  <span class='fu'><a href='https://funkyheatmap.github.io/funkyheatmap/reference/geom_rounded_rect.html'>geom_rounded_rect</a></span><span class='op'>(</span></span>
+<span>    data <span class='op'>=</span> <span class='va'>arrow_box</span>,</span>
+<span>    <span class='fu'><a href='https://ggplot2.tidyverse.org/reference/aes.html'>aes</a></span><span class='op'>(</span>xmin <span class='op'>=</span> <span class='va'>xmin</span>, xmax <span class='op'>=</span> <span class='va'>xmax</span>,</span>
+<span>        ymin <span class='op'>=</span> <span class='va'>ymin</span>, ymax <span class='op'>=</span> <span class='va'>ymax</span><span class='op'>)</span>,</span>
+<span>    radius <span class='op'>=</span> <span class='va'>box_radius</span>,</span>
+<span>    fill <span class='op'>=</span> <span class='cn'>NA</span>,</span>
+<span>    color <span class='op'>=</span> <span class='va'>box_color</span>,</span>
+<span>    linewidth <span class='op'>=</span> <span class='va'>box_line_width</span><span class='op'>)</span> <span class='co'># ALMOST GOT IT, BUT THERE'S A WEIRD BEHAVIOUR</span></span>
+<span>                                <span class='co'># WHEN LINEWIDTH INCREASES</span></span>
+<span></span>
 <span><span class='va'>calgary_legend3</span> <span class='co'># To see it</span></span></code></pre>
 </div>
 <img src="100569505_files/figure-html5/unnamed-chunk-1-1.png" width="100%" style="display: block; margin: auto;" />
@@ -1885,7 +1954,10 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
 <span>  height <span class='op'>=</span> <span class='fl'>34.375</span>,</span>
 <span>  dpi <span class='op'>=</span> <span class='fl'>96</span>,</span>
 <span>  bg <span class='op'>=</span> <span class='st'>"white"</span></span>
-<span><span class='op'>)</span></span></code></pre>
+<span><span class='op'>)</span></span>
+<span><span class='co'>#####################</span></span>
+<span><span class='co'>#     Done :)       #</span></span>
+<span><span class='co'>#####################</span></span></code></pre>
 </div>
 </div>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r distill-force-highlighting-css"><code class="sourceCode r"></code></pre></div>
