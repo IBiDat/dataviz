@@ -295,7 +295,7 @@ ggsave(
 ```
 We now have the first two legends, they fit almost perfectly when comparing in Gimp. Now i need to add the arrow pointing north with scale underneath.
 
-## Plotting third legend
+## Plotting third legend (north arrow)
 
 Searching in duckduckgo "how to add north arrow ggplot" i find [here](https://stackoverflow.com/questions/61809382/how-can-i-put-a-scalebar-and-a-north-arrow-on-the-map-ggplot) package `ggspacial`. I read more about [here](https://cran.r-universe.dev/ggspatial/doc/manual.html). But ggspatial defaults don't work. I don't find other packages that could be useful, I'll have to do it manually. Actually, it shouldn't be too hard adding a triangle and a rounded rectangle with a box around them. Searching "add arrow ggplot" i find [here](https://www.statology.org/ggplot-arrows/) and [here](https://teunbrand.github.io/ggarrow/) there's function `arrow` already within ggplot, it can be used with geom_segment. I'll try using that one. It doesn't really work, can only make rounded arrows with this size (I think it is because of the stroke.)
 
@@ -308,27 +308,36 @@ There's a weird behaviour with geom_rounded_rectangle(), when linewidth increase
 ######## and should do settings -> ggplot, or ggpplot directly, but gets messy
 ######## ASK IÑAKI!
 
-arrow_color <- "red"
-
+# Arrow:
+arrow_color <- "#e3cdd5"
 # Arrow triangle 
 triangle_tip_x <- -114.2680 ######## LAST +5
 triangle_half_width <- 0.0076 ####### Last: +1
 triangle_bottom_y <- 50.9067 ######## last +1
 triangle_height <- 0.0048 ### last:-1
 # Arrow rectangle:
-arrow_rectangle_width <- 0.45 # Relative to triangle width
-arrow_rectangle_height <- 1.49 # Relative to triangle height
+arrow_rectangle_width <- 0.455 # Relative to triangle width
+arrow_rectangle_height <- 1.495 # Relative to triangle height
 arrow_rectangle_radius <- 0.24 #
+
 # North text:
 space <- 0.55 # Relative to triangle height
 north_size <- 9
-# Box (around the arrow):
-box_width <- 2.20 # Relative to triangle width
-box_height <- 2.43 # Relative to triangle height
+north_color <- "#000000"
+
+# Outer box:
+box_width <- 2.22 # Relative to triangle width
+box_height <- 2.45 # Relative to triangle height
 box_radius <- 0.20
 box_y_position <- 0.255 # Relative to triangle tip (measured in triangle height)
-box_color <- "#6f6f6f"
-box_line_width <- 0.7
+box_color <- "#575757"
+
+# Border thickness (i will use this to change size of inner box):
+border_thickness <- 0.03 # Range 0-1 (no border, full black box).
+inner_box_color <- "white"
+
+
+
 
 
 ######### Create tibble according to settins ##########################
@@ -357,7 +366,7 @@ arrow_rectangle <- tibble(
 north <- tibble(
   label = "North",
   x = triangle_tip_x,
-  y = triangle_bottom_y + triangle_height + space*triangle_height,
+  y = triangle_bottom_y + triangle_height + space*triangle_height
 )
 
 # Create the tibble for the box around the arrow:
@@ -369,38 +378,63 @@ arrow_box <- tibble(
   ymax = triangle_bottom_y + (triangle_height*box_height) +
     (triangle_height*box_y_position)) # Top
 
+# Create the tibble for the inner box:
+# First we create an auxiliary object which we will add/substract to outer box:
+box_vertical_border <- ((arrow_box$xmax - arrow_box$xmin)*border_thickness)/2 
+box_horizontal_border <- ((arrow_box$ymax - arrow_box$ymin)*border_thickness)/2
+# And then the tibble:
+inner_box <- tibble(
+  xmin = arrow_box$xmin + box_vertical_border,
+  xmax = arrow_box$xmax - box_vertical_border,
+  ymin = arrow_box$ymin + box_horizontal_border,
+  ymax = arrow_box$ymax - box_horizontal_border
+)
+
+
+
+
 
 
 ##### PLOTTING NORTH ARROW #####
 calgary_legend3 <- calgary_legend2 +
+  geom_rounded_rect( #### Plot outer box (for border) ####
+    data = arrow_box,
+    aes(xmin = xmin, xmax = xmax,
+        ymin = ymin, ymax = ymax),
+    radius = box_radius,
+    fill = box_color,
+    color = NA
+    ) +
+  geom_rounded_rect( ####Plot inner box (for border)
+    data = inner_box,
+    aes(xmin = xmin, xmax = xmax,
+        ymin = ymin, ymax = ymax),
+    radius = box_radius,
+    fill = inner_box_color,
+    color = NA
+    )+
   geom_polygon( #### Plot the arrow triangle ####
     data = triangle_polygon,
     aes(x = x, y = y),
     fill = arrow_color,
-    color = NA) + # No border
+    color = NA # No border
+    ) + 
   geom_rounded_rect( #### Plot the arrow "body" ####
     data = arrow_rectangle,
     aes(xmin = xmin, xmax = xmax,
         ymin = ymin, ymax = ymax),
     radius = arrow_rectangle_radius,
     fill = arrow_color,
-    color= NA) + # No border
+    color= NA # No border
+    ) + 
   geom_text( #### Plot "North" text ####
     data = north,
     aes(x = x, y = y, label = label),
     size = north_size,
     fontface = "bold",
-    color = "red", 
-    family = "atkinson")+
-  geom_rounded_rect(
-    data = arrow_box,
-    aes(xmin = xmin, xmax = xmax,
-        ymin = ymin, ymax = ymax),
-    radius = box_radius,
-    fill = NA,
-    color = box_color,
-    linewidth = box_line_width) # ALMOST GOT IT, BUT THERE'S A WEIRD BEHAVIOUR
-                                # WHEN LINEWIDTH INCREASES
+    color = north_color, 
+    family = "atkinson"
+    )
 
 calgary_legend3 # To see it
 
