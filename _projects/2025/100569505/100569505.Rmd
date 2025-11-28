@@ -369,7 +369,7 @@ north <- tibble(
   y = triangle_bottom_y + triangle_height + space*triangle_height
 )
 
-# Create the tibble for the box around the arrow:
+# Create the tibble for the box around the arrow (outer box):
 arrow_box <- tibble(
   xmin = triangle_tip_x - (triangle_half_width*box_width), # Left
   xmax = triangle_tip_x + (triangle_half_width*box_width), # Right
@@ -445,7 +445,127 @@ ggsave(
   dpi = 96,
   bg = "white"
 )
-#####################
-#     Done :)       #
-##################### 
 ```
+
+## Plot forth legend (scale)
+
+It'll be faster to plot it relative to the box, so I wil use the same settings -> tibble -> plot approach as above.
+
+```{r}
+########## SETTINGS #############
+
+# Horizontal line:
+line_length <- 1 # Proportion of the box width
+line_space <- 1 # Space between line and box, proportion of box width
+line_color <- "#676767"
+line_thickness <- 1 # For argument linewidth =
+
+# Ticks:
+tick_length <- 1 # Proportion of the box height
+tick_color <- "#000000"
+tick_thickness <- 1 # For argument linewidth =
+
+# Kilometers:
+km_space <- 1.66 # Space between km and line, proportion of box height
+km_size <- 9 # In points, not relativ to the map
+km_color <- "#000000"
+km_font <- "atkinson"
+
+scale_km <- tibble( ############### NEED TO FINISH THIS ONE, BUT BEFORE THAT, GET THE SCALE RIGHT###############
+  label = c("0", "1.5", "3", " km")
+  x = c(
+    
+  ),
+  y = c(
+    
+  )
+  hjust = c(0.5, 0.5, 0.5, 0)
+)
+
+legend_minutes <- tibble(
+  label = c("30", "10", "10", "30", "   minutes"), # Like this is relative
+  x = c(                                           # with nudge is absolute EXPLAIN BETTER IN FINAL VERSION WHY I DECIDED THIS
+    rectangle_left + rectangle_width + (0.5*rectangle_space),
+    rectangle_left + (2*rectangle_width) + (1.5*rectangle_space),
+    rectangle_left + (3*rectangle_width) + (2.5*rectangle_space),
+    rectangle_left + (4*rectangle_width) + (3.5*rectangle_space),
+    rectangle_left + (4*rectangle_width) + (3.5*rectangle_space)), 
+  y = rectangle_top - rectangle_height * minute_separation,
+  hjust = c(0.5, 0.5, 0.5, 0.5, 0) # All justified center, "minutes" left
+  )
+
+######### TIBBLES ###############
+
+### Horizontal line
+# I first create an object with the actual outer box width, height, and x mid
+# point, it will make code easier later:
+box_actual_width <- arrow_box$xmax - arrow_box$xmin
+box_actual_height <- arrow_box$ymax - arrow_box$ymin
+box_mid_x <- arrow_box$xmin + (box_actual_width/2)
+# Then the tibble:
+horizontal_line <- tibble(
+  x = box_mid_x - ((box_actual_width/2)*line_length),
+  xend = box_mid_x + ((box_actual_width/2)*line_length),
+  y = arrow_box$ymin - (box_actual_height*line_space),
+  yend = arrow_box$ymin - (box_actual_height*line_space))
+
+
+### Ticks:
+tick <- tibble(
+  x = c(horizontal_line$x, box_mid_x, horizontal_line$xend),
+  xend = c(horizontal_line$x, box_mid_x, horizontal_line$xend),
+  y = horizontal_line$y - ((box_actual_height/2)*tick_length),
+  yend = horizontal_line$y + ((box_actual_height/2)*tick_length))
+
+####### PLOTTING #############
+
+calgary_legend4 <- calgary_legend3 +
+  geom_segment( ### Plotting the horizontal line
+    data = horizontal_line,
+    aes(x = x, xend = xend, 
+        y = y, yend = yend),
+    linewidth = line_thickness,
+    color = line_color
+    ) +
+  geom_segment( ### Plotting the ticks
+    data = tick,
+    aes(x = x, xend = xend, 
+        y = y, yend = yend),
+    linewidth = tick_thickness,
+    color = line_color
+    ) 
+
+ggsave(
+  "calgary_05.png",
+  width = 34.375,
+  height = 34.375,
+  dpi = 96,
+  bg = "white"
+)
+
+```
+**I've been think the wrong way about how to plot the line for the scale, i was trying to just imitate the position comparing the pictures, but i need to calculate what a km (and 3km) are in my map in order to properly plot the scale!** 
+
+I need to keep investigating, but it is too late already, so I will keep on reviewin this tomorrow:
+
+- https://stackoverflow.com/questions/54453236/compute-distance-and-add-lines-ggplot
+
+- https://stackoverflow.com/questions/32363998/function-to-calculate-geospatial-distance-between-two-points-lat-long-using-r
+
+- https://gis.stackexchange.com/questions/353798/what-is-the-proper-way-to-calculate-distance-in-km-from-degrees
+
+- 
+```{r}
+
+ggspatial:::GeomScaleBar$draw_panel
+  
+calgary_legend4
+
+GeomScaleBar
+
+annotation_scale
+
+
+```
+
+
