@@ -24,7 +24,8 @@ library(geojsonsf) # Used function geojson_sf to convert geojson into sf
 library(glossa) # Used function invert_polygon (idea didn't work)
 library(sf) # Used function st_intersection
 library(funkyheatmap) # Used function geom_rounded_rect
-library(ggspatial) # Used in north arrow and ¿SCALE?
+library(ggspatial) # Used in north arrow and ¿SCALE? # NOT USING IT IN THE END
+library(geosphere) # To calculate distance for the scale
 ```
 
 
@@ -79,7 +80,7 @@ calgary_legendless <- ggplot() +
     data = hexroads_intersection,
     aes(color = time_color),
     linewidth = 1.1,  # To make roads thicker
-    show.legend = TRUE
+    show.legend = FALSE
   ) +
   scale_color_manual(
     values = c(
@@ -451,89 +452,134 @@ ggsave(
 
 It'll be faster to plot it relative to the box, so I wil use the same settings -> tibble -> plot approach as above.
 
+**I've been thinking the wrong way about how to plot the line for the scale, i was trying to just imitate the position comparing the pictures, but i need to calculate what a km (and 3km) are in my map in order to properly plot the scale!** 
+
+I need to keep investigating, but it is too late already, so I will keep on reviewin this tomorrow:
+
+- https://stackoverflow.com/questions/54453236/compute-distance-and-add-lines-ggplot
+
+- https://gis.stackexchange.com/questions/353798/what-is-the-proper-way-to-calculate-distance-in-km-from-degrees
+
+- https://stackoverflow.com/questions/32363998/function-to-calculate-geospatial-distance-between-two-points-lat-long-using-r 
+
+**THIS LAST ONE MIGHT BE IT** Let's read about `library(geosphere)` 
+
+- https://cran.r-project.org/web/packages/geosphere/index.html
+
+- https://cran.r-project.org/web/packages/geosphere/geosphere.pdf
+
+It seems like `destPoint()` could be it.
+
+
 ```{r}
 ########## SETTINGS #############
-
 # Horizontal line:
-line_length <- 1 # Proportion of the box width
-line_space <- 1 # Space between line and box, proportion of box width
-line_color <- "#676767"
-line_thickness <- 1 # For argument linewidth =
-
+scale_length <- 3000 # In meters
+scale_space <- 0.13 # Space between line and box, proportion of box width
+scale_color <- "#676767"
+scale_thickness <- 2 # For argument linedwidth = in segment
+  
 # Ticks:
-tick_length <- 1 # Proportion of the box height
+tick_length <- 0.08 # Proportion of the box height
 tick_color <- "#000000"
-tick_thickness <- 1 # For argument linewidth =
+tick_thickness <- 1.1 # For argument linewidth =
 
 # Kilometers:
-km_space <- 1.66 # Space between km and line, proportion of box height
+km_space <- 0.275 # Space between km and scale, proportion of box height
 km_size <- 9 # In points, not relativ to the map
 km_color <- "#000000"
 km_font <- "atkinson"
 
-scale_km <- tibble( ############### NEED TO FINISH THIS ONE, BUT BEFORE THAT, GET THE SCALE RIGHT###############
-  label = c("0", "1.5", "3", " km")
-  x = c(
-    
-  ),
-  y = c(
-    
-  )
-  hjust = c(0.5, 0.5, 0.5, 0)
-)
-
-legend_minutes <- tibble(
-  label = c("30", "10", "10", "30", "   minutes"), # Like this is relative
-  x = c(                                           # with nudge is absolute EXPLAIN BETTER IN FINAL VERSION WHY I DECIDED THIS
-    rectangle_left + rectangle_width + (0.5*rectangle_space),
-    rectangle_left + (2*rectangle_width) + (1.5*rectangle_space),
-    rectangle_left + (3*rectangle_width) + (2.5*rectangle_space),
-    rectangle_left + (4*rectangle_width) + (3.5*rectangle_space),
-    rectangle_left + (4*rectangle_width) + (3.5*rectangle_space)), 
-  y = rectangle_top - rectangle_height * minute_separation,
-  hjust = c(0.5, 0.5, 0.5, 0.5, 0) # All justified center, "minutes" left
-  )
-
+#################################
 ######### TIBBLES ###############
+################################
 
-### Horizontal line
+
+### Tibble for scale horizontal line
+####################################
+
 # I first create an object with the actual outer box width, height, and x mid
 # point, it will make code easier later:
 box_actual_width <- arrow_box$xmax - arrow_box$xmin
 box_actual_height <- arrow_box$ymax - arrow_box$ymin
 box_mid_x <- arrow_box$xmin + (box_actual_width/2)
-# Then the tibble:
-horizontal_line <- tibble(
-  x = box_mid_x - ((box_actual_width/2)*line_length),
-  xend = box_mid_x + ((box_actual_width/2)*line_length),
-  y = arrow_box$ymin - (box_actual_height*line_space),
-  yend = arrow_box$ymin - (box_actual_height*line_space))
 
 
-### Ticks:
+# Then we compute what the end points of the scale should be with destPoint:
+scale_left <- as_tibble(destPoint( # I use as_tibble because it is more readable later
+  p = c(box_mid_x,  # Start x coordinate (the middle of the box)
+        arrow_box$ymin - box_actual_height*scale_space), # Start y (box bottom)
+  b = 90, # Bearing (direction) in degrees
+  d = -scale_length/2)) # Distance in meters 
+
+scale_right <- as_tibble(destPoint(
+  p = c(box_mid_x,  # Start x coordinate (middle of the box)
+        arrow_box$ymin - box_actual_height*scale_space), # Start y (box bottom)
+  b = 90, # Bearing (direction) in degress 
+  d = scale_length/2)) # Distance in meters 
+
+# Then the tibble for the scale horizontal_line (could omit, but to make
+# everything coherent (homogeneous) when plotting):
+scale_horizontal <- tibble(
+  x = scale_left$lon,
+  xend = scale_right$lon,
+  y = scale_left$lat,
+  yend = scale_left$lat)
+
+### Tibble for ticks
+####################################
 tick <- tibble(
-  x = c(horizontal_line$x, box_mid_x, horizontal_line$xend),
-  xend = c(horizontal_line$x, box_mid_x, horizontal_line$xend),
-  y = horizontal_line$y - ((box_actual_height/2)*tick_length),
-  yend = horizontal_line$y + ((box_actual_height/2)*tick_length))
+  x = c(
+    scale_left$lon,
+    box_mid_x,
+    scale_right$lon),
+  xend = c(
+    scale_left$lon,
+    box_mid_x,
+    scale_right$lon),
+  y = scale_left$lat - ((box_actual_height/2)*tick_length), 
+  yend = scale_left$lat + ((box_actual_height/2)*tick_length))
 
+### Tibble for kms
+####################################
+km <- tibble(
+  label = c("0", "1.5", "3", "  km"),
+  x = c(
+    scale_left$lon,
+    box_mid_x,
+    scale_right$lon,
+    scale_right$lon
+  ),
+  y = scale_left$lat - ((box_actual_height/2)*km_space),
+  hjust = c(0.5, 0.5, 0.5, 0)) # All justified center, "kilometers" left
+
+##############################
 ####### PLOTTING #############
+##############################
 
 calgary_legend4 <- calgary_legend3 +
-  geom_segment( ### Plotting the horizontal line
-    data = horizontal_line,
-    aes(x = x, xend = xend, 
-        y = y, yend = yend),
-    linewidth = line_thickness,
-    color = line_color
-    ) +
-  geom_segment( ### Plotting the ticks
+    geom_segment( ### Plotting the ticks (so get the original ugly ticks on top)
     data = tick,
     aes(x = x, xend = xend, 
         y = y, yend = yend),
     linewidth = tick_thickness,
-    color = line_color
-    ) 
+    color = tick_color
+    ) +
+  geom_segment( ### Plotting the horizontal line
+    data = scale_horizontal,
+    aes(x = x, xend = xend, 
+        y = y, yend = yend),
+    linewidth = scale_thickness,
+    color = scale_color
+    ) +
+  geom_text(
+    data = km,
+    aes(x = x, y = y, hjust = hjust, label = label),
+    size = km_size,
+    color = km_color, 
+    family = km_font)
+
+calgary_legend4
 
 ggsave(
   "calgary_05.png",
@@ -543,29 +589,9 @@ ggsave(
   bg = "white"
 )
 
+
+###############
+#   Done :)   #
+###############
 ```
-**I've been think the wrong way about how to plot the line for the scale, i was trying to just imitate the position comparing the pictures, but i need to calculate what a km (and 3km) are in my map in order to properly plot the scale!** 
-
-I need to keep investigating, but it is too late already, so I will keep on reviewin this tomorrow:
-
-- https://stackoverflow.com/questions/54453236/compute-distance-and-add-lines-ggplot
-
-- https://stackoverflow.com/questions/32363998/function-to-calculate-geospatial-distance-between-two-points-lat-long-using-r
-
-- https://gis.stackexchange.com/questions/353798/what-is-the-proper-way-to-calculate-distance-in-km-from-degrees
-
-- 
-```{r}
-
-ggspatial:::GeomScaleBar$draw_panel
-  
-calgary_legend4
-
-GeomScaleBar
-
-annotation_scale
-
-
-```
-
-
+And I pretty much have it. It fits basically perfectly comparing in GIMP. I believe the main difference is that the horizontal line in the scale exceeds the ticks in the original plot. I could make that worse to fit the original.
