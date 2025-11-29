@@ -448,7 +448,7 @@ ggsave(
 )
 ```
 
-## Plot forth legend (scale)
+## Plot forth legend (scale [better than original])
 
 It'll be faster to plot it relative to the box, so I wil use the same settings -> tibble -> plot approach as above.
 
@@ -476,7 +476,7 @@ It seems like `destPoint()` could be it.
 # Horizontal line:
 scale_length <- 3000 # In meters
 scale_space <- 0.13 # Space between line and box, proportion of box width
-scale_color <- "#676767"
+scale_color <- "#000000"
 scale_thickness <- 2 # For argument linedwidth = in segment
   
 # Ticks:
@@ -558,19 +558,19 @@ km <- tibble(
 ##############################
 
 calgary_legend4 <- calgary_legend3 +
-    geom_segment( ### Plotting the ticks (so get the original ugly ticks on top)
-    data = tick,
-    aes(x = x, xend = xend, 
-        y = y, yend = yend),
-    linewidth = tick_thickness,
-    color = tick_color
-    ) +
   geom_segment( ### Plotting the horizontal line
     data = scale_horizontal,
     aes(x = x, xend = xend, 
         y = y, yend = yend),
     linewidth = scale_thickness,
     color = scale_color
+    ) +
+  geom_segment( ### Plotting the ticks
+    data = tick,
+    aes(x = x, xend = xend, 
+        y = y, yend = yend),
+    linewidth = tick_thickness,
+    color = tick_color
     ) +
   geom_text(
     data = km,
@@ -595,3 +595,78 @@ ggsave(
 ###############
 ```
 And I pretty much have it. It fits basically perfectly comparing in GIMP. I believe the main difference is that the horizontal line in the scale exceeds the ticks in the original plot. I could make that worse to fit the original.
+
+## Plot forth legend (worsened scale to fit original)
+
+We have al the other objects in the chunk above, we just need a longer horizontal line so that it surpasses the ticks on the extremes, plot it on top of the ticks, and make it grey.
+
+```{r}
+
+#### Wrong horizontal line settings
+
+# Horizontal line:
+ugly_scale_length <- 3100 # In meters
+scale_space <- 0.13 # Space between line and box, proportion of box width
+ugly_scale_color <- "#676767"
+scale_thickness <- 2 # For argument linedwidth = in segment
+
+
+# Then we compute what the end points of the scale should be with destPoint:
+ugly_scale_left <- as_tibble(destPoint( # I use as_tibble because it is more readable later
+  p = c(box_mid_x,  # Start x coordinate (the middle of the box)
+        arrow_box$ymin - box_actual_height*scale_space), # Start y (box bottom)
+  b = 90, # Bearing (direction) in degrees
+  d = -ugly_scale_length/2)) # Distance in meters 
+
+ugly_scale_right <- as_tibble(destPoint(
+  p = c(box_mid_x,  # Start x coordinate (middle of the box)
+        arrow_box$ymin - box_actual_height*scale_space), # Start y (box bottom)
+  b = 90, # Bearing (direction) in degress 
+  d = ugly_scale_length/2)) # Distance in meters 
+
+# Then the tibble for the scale horizontal_line (could omit, but to make
+# everything coherent (homogeneous) when plotting):
+ugly_scale_horizontal <- tibble(
+  x = ugly_scale_left$lon,
+  xend = ugly_scale_right$lon,
+  y = ugly_scale_left$lat,
+  yend = ugly_scale_left$lat)
+
+
+##############################
+####### PLOTTING #############
+##############################
+
+calgary_legend_ugly <- calgary_legend3 +
+  geom_segment( ### Plotting the ticks
+    data = tick,
+    aes(x = x, xend = xend, 
+        y = y, yend = yend),
+    linewidth = tick_thickness,
+    color = tick_color
+    ) +
+ geom_segment( ### Plotting the ugly horizontal line
+    data = ugly_scale_horizontal,
+    aes(x = x, xend = xend, 
+        y = y, yend = yend),
+    linewidth = scale_thickness,
+    color = ugly_scale_color
+    ) +
+  geom_text(
+    data = km,
+    aes(x = x, y = y, hjust = hjust, label = label),
+    size = km_size,
+    color = km_color, 
+    family = km_font)
+
+calgary_legend_ugly
+
+ggsave(
+  "calgary_06.png",
+  width = 34.375,
+  height = 34.375,
+  dpi = 96,
+  bg = "white"
+)
+```
+
