@@ -17,6 +17,18 @@ knitr::opts_chunk$set(out.width = "100%", fig.align = "center",
   fig.showtext = TRUE, fig.width = 34.375, fig.height = 34.375)
 ```
 
+```{r set_options}
+# Increase the amount of memory available to Java (this is necessary for large
+# r5r queries).
+options(java.parameters = "-Xmx2G") # I can change "2G" to other value if needed
+
+# Increase timeout to be able to download larg files (necessary to download
+# large file with osmextract)
+options(timeout = 600) # Timeout 600 seconds (10 minutes)
+
+```
+
+
 ```{r load_libraries}
 library(tidyverse)
 library(osmdata)
@@ -26,11 +38,13 @@ library(sf) # Used function st_intersection
 library(funkyheatmap) # Used function geom_rounded_rect
 library(ggspatial) # Used in north arrow and ¿SCALE? # NOT USING IT IN THE END
 library(geosphere) # To calculate distance for the scale
+library(r5r) # To calculate travel times by car
+library(osmextract) # To download data necesesary to use r5r
 ```
 
+## Replica
 
-
-## Loading and plotting (checking json files)
+### Loading and plotting (checking json files)
 
 ```{r load_data}
 # Loading travel times
@@ -71,7 +85,7 @@ hexroads_intersection <- hexroads_intersection |>
     )
 ```
 
-## Plotting map
+### Plotting map
 
 ```{r plot_legendless_map}
 # Just the map, without legend
@@ -102,7 +116,7 @@ calgary_legendless <- ggplot() +
 calgary_legendless # To see it
 ```
 
-## Plotting first legend
+### Plotting first legend
 
 In order to change line spacing see [here](https://stackoverflow.com/questions/39721772/line-height-spacing-for-text-in-ggplot)
 
@@ -173,7 +187,7 @@ ggsave(
 
 Almost perfect fit. Comparing with gimp changing opacity, it is really really close. I'm not sure I can get closer without using the same font as the original plot (which I cant). Maybe i could make the blue dot in the legend a little bit smaller, just to make it visually more similar.
 
-## Plotting second legend
+### Plotting second legend
 
 **CONTINUE FROM HERE**
 
@@ -296,13 +310,13 @@ ggsave(
 ```
 We now have the first two legends, they fit almost perfectly when comparing in Gimp. Now i need to add the arrow pointing north with scale underneath.
 
-## Plotting third legend (north arrow)
+### Plotting third legend (north arrow)
 
 Searching in duckduckgo "how to add north arrow ggplot" i find [here](https://stackoverflow.com/questions/61809382/how-can-i-put-a-scalebar-and-a-north-arrow-on-the-map-ggplot) package `ggspacial`. I read more about [here](https://cran.r-universe.dev/ggspatial/doc/manual.html). But ggspatial defaults don't work. I don't find other packages that could be useful, I'll have to do it manually. Actually, it shouldn't be too hard adding a triangle and a rounded rectangle with a box around them. Searching "add arrow ggplot" i find [here](https://www.statology.org/ggplot-arrows/) and [here](https://teunbrand.github.io/ggarrow/) there's function `arrow` already within ggplot, it can be used with geom_segment. I'll try using that one. It doesn't really work, can only make rounded arrows with this size (I think it is because of the stroke.)
 
 There's a weird behaviour with geom_rounded_rectangle(), when linewidth increases it breack the shape. Since I can't match the linewdith that way, I will plot two rounded_rectangles, a white one on top of a bigger black one, to get the desired effect.
 
-```{r}
+```{r plot_legend3}
 ######## Settings to make it easier to manually adjust ###########
 ######## I also think the code is more readable this way, but maybe
 ######## I shouldn't do settings -> tibble -> ggplot
@@ -448,7 +462,7 @@ ggsave(
 )
 ```
 
-## Plot forth legend (scale [better than original])
+### Plot forth legend (scale [better than original])
 
 It'll be faster to plot it relative to the box, so I wil use the same settings -> tibble -> plot approach as above.
 
@@ -471,7 +485,7 @@ I need to keep investigating, but it is too late already, so I will keep on revi
 It seems like `destPoint()` could be it.
 
 
-```{r}
+```{r plot_legend_4}
 ########## SETTINGS #############
 # Horizontal line:
 scale_length <- 3000 # In meters
@@ -596,11 +610,11 @@ ggsave(
 ```
 And I pretty much have it. It fits basically perfectly comparing in GIMP. I believe the main difference is that the horizontal line in the scale exceeds the ticks in the original plot. I could make that worse to fit the original.
 
-## Plot forth legend (worsened scale to fit original)
+### Plot forth legend (worsened scale to fit original)
 
 We have al the other objects in the chunk above, we just need a longer horizontal line so that it surpasses the ticks on the extremes, plot it on top of the ticks, and make it grey.
 
-```{r}
+```{r plot_legend4_ugly}
 
 #### Wrong horizontal line settings
 
@@ -668,5 +682,58 @@ ggsave(
   dpi = 96,
   bg = "white"
 )
+```
+
+## Alternatives and enhancements
+
+### Fix scale (minor enhancement)
+
+```{r}
+# Here I put the code with the correct scale
+```
+
+
+### Add missing water (just aesthetic)
+
+```{r}
+# Not sure this is an actual improvement worth working on
+```
+
+
+### From where in 30 minutes or less
+
+```{r}
+# I could plot two different maps (or some kind of visualization) to plot
+# which part of the cities are within a 30 minute radio of Calgary tower
+```
+
+### From where is it faster by car
+
+[OpenRouteService API](https://api.openrouteservice.org/) allows me to calculate travel times by car from my hexagons, but the API Limit is 2000 routes per day, 40 per minute, which means it would take me 4 days to get data for all the hexagons in `intersection_hexagons` (which are the map hexagons that intersect with roads, thus the only one that i need data for). If I needed to recurrently update the plot with up-to-date data this would probably be the best option.
+
+But since I don't, I will use another option: `r5r` [(intro to r5r)](https://cran.r-project.org/web//packages/r5r/vignettes/r5r.html)
+
+#### Collecting car data with r5r
+
+In order to use r5r we need a network dataset from OSM in .pbf format. As the intro to r5r mentions, we can do this using the package `osmextract` [(more about it here)](https://docs.ropensci.org/osmextract/).
+
+```{r}
+oe_match("Calgary") # There's a direct match
+
+calgary_oe <- oe_get( # We extract the OSM data and get our .pbf file
+  place = "Calgary",
+  download_directory = "oe_osm_data/") 
+
+# I plot it to check the data is for the correct city
+ggplot(calgary_oe) +
+  geom_sf(linewidth = 0.1, color = "black") +
+  theme_minimal()
+# It is data for the correct city.
+```
+
+Now that we have the .pbf file we can calculate car travel times with `r5r`:
+
+```{r}
+
 ```
 
