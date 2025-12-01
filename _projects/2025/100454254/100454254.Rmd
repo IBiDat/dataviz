@@ -10,6 +10,142 @@ output:
     self_contained: false
     toc: true
 ---
+## Context:
 
+This work aims to replicate a graph presented by the Wall Street Journal (WSJ),
+in the year 2022. In that graph, data on Gross Domestic Product (GDP), in
+trillions and Research & Development expenditure (R&D) is presented for a set 
+of countries in the year 2019. Those countries are then divided into two blocks,
+East and West, being the former build by data on the US, the EU, Japan and others,
+while the latter is conformed by China and Russia. Data is retrieved from the
+International Monetary Fund (IMF) database and the OECD database.
 
+## Data loading and read in R. 
 
+Data has been retrieved from the original sources the WSJ article exposed, thus 
+being the IMF database for the GDP data and the OECD database for the R&D data. 
+After major cleansing in Excel, data is exported in R as .csv, in order to 
+perform minor changes and select countries to replicate the graph. 
+
+In what is related with OECD database, from where data on R&D has been recovered
+from the Main Science and Investigation Institute (MSTI), the database can be 
+accesed in this link. (https://data-explorer.oecd.org/vis?lc=en&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_MSTI%40DF_MSTI&df[ag]=OECD.STI.STP&dq=.A.G%2BT_RS...&lom=LASTNPERIODS&lo=5&to[TIME_PERIOD]=false)
+
+In what is related with GDP data, recovered from the IMF database based on the
+World Economic Outlook (WEO), data can be accessed in this link.
+(https://data.imf.org/en/datasets/IMF.RES:WEO)
+
+Having said the previous, the first chunk exposes the loading of both databases.
+
+```{r Database loading}
+# library (readr) or
+gedr_data <- readr::read_delim("gedr_data.csv", delim = NULL, 
+                               show_col_types = FALSE)
+gdp_data <- read.csv("gdp_data.csv", sep = ";")
+```
+
+Even after some initial cleansing of the database in Excel, it is required to
+select the countries and columns of interest to graph. As long there are two 
+graph that in the last step will be merged (one for GDP and other for R&D), I 
+prefer to work with two separated databases rather than with one, in order 
+to avoid misunderstandings. 
+
+The second  and third chunk shows the procedure of cleaning of both databases 
+and the selection of countries.
+
+```{r Data cleaning and country selection for gdp_data}
+library(tidyverse)
+# 1st: I build a variable of countries selected. Note that China and China (
+# People´s Republic of) refers to the same country, as they are coded different
+# in both databases)
+
+selected_countries <- c(
+  "China", "Russia", "North Korea", "United States", "Japan", "Canada", 
+  "Australia","Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", 
+  "Czech Republic", "Denmark","Estonia", "Finland", "France", "Germany", 
+  "Greece", "Hungary", "Ireland", "Italy","Latvia", "Lithuania", "Luxembourg", 
+  "Malta", "Netherlands", "Poland", "Portugal","Romania", "Slovak Republic", 
+  "Slovenia", "Spain", "Sweden", "China (People’s Republic of)")
+# 2nd: I filter gdp_data for selected countries and variables of interest,
+# among other features. I use gdp_data as a base database, and gdp_data_ as a 
+# modified database.
+gdp_data_ <- gdp_data |> 
+  filter(Country %in% selected_countries,
+         stringr::str_detect(Subject.Descriptor, "current"),# for GDP data on current prices
+         stringr::str_detect(Units, "parity"),
+         stringr::str_detect(Scale, "Billions"))
+# 3rd: Modify gdp_data_ to convert non-numeric columns into numeric cols.
+# This is specially relevant for Date columns, that are displayed in XYEAR form
+# and as chr.
+gdp_data_ <- gdp_data_ |>
+  drop_na(all_of(paste0("X", 1990:2023))) |> 
+  mutate(across(
+    X1990:X2023,
+    ~ as.numeric(gsub(",", "", .x))  # remove commas, convert to numeric
+  )) |>
+  pivot_longer(
+    cols = X1990:X2023,
+    names_to = "year",
+    values_to = "gdp") |>
+  mutate(
+    year = as.integer(sub("X", "", year)))
+```
+
+The third chunk shows the cleaning and selection procedure for the R&D database.
+
+```{r Data cleaning and country selection for gedr_data}
+# 1st: I clean and select countries in gedr_data. As in the previous, I use
+# gedr_data as a base dataset, and a gedr_data_ as a modified one, in order to
+# prevent misunderstandings and limit error losses.
+gedr_data_ <- gedr_data |> 
+  dplyr::select(`Reference area`, Measure, TIME_PERIOD, OBS_VALUE) |> 
+   filter(
+    `Reference area` %in% selected_countries,
+    str_detect(Measure, "GERD"),
+    TIME_PERIOD == 2019)
+```
+
+The first part of the cleaning and selection procedure is now done. However, as
+the original graph groups countries in blocks (EAST-WEST), and some other 
+features (EU countries) can´t be extracted from the original databases, some 
+work still needs to be done. The following chunks show the creation of the 
+variable eu_countries and the group-region add in both databases.
+
+```{r EU_countries, group and region variables add in original databases}
+# 1st: I build a variable of eu_countries.
+eu_countries <- c(
+  "Austria","Belgium","Bulgaria","Croatia","Cyprus","Czech Republic","Denmark",
+  "Estonia","Finland","France","Germany","Greece","Hungary","Ireland","Italy",
+  "Latvia","Lithuania","Luxembourg","Malta","Netherlands","Poland","Portugal",
+  "Romania","Slovak Republic","Slovenia","Spain","Sweden")
+# 2nd: Add a group and region variables to gdp_data_
+gdp_data_<- gdp_data_ |> 
+  mutate(
+    group = case_when(
+      Country == "United States" ~ "U.S.",
+      Country == "Japan" ~ "Japan",
+      Country == "China" ~ "China",
+      Country == "Russia" ~ "Russia",
+      Country %in% eu_countries ~ "EU",
+      TRUE ~ "Other"),
+    region = case_when(
+      group %in% c("U.S.", "Japan", "EU", "Other") ~ "WEST",
+      group %in% c("China", "Russia") ~ "EAST"))
+# 3rd: Replicate the process with gedr_data_
+gedr_data_ <- gedr_data_ |> 
+  mutate(
+    group = case_when(
+      `Reference area`== "United States" ~ "U.S.",
+       `Reference area`== "Japan" ~ "Japan",
+      `Reference area` == "China (People’s Republic of)" ~ "China",
+      `Reference area` == "Russia" ~ "Russia",
+      `Reference area`%in% eu_countries ~ "EU",
+      TRUE ~ "Other"),
+    region = case_when(
+      group %in% c("U.S.", "Japan", "EU", "Other") ~ "WEST",
+      group %in% c("China", "Russia") ~ "EAST"))
+
+```
+
+Now we are ready to start plotting our graph and try to replicate the original 
+WSJ graph.

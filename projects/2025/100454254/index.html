@@ -131,7 +131,7 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
 <!--/radix_placeholder_rmarkdown_metadata-->
   
   <script type="text/json" id="radix-resource-manifest">
-  {"type":"NULL"}
+  {"type":"character","attributes":{},"value":["100454254_files/anchor-4.2.2/anchor.min.js","100454254_files/bowser-1.9.3/bowser.min.js","100454254_files/distill-2.2.21/template.v2.js","100454254_files/header-attrs-2.30/header-attrs.js","100454254_files/jquery-3.6.0/jquery-3.6.0.js","100454254_files/jquery-3.6.0/jquery-3.6.0.min.js","100454254_files/jquery-3.6.0/jquery-3.6.0.min.map","100454254_files/popper-2.6.0/popper.min.js","100454254_files/tippy-6.2.7/tippy-bundle.umd.min.js","100454254_files/tippy-6.2.7/tippy-light-border.css","100454254_files/tippy-6.2.7/tippy.css","100454254_files/tippy-6.2.7/tippy.umd.min.js","100454254_files/webcomponents-2.0.0/webcomponents.js","Databases/gdp_data.csv","Databases/gedr_data.csv","gdp_data.csv","gedr_data.csv"]}
   </script>
   <!--radix_placeholder_navigation_in_header-->
 <meta name="distill:offset" content="../../.."/>
@@ -2520,6 +2520,146 @@ d-appendix d-footnote-list a.footnote-backlink {
 </div>
 
 <div class="d-article">
+<div class="d-contents d-contents-float">
+<nav class="l-text toc figcaption" id="TOC">
+<h3>Contents</h3>
+<ul>
+<li><a href="#context" id="toc-context">Context:</a></li>
+<li><a href="#data-loading-and-read-in-r." id="toc-data-loading-and-read-in-r.">Data loading and read in R.</a></li>
+</ul>
+</nav>
+</div>
+<h2 id="context">Context:</h2>
+<p>This work aims to replicate a graph presented by the Wall Street Journal (WSJ),
+in the year 2022. In that graph, data on Gross Domestic Product (GDP), in
+trillions and Research &amp; Development expenditure (R&amp;D) is presented for a set
+of countries in the year 2019. Those countries are then divided into two blocks,
+East and West, being the former build by data on the US, the EU, Japan and others,
+while the latter is conformed by China and Russia. Data is retrieved from the
+International Monetary Fund (IMF) database and the OECD database.</p>
+<h2 id="data-loading-and-read-in-r.">Data loading and read in R.</h2>
+<p>Data has been retrieved from the original sources the WSJ article exposed, thus
+being the IMF database for the GDP data and the OECD database for the R&amp;D data.
+After major cleansing in Excel, data is exported in R as .csv, in order to
+perform minor changes and select countries to replicate the graph.</p>
+<p>In what is related with OECD database, from where data on R&amp;D has been recovered
+from the Main Science and Investigation Institute (MSTI), the database can be
+accesed in this link. (<a href="https://data-explorer.oecd.org/vis?lc=en&amp;df%5Bds%5D=dsDisseminateFinalDMZ&amp;df%5Bid%5D=DSD_MSTI%40DF_MSTI&amp;df%5Bag%5D=OECD.STI.STP&amp;dq=.A.G%2BT_RS" class="uri">https://data-explorer.oecd.org/vis?lc=en&amp;df[ds]=dsDisseminateFinalDMZ&amp;df[id]=DSD_MSTI%40DF_MSTI&amp;df[ag]=OECD.STI.STP&amp;dq=.A.G%2BT_RS</a>…&amp;lom=LASTNPERIODS&amp;lo=5&amp;to[TIME_PERIOD]=false)</p>
+<p>In what is related with GDP data, recovered from the IMF database based on the
+World Economic Outlook (WEO), data can be accessed in this link.
+(<a href="https://data.imf.org/en/datasets/IMF.RES:WEO" class="uri">https://data.imf.org/en/datasets/IMF.RES:WEO</a>)</p>
+<p>Having said the previous, the first chunk exposes the loading of both databases.</p>
+<div class="layout-chunk" data-layout="l-body">
+<div class="sourceCode">
+<pre class="sourceCode r"><code class="sourceCode r"><span><span class='co'># library (readr) or</span></span>
+<span><span class='va'>gedr_data</span> <span class='op'>&lt;-</span> <span class='fu'>readr</span><span class='fu'>::</span><span class='fu'><a href='https://readr.tidyverse.org/reference/read_delim.html'>read_delim</a></span><span class='op'>(</span><span class='st'>"gedr_data.csv"</span>, delim <span class='op'>=</span> <span class='cn'>NULL</span>, </span>
+<span>                               show_col_types <span class='op'>=</span> <span class='cn'>FALSE</span><span class='op'>)</span></span>
+<span><span class='va'>gdp_data</span> <span class='op'>&lt;-</span> <span class='fu'><a href='https://rdrr.io/r/utils/read.table.html'>read.csv</a></span><span class='op'>(</span><span class='st'>"gdp_data.csv"</span>, sep <span class='op'>=</span> <span class='st'>";"</span><span class='op'>)</span></span></code></pre>
+</div>
+</div>
+<p>Even after some initial cleansing of the database in Excel, it is required to
+select the countries and columns of interest to graph. As long there are two
+graph that in the last step will be merged (one for GDP and other for R&amp;D), I
+prefer to work with two separated databases rather than with one, in order
+to avoid misunderstandings.</p>
+<p>The second and third chunk shows the procedure of cleaning of both databases
+and the selection of countries.</p>
+<div class="layout-chunk" data-layout="l-body">
+<div class="sourceCode">
+<pre class="sourceCode r"><code class="sourceCode r"><span><span class='kw'><a href='https://rdrr.io/r/base/library.html'>library</a></span><span class='op'>(</span><span class='va'><a href='https://tidyverse.tidyverse.org'>tidyverse</a></span><span class='op'>)</span></span>
+<span><span class='co'># 1st: I build a variable of countries selected. Note that China and China (</span></span>
+<span><span class='co'># People´s Republic of) refers to the same country, as they are coded different</span></span>
+<span><span class='co'># in both databases)</span></span>
+<span></span>
+<span><span class='va'>selected_countries</span> <span class='op'>&lt;-</span> <span class='fu'><a href='https://rdrr.io/r/base/c.html'>c</a></span><span class='op'>(</span></span>
+<span>  <span class='st'>"China"</span>, <span class='st'>"Russia"</span>, <span class='st'>"North Korea"</span>, <span class='st'>"United States"</span>, <span class='st'>"Japan"</span>, <span class='st'>"Canada"</span>, </span>
+<span>  <span class='st'>"Australia"</span>,<span class='st'>"Austria"</span>, <span class='st'>"Belgium"</span>, <span class='st'>"Bulgaria"</span>, <span class='st'>"Croatia"</span>, <span class='st'>"Cyprus"</span>, </span>
+<span>  <span class='st'>"Czech Republic"</span>, <span class='st'>"Denmark"</span>,<span class='st'>"Estonia"</span>, <span class='st'>"Finland"</span>, <span class='st'>"France"</span>, <span class='st'>"Germany"</span>, </span>
+<span>  <span class='st'>"Greece"</span>, <span class='st'>"Hungary"</span>, <span class='st'>"Ireland"</span>, <span class='st'>"Italy"</span>,<span class='st'>"Latvia"</span>, <span class='st'>"Lithuania"</span>, <span class='st'>"Luxembourg"</span>, </span>
+<span>  <span class='st'>"Malta"</span>, <span class='st'>"Netherlands"</span>, <span class='st'>"Poland"</span>, <span class='st'>"Portugal"</span>,<span class='st'>"Romania"</span>, <span class='st'>"Slovak Republic"</span>, </span>
+<span>  <span class='st'>"Slovenia"</span>, <span class='st'>"Spain"</span>, <span class='st'>"Sweden"</span>, <span class='st'>"China (People’s Republic of)"</span><span class='op'>)</span></span>
+<span><span class='co'># 2nd: I filter gdp_data for selected countries and variables of interest,</span></span>
+<span><span class='co'># among other features. I use gdp_data as a base database, and gdp_data_ as a </span></span>
+<span><span class='co'># modified database.</span></span>
+<span><span class='va'>gdp_data_</span> <span class='op'>&lt;-</span> <span class='va'>gdp_data</span> <span class='op'>|&gt;</span> </span>
+<span>  <span class='fu'><a href='https://dplyr.tidyverse.org/reference/filter.html'>filter</a></span><span class='op'>(</span><span class='va'>Country</span> <span class='op'><a href='https://rdrr.io/r/base/match.html'>%in%</a></span> <span class='va'>selected_countries</span>,</span>
+<span>         <span class='fu'>stringr</span><span class='fu'>::</span><span class='fu'><a href='https://stringr.tidyverse.org/reference/str_detect.html'>str_detect</a></span><span class='op'>(</span><span class='va'>Subject.Descriptor</span>, <span class='st'>"current"</span><span class='op'>)</span>,<span class='co'># for GDP data on current prices</span></span>
+<span>         <span class='fu'>stringr</span><span class='fu'>::</span><span class='fu'><a href='https://stringr.tidyverse.org/reference/str_detect.html'>str_detect</a></span><span class='op'>(</span><span class='va'>Units</span>, <span class='st'>"parity"</span><span class='op'>)</span>,</span>
+<span>         <span class='fu'>stringr</span><span class='fu'>::</span><span class='fu'><a href='https://stringr.tidyverse.org/reference/str_detect.html'>str_detect</a></span><span class='op'>(</span><span class='va'>Scale</span>, <span class='st'>"Billions"</span><span class='op'>)</span><span class='op'>)</span></span>
+<span><span class='co'># 3rd: Modify gdp_data_ to convert non-numeric columns into numeric cols.</span></span>
+<span><span class='co'># This is specially relevant for Date columns, that are displayed in XYEAR form</span></span>
+<span><span class='co'># and as chr.</span></span>
+<span><span class='va'>gdp_data_</span> <span class='op'>&lt;-</span> <span class='va'>gdp_data_</span> <span class='op'>|&gt;</span></span>
+<span>  <span class='fu'><a href='https://tidyr.tidyverse.org/reference/drop_na.html'>drop_na</a></span><span class='op'>(</span><span class='fu'><a href='https://tidyselect.r-lib.org/reference/all_of.html'>all_of</a></span><span class='op'>(</span><span class='fu'><a href='https://rdrr.io/r/base/paste.html'>paste0</a></span><span class='op'>(</span><span class='st'>"X"</span>, <span class='fl'>1990</span><span class='op'>:</span><span class='fl'>2023</span><span class='op'>)</span><span class='op'>)</span><span class='op'>)</span> <span class='op'>|&gt;</span> </span>
+<span>  <span class='fu'><a href='https://dplyr.tidyverse.org/reference/mutate.html'>mutate</a></span><span class='op'>(</span><span class='fu'><a href='https://dplyr.tidyverse.org/reference/across.html'>across</a></span><span class='op'>(</span></span>
+<span>    <span class='va'>X1990</span><span class='op'>:</span><span class='va'>X2023</span>,</span>
+<span>    <span class='op'>~</span> <span class='fu'><a href='https://rdrr.io/r/base/numeric.html'>as.numeric</a></span><span class='op'>(</span><span class='fu'><a href='https://rdrr.io/r/base/grep.html'>gsub</a></span><span class='op'>(</span><span class='st'>","</span>, <span class='st'>""</span>, <span class='va'>.x</span><span class='op'>)</span><span class='op'>)</span>  <span class='co'># remove commas, convert to numeric</span></span>
+<span>  <span class='op'>)</span><span class='op'>)</span> <span class='op'>|&gt;</span></span>
+<span>  <span class='fu'><a href='https://tidyr.tidyverse.org/reference/pivot_longer.html'>pivot_longer</a></span><span class='op'>(</span></span>
+<span>    cols <span class='op'>=</span> <span class='va'>X1990</span><span class='op'>:</span><span class='va'>X2023</span>,</span>
+<span>    names_to <span class='op'>=</span> <span class='st'>"year"</span>,</span>
+<span>    values_to <span class='op'>=</span> <span class='st'>"gdp"</span><span class='op'>)</span> <span class='op'>|&gt;</span></span>
+<span>  <span class='fu'><a href='https://dplyr.tidyverse.org/reference/mutate.html'>mutate</a></span><span class='op'>(</span></span>
+<span>    year <span class='op'>=</span> <span class='fu'><a href='https://rdrr.io/r/base/integer.html'>as.integer</a></span><span class='op'>(</span><span class='fu'><a href='https://rdrr.io/r/base/grep.html'>sub</a></span><span class='op'>(</span><span class='st'>"X"</span>, <span class='st'>""</span>, <span class='va'>year</span><span class='op'>)</span><span class='op'>)</span><span class='op'>)</span></span></code></pre>
+</div>
+</div>
+<p>The third chunk shows the cleaning and selection procedure for the R&amp;D database.</p>
+<div class="layout-chunk" data-layout="l-body">
+<div class="sourceCode">
+<pre class="sourceCode r"><code class="sourceCode r"><span><span class='co'># 1st: I clean and select countries in gedr_data. As in the previous, I use</span></span>
+<span><span class='co'># gedr_data as a base dataset, and a gedr_data_ as a modified one, in order to</span></span>
+<span><span class='co'># prevent misunderstandings and limit error losses.</span></span>
+<span><span class='va'>gedr_data_</span> <span class='op'>&lt;-</span> <span class='va'>gedr_data</span> <span class='op'>|&gt;</span> </span>
+<span>  <span class='fu'>dplyr</span><span class='fu'>::</span><span class='fu'><a href='https://dplyr.tidyverse.org/reference/select.html'>select</a></span><span class='op'>(</span><span class='va'>`Reference area`</span>, <span class='va'>Measure</span>, <span class='va'>TIME_PERIOD</span>, <span class='va'>OBS_VALUE</span><span class='op'>)</span> <span class='op'>|&gt;</span> </span>
+<span>   <span class='fu'><a href='https://dplyr.tidyverse.org/reference/filter.html'>filter</a></span><span class='op'>(</span></span>
+<span>    <span class='va'>`Reference area`</span> <span class='op'><a href='https://rdrr.io/r/base/match.html'>%in%</a></span> <span class='va'>selected_countries</span>,</span>
+<span>    <span class='fu'><a href='https://stringr.tidyverse.org/reference/str_detect.html'>str_detect</a></span><span class='op'>(</span><span class='va'>Measure</span>, <span class='st'>"GERD"</span><span class='op'>)</span>,</span>
+<span>    <span class='va'>TIME_PERIOD</span> <span class='op'>==</span> <span class='fl'>2019</span><span class='op'>)</span></span></code></pre>
+</div>
+</div>
+<p>The first part of the cleaning and selection procedure is now done. However, as
+the original graph groups countries in blocks (EAST-WEST), and some other
+features (EU countries) can´t be extracted from the original databases, some
+work still needs to be done. The following chunks show the creation of the
+variable eu_countries and the group-region add in both databases.</p>
+<div class="layout-chunk" data-layout="l-body">
+<div class="sourceCode">
+<pre class="sourceCode r"><code class="sourceCode r"><span><span class='co'># 1st: I build a variable of eu_countries.</span></span>
+<span><span class='va'>eu_countries</span> <span class='op'>&lt;-</span> <span class='fu'><a href='https://rdrr.io/r/base/c.html'>c</a></span><span class='op'>(</span></span>
+<span>  <span class='st'>"Austria"</span>,<span class='st'>"Belgium"</span>,<span class='st'>"Bulgaria"</span>,<span class='st'>"Croatia"</span>,<span class='st'>"Cyprus"</span>,<span class='st'>"Czech Republic"</span>,<span class='st'>"Denmark"</span>,</span>
+<span>  <span class='st'>"Estonia"</span>,<span class='st'>"Finland"</span>,<span class='st'>"France"</span>,<span class='st'>"Germany"</span>,<span class='st'>"Greece"</span>,<span class='st'>"Hungary"</span>,<span class='st'>"Ireland"</span>,<span class='st'>"Italy"</span>,</span>
+<span>  <span class='st'>"Latvia"</span>,<span class='st'>"Lithuania"</span>,<span class='st'>"Luxembourg"</span>,<span class='st'>"Malta"</span>,<span class='st'>"Netherlands"</span>,<span class='st'>"Poland"</span>,<span class='st'>"Portugal"</span>,</span>
+<span>  <span class='st'>"Romania"</span>,<span class='st'>"Slovak Republic"</span>,<span class='st'>"Slovenia"</span>,<span class='st'>"Spain"</span>,<span class='st'>"Sweden"</span><span class='op'>)</span></span>
+<span><span class='co'># 2nd: Add a group and region variables to gdp_data_</span></span>
+<span><span class='va'>gdp_data_</span><span class='op'>&lt;-</span> <span class='va'>gdp_data_</span> <span class='op'>|&gt;</span> </span>
+<span>  <span class='fu'><a href='https://dplyr.tidyverse.org/reference/mutate.html'>mutate</a></span><span class='op'>(</span></span>
+<span>    group <span class='op'>=</span> <span class='fu'><a href='https://dplyr.tidyverse.org/reference/case_when.html'>case_when</a></span><span class='op'>(</span></span>
+<span>      <span class='va'>Country</span> <span class='op'>==</span> <span class='st'>"United States"</span> <span class='op'>~</span> <span class='st'>"U.S."</span>,</span>
+<span>      <span class='va'>Country</span> <span class='op'>==</span> <span class='st'>"Japan"</span> <span class='op'>~</span> <span class='st'>"Japan"</span>,</span>
+<span>      <span class='va'>Country</span> <span class='op'>==</span> <span class='st'>"China"</span> <span class='op'>~</span> <span class='st'>"China"</span>,</span>
+<span>      <span class='va'>Country</span> <span class='op'>==</span> <span class='st'>"Russia"</span> <span class='op'>~</span> <span class='st'>"Russia"</span>,</span>
+<span>      <span class='va'>Country</span> <span class='op'><a href='https://rdrr.io/r/base/match.html'>%in%</a></span> <span class='va'>eu_countries</span> <span class='op'>~</span> <span class='st'>"EU"</span>,</span>
+<span>      <span class='cn'>TRUE</span> <span class='op'>~</span> <span class='st'>"Other"</span><span class='op'>)</span>,</span>
+<span>    region <span class='op'>=</span> <span class='fu'><a href='https://dplyr.tidyverse.org/reference/case_when.html'>case_when</a></span><span class='op'>(</span></span>
+<span>      <span class='va'>group</span> <span class='op'><a href='https://rdrr.io/r/base/match.html'>%in%</a></span> <span class='fu'><a href='https://rdrr.io/r/base/c.html'>c</a></span><span class='op'>(</span><span class='st'>"U.S."</span>, <span class='st'>"Japan"</span>, <span class='st'>"EU"</span>, <span class='st'>"Other"</span><span class='op'>)</span> <span class='op'>~</span> <span class='st'>"WEST"</span>,</span>
+<span>      <span class='va'>group</span> <span class='op'><a href='https://rdrr.io/r/base/match.html'>%in%</a></span> <span class='fu'><a href='https://rdrr.io/r/base/c.html'>c</a></span><span class='op'>(</span><span class='st'>"China"</span>, <span class='st'>"Russia"</span><span class='op'>)</span> <span class='op'>~</span> <span class='st'>"EAST"</span><span class='op'>)</span><span class='op'>)</span></span>
+<span><span class='co'># 3rd: Replicate the process with gedr_data_</span></span>
+<span><span class='va'>gedr_data_</span> <span class='op'>&lt;-</span> <span class='va'>gedr_data_</span> <span class='op'>|&gt;</span> </span>
+<span>  <span class='fu'><a href='https://dplyr.tidyverse.org/reference/mutate.html'>mutate</a></span><span class='op'>(</span></span>
+<span>    group <span class='op'>=</span> <span class='fu'><a href='https://dplyr.tidyverse.org/reference/case_when.html'>case_when</a></span><span class='op'>(</span></span>
+<span>      <span class='va'>`Reference area`</span><span class='op'>==</span> <span class='st'>"United States"</span> <span class='op'>~</span> <span class='st'>"U.S."</span>,</span>
+<span>       <span class='va'>`Reference area`</span><span class='op'>==</span> <span class='st'>"Japan"</span> <span class='op'>~</span> <span class='st'>"Japan"</span>,</span>
+<span>      <span class='va'>`Reference area`</span> <span class='op'>==</span> <span class='st'>"China (People’s Republic of)"</span> <span class='op'>~</span> <span class='st'>"China"</span>,</span>
+<span>      <span class='va'>`Reference area`</span> <span class='op'>==</span> <span class='st'>"Russia"</span> <span class='op'>~</span> <span class='st'>"Russia"</span>,</span>
+<span>      <span class='va'>`Reference area`</span><span class='op'><a href='https://rdrr.io/r/base/match.html'>%in%</a></span> <span class='va'>eu_countries</span> <span class='op'>~</span> <span class='st'>"EU"</span>,</span>
+<span>      <span class='cn'>TRUE</span> <span class='op'>~</span> <span class='st'>"Other"</span><span class='op'>)</span>,</span>
+<span>    region <span class='op'>=</span> <span class='fu'><a href='https://dplyr.tidyverse.org/reference/case_when.html'>case_when</a></span><span class='op'>(</span></span>
+<span>      <span class='va'>group</span> <span class='op'><a href='https://rdrr.io/r/base/match.html'>%in%</a></span> <span class='fu'><a href='https://rdrr.io/r/base/c.html'>c</a></span><span class='op'>(</span><span class='st'>"U.S."</span>, <span class='st'>"Japan"</span>, <span class='st'>"EU"</span>, <span class='st'>"Other"</span><span class='op'>)</span> <span class='op'>~</span> <span class='st'>"WEST"</span>,</span>
+<span>      <span class='va'>group</span> <span class='op'><a href='https://rdrr.io/r/base/match.html'>%in%</a></span> <span class='fu'><a href='https://rdrr.io/r/base/c.html'>c</a></span><span class='op'>(</span><span class='st'>"China"</span>, <span class='st'>"Russia"</span><span class='op'>)</span> <span class='op'>~</span> <span class='st'>"EAST"</span><span class='op'>)</span><span class='op'>)</span></span></code></pre>
+</div>
+</div>
+<p>Now we are ready to start plotting our graph and try to replicate the original
+WSJ graph.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode r distill-force-highlighting-css"><code class="sourceCode r"></code></pre></div>
 <!--radix_placeholder_article_footer-->
 <!--/radix_placeholder_article_footer-->
