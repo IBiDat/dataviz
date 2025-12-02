@@ -733,39 +733,88 @@ ggplot(calgary_oe) +
 
 Now that we have the .pbf file we can calculate car travel times with `r5r`:
 
-** I HAVE TO GO, I COULDN'T MAKE THIS WORK YET, HAVE TO FIX THE FORMATS SO THAT I CAN PASS THEM INTO TRAVEL_TIME_MATRIX**
-
 ```{r}
 # We build the network that we will need to pass into travel_time_matrix() 
 r5r_network <- build_network("oe_osm_data/")
 
 # travel_time_matrix needs points with longitudes and latitudes in both
 # origins and destinations argument. But our hexagons are not points, so we
-# will compute the center of the hexagons:
-hexagons <- hexagons |> 
-  mutate("center_point" = st_centroid(hexagons$geometry))
+# will compute the center of the hexagons and create a tibble. We can compute
+# only hexagons with roads to avoid unnecessary computation.
+hexagons_center <- as_tibble(
+  st_coordinates(st_centroid(hexroads_intersection$geometry)))
+
+origins_tibble <- tibble(
+  id = hexroads_intersection$id,
+  lon = hexagons_center$X,
+  lat = hexagons_center$Y,
+)
 
 # We get the coordinates for calgary tower on a data frame to be able to
 # pass it into travel_time_matrix:
 calgary_tower <- tibble(
+  id = "tower",
   lon = -114.0631,
   lat = 51.04465)
 
-
-travel_time_matrix(
-  r5r_network = r5r_network, # We pass the network we just created
-  origins = hexagons$center_point,
-  destination = calgary_tower,
-  mode = "CAR",
-  departure_datetime = as.POSIXct("2024-11-29 08:00:00"),
-)
-
-hexagons
-st_coordinates(hexagons$geometry)
-?st_centroid
-?st_coordinates
-hexagons$geometry
-# We now need to 
-?travel_time_matrix()
+# This takes long to compute (45') so I'll save the object so as to avoid
+# running it again.
+# ttm <- travel_time_matrix(
+#   r5r_network = r5r_network, # We pass the network we just created
+#   origins = origins_tibble,
+#   destination = calgary_tower,
+#   mode = "CAR",
+#   departure_datetime = as.POSIXct("2024-11-29 08:00:00"),
+# )
+# save(ttm, file = "ttm.RData")
+load("ttm.RData")
 ```
+
+
+We now have the car travel times, now we can add them to to `hexroads_intersection`.
+
+```{r}
+# Car faster by more than:
+cf <- 0 # Minutes
+
+# Bike/transit travel slower by at least:
+min <- 30 # Minutes
+
+hexroads_intersection2 <- hexroads_intersection |>
+  mutate("id" = as.character(id)) |> 
+  left_join(ttm, by = c("id" = "from_id")) |> # Join car travel times
+  select(-c(fid, to_id)) |>  # Remove useless columns
+  mutate( # Rename travel_time_p50 to car travel time (car_tt)
+    "car_tt" =  travel_time_p50,
+    "time_color_car" = case_when( # When car more than 10 minutes faster: "9"
+      b_travel_time <= min | travel_time <= min ~ time_color,
+      car_tt - b_travel_time < -cf & car_tt - travel_time < -cf ~ "9",
+      car_tt - b_travel_time >= -cf | car_tt - travel_time >= -cf ~ time_color))
+```
+
+#### Plotting map with car data
+
+```{r plot_map_car}
+calgary_car <- ggplot() +
+  geom_sf( # We plot the roads:
+    data = hexroads_intersection2,
+    aes(color = time_color_car),
+    linewidth = 1.1,  # To make roads thicker
+    show.legend = FALSE
+  ) +
+  scale_color_manual(
+    values = c(
+      "-2" = "#aa5312",   # bike >30 min faster
+      "-1" = "#c88c47",   # bike 10–30 min faster
+      "0"  = "#b7a6ac",   # similar travel time
+      "1"  = "#a36f96",   # transit 10–30 min faster
+      "2"  = "#6a4886",   # transit >30 min faster
+      "9" = "#000000"     # car more than 10 minutes faster than both
+    )
+  )
+
+calgary_car
+
+```
+
 
