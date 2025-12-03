@@ -149,3 +149,123 @@ gedr_data_ <- gedr_data_ |>
 
 Now we are ready to start plotting our graph and try to replicate the original 
 WSJ graph.
+
+Firstly, we need to divide the whole graph into four different graphs, that in
+the end will be merged. That is to say, in the whole graph there are four 
+different graphs, two corresponding to GDP and two corresponding to R&D. 
+Concerning the GDP graphs, the blue one represents the GDP in trillions of the 
+WEST block, that is to say the US, the EU, Japan, and other countries allied, 
+such as Australia. On the other hand, the gold part of the graph replicates the
+GDP in trillions of the EAST block, meaning China and Russia, among others more 
+difficult to know in base of the WSJ journal. It is needed to say that the gold 
+part of the graph in GDP, is mirrored, so we need some prior transformations in
+our edited dataset (gdp_data_) to corectly plot it. The following chunk shows
+the mutation of the dataset to be able to plot the EAST block data. 
+
+```{r EAST block data mirroring}
+gdp_data_$gdp_mirror <- ifelse(gdp_data_$region == "EAST",
+                               -gdp_data_$gdp,
+                               gdp_data_$gdp)
+```
+
+Now we are able to start plotting and replicating the graph. The following chunk
+starts to replicate the GDP part of the graph with the most basic version of our 
+graph. Firstly, we will display our axis to then start plotting the data.
+
+```{r First step: ggplot + aes}
+p <- ggplot(
+  gdp_data_,
+  aes(x = year, y = gdp_mirror, fill = group))
+print(p)
+```
+
+Once the code is run, we can see how our axis seem to be correct. Although they
+will be latter transformed, and labels year and gdp_mirror will be eliminated in
+future stages, before is needed to include some data. The following chunk 
+modifies p by plotting geom_area.
+
+```{r Second step: p + geom_area}
+p <- p + geom_area(color = "white", linewidth = .6)
+print(p)
+```
+
+Now we can see that our data is looking more similar to the graph we want to 
+replicate. However, colors are not grouped by block, labels still there and the 
+axis are not still the ones as in the WSJ article. The following chunk changes 
+the axis to adequate them to the WSJ reference, taking into account that the
+y- axis is right-hand placed. 
+
+```{r Third step: p + scale_x_continuous scale_y_continuous}
+p <- p + scale_x_continuous( # I create a vector of years to adequate it to WSJ.
+    breaks = c(1990, 1995, 2000, 2005, 2010, 2015, 2020),
+    labels = c("'90", "'95", "2000", "'05", "'10", "'15", "'20")) +
+  
+  scale_y_continuous( # This vector is needed to not have negative numbers in EAST)
+    breaks = seq(-40000, 40000, 10000),
+    labels = c("$40", "30", "20", "10", "0", "10", "20", "$30", "40"),
+    position = "right",
+    expand = c(0,0))
+print(p)
+```
+
+Now we can see how our graph is increasingly being more similar to the WSJ one. 
+However, colors are still different, and not grouped by block. Moreover, labels 
+are not present in the original WSJ graph, and some add no information, such as
+year. Hence, the following chunk orders the colors in blue and gold, and 
+eliminate the labels of the axis.  
+
+```{r Fourth step: replicate WSJ colors and eliminate labels}
+p <- p + scale_fill_manual(values = c(
+    "U.S."   = "#94cced",
+    "EU"     = "#94cced",
+    "Japan"  = "#94cced",
+    "Other"  = "#94cced",
+    "China"  = "#e0c461",
+    "Russia" = "#e0c461")) +
+  
+  labs(
+    title = "Gross domestic product, in trillions",
+    x = NULL,
+    y = NULL)
+print(p)
+```
+
+After this step, the replication graph seems much more similar to the WSJ
+original. Now colors are the same, and axis replicate, within data, the ones of
+the original graph. In what is more, the title has been added, although it needs
+to be modified and placed in bold. Added to that, the group label is not present
+in the original one, and add few if any information. Besides, these labels will 
+be added to be plotted within the graph, so there is no utility in keeping 
+it. The following chunk eliminates the group label, include the labels within 
+the data, puts the title in bold and includes some theme_minimal adjustments to 
+make the graph cleaner and more easily readable. 
+
+```{r Fifth step: Group label elimination, labels and title modification}
+p <- p + theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    axis.title = element_blank(),
+    legend.position = "none",
+    plot.margin = margin(5, 10, 5, 5),
+    plot.title = element_text(size = 11, face = "bold")) +
+  
+  annotate("text", x = 2010, y = 26000, label = "Other", size = 2.5, color = "black") +
+  annotate("text", x = 2010, y = 20000, label = "Japan", size = 2.5, color = "black") +
+  annotate("text", x = 2010, y = 17000, label = "EU", size = 3, color = "black") +
+  annotate("text", x = 2010, y = 8000, label = "U.S.", size = 3.5, color = "black") +
+  annotate("text", x = 2020, y = 5000, label = "WEST", size = 7, color = "white",
+           fontface = "bold", family = "Bale") +
+  annotate("text", x = 2010, y = -1500, label = "Russia", size = 3.5, color = "black") +
+  annotate("text", x = 2010, y = -10000, label = "China", size = 3.5, color = "black") +
+  annotate("text", x = 2020, y = -10000, label = "EAST", size = 7, color = "white",
+           fontface = "bold", family = "Bale")
+print(p)
+```
+
+Now we can see we almost replicated the original graph. However, some major
+differences will be noted, such as the small portion of GDP the EU has. This is
+perhaps caused by differences in original dataset and our dataset. However, 
+this seems a pretty accurate replication of our original graph, even taking into
+account these differences. By now, we will leave this graph stored as p, and 
+start building the R&D graph as p1, to then merge them with patchwork.
