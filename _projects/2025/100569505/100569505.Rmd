@@ -40,6 +40,7 @@ library(ggspatial) # Used in north arrow and ¿SCALE? # NOT USING IT IN THE END
 library(geosphere) # To calculate distance for the scale
 library(r5r) # To calculate travel times by car
 library(osmextract) # To download data necesesary to use r5r
+library(ggnewscale)
 ```
 
 ## Replica
@@ -152,7 +153,7 @@ calgary_legend1 <- calgary_legendless +
   ) + 
    annotate(  # The blue point in the legend
     "point",
-    x = -114.2450, ##################### LAST: +10
+    x = -114.2420, ##################### LAST: 00
     y = 50.97495,  
     shape = 21, # Has to be one between 21 and 25 (according to documentation)
     size = 8.25,
@@ -702,9 +703,46 @@ ggsave(
 
 ### From where in 30 minutes or less
 
+#### Less than 30 minutes by bike
+
 ```{r}
-# I could plot two different maps (or some kind of visualization) to plot
-# which part of the cities are within a 30 minute radio of Calgary tower
+# Under xx minutes by: 
+under <- 30 # Minutes to get to Calgary Tower
+
+# Under xx by bike:
+under_mm_bike <- ggplot() +
+  geom_sf( # We plot the roads:
+    data = hexroads_intersection,
+    aes(color = b_travel_time < under),
+    linewidth = 1.1,  # To make roads thicker
+    show.legend = FALSE
+  ) 
+
+under_mm_bike
+
+# Under xx by transit:
+under_mm_transit <- ggplot() +
+  geom_sf( # We plot the roads:
+    data = hexroads_intersection,
+    aes(color = travel_time < under),
+    linewidth = 1.1,  # To make roads thicker
+    show.legend = FALSE
+  ) 
+
+under_mm_transit
+
+
+# Under xx by car:
+# under_mm_car <- ggplot() +
+#   geom_sf( # We plot the roads:
+#     data = hexroads_intersection2,
+#     aes(color = car_tt < under),
+#     linewidth = 1.1,  # To make roads thicker
+#     show.legend = FALSE
+#   ) 
+# 
+# under_mm_car
+
 ```
 
 ### From where is it faster by car
@@ -774,11 +812,11 @@ load("ttm.RData")
 We now have the car travel times, now we can add them to to `hexroads_intersection`.
 
 ```{r}
-# Car faster by more than:
-cf <- 0 # Minutes
+# Car faster by more than xx minutes:
+cf <- 15 # Minutes
 
-# Bike/transit travel slower by at least:
-min <- 30 # Minutes
+# Less than xx minutes by bike or transit shows bike or transit (and not car).
+min <- 0 # Minutes
 
 hexroads_intersection2 <- hexroads_intersection |>
   mutate("id" = as.character(id)) |> 
@@ -816,5 +854,219 @@ calgary_car <- ggplot() +
 calgary_car
 
 ```
+## Notas hablando con Iñaki:
 
+- Añadir anotaciones en el mapa que ayuden a leerlo (desde aquí hasta aquí es más de 30' más rápido ir en transporte público; desde aquí hasta aquí es más de 10' más rápido ir en bici).
+
+- Añadir ischornes de tiempo en bici (o plotear el fondo del mapa con el tiempo en bici), y añadir líneas que digan "desde aquí es más rentable coger la bici, desde aquí es más rentable coger el tranporte público").
+
+- Menciona buscar alguna manera de solucionar los errores.
+
+
+## Adding "isochrones" for absolute travel time
+
+Continuous:
+```{r}
+hexagons2 <- hexagons |> 
+  mutate(
+    "fastest_travel_time" = case_when(
+      b_travel_time > travel_time ~ travel_time,
+      b_travel_time <= travel_time ~ b_travel_time
+    )
+  )
+
+# Plotting:
+ggplot() + 
+  geom_sf(data = hexagons2,
+          aes(fill = fastest_travel_time,
+              color = fastest_travel_time)
+          ) + 
+  scale_fill_gradient(low = "black", high = "white") +
+  scale_color_gradient(low = "black", high = "white") +
+  new_scale_color() + # Reset the scale for the next geoms
+
+# THEN PLOT EVERYTHING ELSE ON TOP (JUST ROADS FOR THE MOMENT)
+  geom_sf( # We plot the roads:
+    data = hexroads_intersection,
+    aes(color = time_color),
+    linewidth = 1.1,  # To make roads thicker
+    show.legend = FALSE
+  ) +
+  scale_color_manual(
+    values = c(
+      "-2" = "#aa5312",   # bike >30 min faster
+      "-1" = "#c88c47",   # bike 10–30 min faster
+      "0"  = "#b7a6ac",   # similar travel time
+      "1"  = "#a36f96",   # transit 10–30 min faster
+      "2"  = "#6a4886"    # transit >30 min faster
+    )
+  ) +
+  geom_sf( # We plot the water:
+    data = water,
+    fill = "#a6b0b9",
+    color = "#a6b0b9",
+    linewidth =1.1 # To make water thicker
+    ) +
+  theme_void()
+```
+
+Discrete:
+
+```{r}
+hexagons2 <- hexagons |> 
+  mutate(
+    "fastest_travel_time" = case_when(
+      b_travel_time > travel_time ~ travel_time,
+      b_travel_time <= travel_time ~ b_travel_time),
+    "fastest_travel_time" = case_when(
+      fastest_travel_time < 15 ~ 1,
+      fastest_travel_time < 30 ~ 2,
+      fastest_travel_time < 45 ~ 3,
+      fastest_travel_time < 60 ~ 5,
+      fastest_travel_time < 75 ~ 6,
+      fastest_travel_time < 90 ~ 7,
+      fastest_travel_time < 105 ~ 8,
+      fastest_travel_time < 120 ~ 9,
+      fastest_travel_time >= 120 ~ 10))
+```
+
+
+## Adding "isochrones" for time by bike
+
+
+### Continuous
+
+```{r}
+# Plotting:
+ggplot() + 
+  geom_sf(data = hexagons2,
+          aes(fill = b_travel_time,
+              color = b_travel_time)
+          ) + 
+  scale_fill_gradient(low = "#c88c47", high = "white", na.value = "red") +
+  scale_color_gradient(low = "#c88c47", high = "white", na.value = "red") +
+  new_scale_color() + # Reset the scale for the next geoms
+
+# THEN PLOT EVERYTHING ELSE ON TOP (JUST ROADS FOR THE MOMENT)
+  geom_sf( # We plot the roads:
+    data = hexroads_intersection,
+    aes(color = time_color),
+    linewidth = 1.1,  # To make roads thicker
+    show.legend = FALSE
+  ) +
+  scale_color_manual(
+    values = c(
+      "-2" = "#000000",   # bike >30 min faster
+      "-1" = "#000000",   # bike 10–30 min faster
+      "0"  = "#b7a6ac",   # similar travel time
+      "1"  = "#a36f96",   # transit 10–30 min faster
+      "2"  = "#6a4886"    # transit >30 min faster
+    )
+  ) +
+  geom_sf( # We plot the water:
+    data = water,
+    fill = "#a6b0b9",
+    color = "#a6b0b9",
+    linewidth =1.1 # To make water thicker
+    ) +
+  theme_void()
+
+```
+
+### Discrete
+
+
+```{r}
+# Creating discrete travel time by bike:
+hexagons2 <- hexagons |> 
+  mutate("iso_b_travel_time" = case_when(
+      b_travel_time < 15 ~ 1,
+      b_travel_time < 30 ~ 2,
+      b_travel_time < 45 ~ 3,
+      b_travel_time < 60 ~ 5,
+      b_travel_time < 75 ~ 6,
+      b_travel_time < 90 ~ 7,
+      b_travel_time >= 90 ~ 8))
+
+
+
+# Plotting:
+ggplot() + 
+  geom_sf(data = hexagons2,
+          aes(fill = iso_b_travel_time,
+              color = iso_b_travel_time),
+          alpha = 0.5
+          ) + 
+  scale_fill_gradient(low = "#c88c47", high = "white", na.value = "red") +
+  scale_color_gradient(low = "#c88c47", high = "white", na.value = "red") +
+  new_scale_color() + # Reset the scale for the next geoms
+
+# THEN PLOT EVERYTHING ELSE ON TOP
+  geom_sf( # We plot the roads:
+    data = hexroads_intersection,
+    aes(color = time_color),
+    linewidth = 1.3,  # To make roads thicker
+    show.legend = FALSE
+  ) +
+  scale_color_manual(
+    values = c(
+      "-2" = "#aa5312",   # bike >30 min faster
+      "-1" = "#c88c47",   # bike 10–30 min faster
+      "0"  = "#b7a6ac",   # similar travel time
+      "1"  = "#a36f96",   # transit 10–30 min faster
+      "2"  = "#6a4886"    # transit >30 min faster
+    )
+  ) +
+  geom_sf( # We plot the water:
+    data = water,
+    fill = "#a6b0b9",
+    color = "#a6b0b9",
+    linewidth =1.1 # To make water thicker
+    ) +
+  theme_void()
+```
+```{r}
+# 1. PRE-PROCESS: Merge hexagons into smooth "zones"
+# We group by the time value and dissolve internal boundaries
+hex_zones <- hexagons2 |>
+  group_by(iso_b_travel_time) |>
+  summarise(geometry = st_union(geometry)) |>
+  ungroup()
+
+# 2. PLOT
+ggplot() + 
+  # Plot the ZONES, not the original hexagons
+  geom_sf(
+    data = hex_zones,
+    aes(fill = iso_b_travel_time, color = iso_b_travel_time),
+    alpha = 0.7
+  ) + 
+  scale_fill_gradient(low = "#c88c47", high = "white", na.value = "white") +
+  scale_color_gradient(low = "#c88c47", high = "white", na.value = "white") +
+  new_scale_color() + # Reset scale color
+  
+  # THEN PLOT EVERYTHING ELSE ON TOP
+  geom_sf( # We plot the roads:
+    data = hexroads_intersection,
+    aes(color = time_color),
+    linewidth = 1.1,  # To make roads thicker
+    show.legend = FALSE
+  ) +
+  scale_color_manual(
+    values = c(
+      "-2" = "#aa5312",   # bike >30 min faster
+      "-1" = "#c88c47",   # bike 10–30 min faster
+      "0"  = "#b7a6ac",   # similar travel time
+      "1"  = "#a36f96",   # transit 10–30 min faster
+      "2"  = "#6a4886"    # transit >30 min faster
+    )
+  ) +
+  geom_sf( # We plot the water:
+    data = water,
+    fill = "#a6b0b9",
+    color = "#a6b0b9",
+    linewidth =1.1 # To make water thicker
+    ) +
+  theme_void()
+```
 
