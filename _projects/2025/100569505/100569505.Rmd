@@ -1070,3 +1070,174 @@ ggplot() +
   theme_void()
 ```
 
+## New idea: bike in roads, transit difference in map
+
+I've decided there will be discrete isochrones, continuous heatmap is an unreadable total mess.
+
+I've been trying different improvement ideas for the legend and travel times (like adding new rectangle squares to the legend to be more precise with the difference), but making it more complex doesn't help. Doesn't add much new information, and makes it really really hard to plot the colors.
+
+
+
+### Calculating isochrones:
+
+- Mergin polygons idea: https://stackoverflow.com/questions/49354393/r-how-do-i-merge-polygon-features-in-a-shapefile-with-many-polygons-reproducib
+
+```{r compute_isochrones}
+# After quite some time of trial and error, 20' is the right balance between 
+# making the map informative, and a total line mess.
+
+# Calculating hexagons under each isochrone:
+hexagons2 <- hexagons |> 
+  mutate("iso_b_travel_time" = case_when(
+      b_travel_time < 20 ~ 1,
+      b_travel_time < 40 ~ 2,
+      b_travel_time < 60 ~ 3,
+      b_travel_time < 80 ~ 5,
+      b_travel_time >= 80 ~ 6)) |> 
+  filter(iso_b_travel_time != 6) # So that we don't get an area for the 
+                                 # last isohrone (which is the bb limit)
+
+# To avoid "hexagon grid" effect, I need to merge adjacent hexagons where
+# travel time by bike is the same.
+hex_zones <- hexagons2 |>
+  group_by(iso_b_travel_time) |> # We group hexagons with the same travel time
+  summarise() # We could use st_union, but this is simpler
+```
+
+
+### Black
+
+```{r improved_black}
+## Plotting in black background:
+
+ggplot() +
+  
+# A) We first plot the isochrone's areas (no borders yet)
+  geom_sf(
+    data = hex_zones, 
+    aes(fill = iso_b_travel_time),
+    color = NA,
+    alpha = 0.7
+  ) + 
+  scale_fill_gradient(low = "#aa5312", # Central isochrone
+                      high = "black", # Outer isochrone
+                      na.value = "black") +
+  new_scale_color() + 
+  new_scale_fill() + # We reset color an fill before continuing
+
+# We plot the water first (so that roads appear on top)
+    geom_sf( # We plot the water:
+    data = water,
+    fill = "#a6b0b9",
+    color = "#a6b0b9",
+    linewidth = 1.1 # To make water thicker
+    ) +
+  new_scale_color() + 
+  new_scale_fill() + # We reset color an fill before continuing
+
+# Then we plot the roads:
+  geom_sf(
+    data = hexroads_intersection,
+    aes(color = time_color),
+    linewidth = 0.5,  # To make roads thicker
+    show.legend = FALSE
+  ) +
+  scale_color_manual(
+    values = c(
+      "-2" = "white",   # bike >30 min faster
+      "-1" = "white",   # bike 10–30 min faster
+      "0"  = "lightgray",   # similar travel time
+      "1"  = "#a36f96",   # transit 10–30 min faster
+      "2"  = "#6a4886"    # transit >30 min faster
+    )
+  ) +
+
+# Anf finally the isochrone's borders (so that they appear on top of roads)
+  geom_sf(
+    data = hex_zones, 
+    aes(fill = NA),
+    color = "#ce9d78", # I tried a gradient instead, but didn't look good.
+    fill = NA,
+    alpha = 1,
+    linewidth = 1
+  ) +
+  new_scale_color() + 
+  new_scale_fill() + # We reset color an fill before continuing
+  
+# Finally, theming to make the background black:
+  theme_void() +
+  theme( # To make the plot area and the whole image have black background
+    plot.background = element_rect(fill = "black", color = NA),
+    panel.background = element_rect(fill = "black", color = NA)
+  )
+```
+
+
+### White
+
+```{r improved_white}
+## Plotting in white background:
+
+ggplot() +
+  
+# A) We first plot the isochrone's areas (no borders yet)
+  geom_sf(
+    data = hex_zones, 
+    aes(fill = iso_b_travel_time), 
+    color = NA, 
+    alpha = 0.1 
+  ) + 
+  scale_fill_gradient(
+    low = "black", # Central isochrone
+    high = "#ffffff", # Outer isochrone
+    na.value = "white"
+  ) +
+  new_scale_color() + 
+  new_scale_fill() + # We reset color an fill before continuing
+
+# We plot the water first (so that roads appear on top)
+    geom_sf( # We plot the water:
+    data = water,
+    fill = "#a6b0b9",
+    color = "#a6b0b9",
+    linewidth = 1.1 # To make water thicker
+    ) +
+  new_scale_color() + 
+  new_scale_fill() + # We reset color an fill before continuing
+
+# Then we plot the roads:
+  geom_sf(
+    data = hexroads_intersection,
+    aes(color = time_color),
+    linewidth = 0.5,  # To make roads thicker
+    show.legend = FALSE
+  ) +
+  scale_color_manual(
+    values = c(
+      "-2" = "#aa5312",   # bike >30 min faster
+      "-1" = "#c88c47",   # bike 10–30 min faster
+      "0"  = "#b7a6ac",   # similar travel time
+      "1"  = "#a36f96",   # transit 10–30 min faster
+      "2"  = "#6a4886"   # transit >30 min faster
+    )
+  ) +
+
+# Anf finally the isochrone's borders (so that they appear on top of roads)
+  geom_sf(
+    data = hex_zones, 
+    aes(fill = NA),
+    color = "black", # I tried a gradient instead, but didn't look good.
+    fill = NA,
+    alpha = 1,
+    linewidth = 0.5
+  ) +
+  new_scale_color() + 
+  new_scale_fill() + # We reset color an fill before continuing
+  
+# Finally, theming to make the background white:
+  theme_void() +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA)
+  )
+```
