@@ -41,7 +41,8 @@ library(geosphere) # To calculate distance for the scale
 library(r5r) # To calculate travel times by car
 library(osmextract) # To download data necesesary to use r5r
 library(ggnewscale)
-library(ggtext)
+library(ggtext) # To plot "highlighted" text easily.
+library(nngeo) # To remove wholes in isochrones 
 ```
 
 ## Replica
@@ -888,9 +889,8 @@ hexagons2 <- hexagons |>
       fastest_travel_time < 20 ~ 1,
       fastest_travel_time < 40 ~ 2,
       fastest_travel_time < 60 ~ 3,
-      fastest_travel_time < 80 ~ 5,
-      fastest_travel_time >= 80 ~ 6)) |> 
-  filter(fastest_travel_time != 6) # So that we don't get an area for the 
+      fastest_travel_time >= 60 ~ 4)) |> 
+  filter(fastest_travel_time != 4) # So that we don't get an area for the 
                                  # last isohrone (which is the bb limit)
 
 
@@ -899,6 +899,15 @@ hexagons2 <- hexagons |>
 hex_zones <- hexagons2 |>
   group_by(fastest_travel_time) |> # We group hexagons with the same travel time
   summarise() # We could use st_union, but this is simpler
+
+# To fix holes (se more detail below)
+hex_zones <- hex_zones |>
+  st_cast("POLYGON") |>  # We separate multipolygons into polygons
+  mutate("area" = st_area(geometry)) |>  # We calculate area of each polygon
+  group_by(fastest_travel_time) |> # We group them by the same travel times
+  slice_max(area, n = 1) |>  # We keep only the polygons with the bigger ares
+  #select(-area)  |>  # Remove the area column
+  st_remove_holes()
 ```
 
 
@@ -1068,9 +1077,9 @@ hexagons2 <- hexagons |>
       b_travel_time < 20 ~ 1,
       b_travel_time < 40 ~ 2,
       b_travel_time < 60 ~ 3,
-      b_travel_time < 80 ~ 5,
-      b_travel_time >= 80 ~ 6)) |> 
-  filter(iso_b_travel_time != 6) # So that we don't get an area for the 
+      b_travel_time < 80 ~ 4,
+      b_travel_time >= 80 ~ 5)) |> 
+  filter(iso_b_travel_time != 5) # So that we don't get an area for the 
                                  # last isohrone (which is the bb limit)
 
 
@@ -1079,7 +1088,36 @@ hexagons2 <- hexagons |>
 hex_zones <- hexagons2 |>
   group_by(iso_b_travel_time) |> # We group hexagons with the same travel time
   summarise() # We could use st_union, but this is simpler
+
+##### A problem to fix: holes.
+# ============================
+# When plotting hex_zones small holes appear. I need to get those removed.
+
+# I initially tried function st_remove_holes()  from package nngeo directly,
+# like this:
+# hexzones <- hexzones |> 
+#   st_remove_holes()
+# But it doesn't work. I think the problem is that our geometry is a
+# multipolygon. Annd st_remove_holes remove the holes inside each "polygon"
+# of the multipolygon (see the documentation of the function for a more
+# visual explanation of what i mean).
+
+# So I tried a new approach: first splitting the multipolygons into single 
+# polygons, selecting only the biggest ones (thus removing the small "holes"),
+# and then running st_remove_holes.
+hex_zones <- hex_zones |>
+  st_cast("POLYGON") |>  # We separate multipolygons into polygons
+  mutate("area" = st_area(geometry)) |>  # We calculate area of each polygon
+  group_by(iso_b_travel_time) |> # We group them by the same travel times
+  slice_max(area, n = 1) |>  # We keep only the polygons with the bigger ares
+  #select(-area)  |>  # Remove the area column
+  st_remove_holes()
+
+# We see some warnings. Documentation says "If information gets lost while type
+# casting, a warning is raised". I'm not sure what information is lost, but
+# everything seems to work fine, so it isn't a problem.
 ```
+
 ### Black bike
 
 ```{r improved_black}
