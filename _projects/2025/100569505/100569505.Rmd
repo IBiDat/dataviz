@@ -863,214 +863,8 @@ calgary_car
 - Menciona buscar alguna manera de solucionar los errores.
 
 
-## Adding "isochrones" for absolute travel time
 
-Continuous:
-```{r}
-hexagons2 <- hexagons |> 
-  mutate(
-    "fastest_travel_time" = case_when(
-      b_travel_time > travel_time ~ travel_time,
-      b_travel_time <= travel_time ~ b_travel_time
-    )
-  )
-
-# Plotting:
-ggplot() + 
-  geom_sf(data = hexagons2,
-          aes(fill = fastest_travel_time,
-              color = fastest_travel_time)
-          ) + 
-  scale_fill_gradient(low = "black", high = "white") +
-  scale_color_gradient(low = "black", high = "white") +
-  new_scale_color() + # Reset the scale for the next geoms
-
-# THEN PLOT EVERYTHING ELSE ON TOP (JUST ROADS FOR THE MOMENT)
-  geom_sf( # We plot the roads:
-    data = hexroads_intersection,
-    aes(color = time_color),
-    linewidth = 1.1,  # To make roads thicker
-    show.legend = FALSE
-  ) +
-  scale_color_manual(
-    values = c(
-      "-2" = "#aa5312",   # bike >30 min faster
-      "-1" = "#c88c47",   # bike 10–30 min faster
-      "0"  = "#b7a6ac",   # similar travel time
-      "1"  = "#a36f96",   # transit 10–30 min faster
-      "2"  = "#6a4886"    # transit >30 min faster
-    )
-  ) +
-  geom_sf( # We plot the water:
-    data = water,
-    fill = "#a6b0b9",
-    color = "#a6b0b9",
-    linewidth =1.1 # To make water thicker
-    ) +
-  theme_void()
-```
-
-Discrete:
-
-```{r}
-hexagons2 <- hexagons |> 
-  mutate(
-    "fastest_travel_time" = case_when(
-      b_travel_time > travel_time ~ travel_time,
-      b_travel_time <= travel_time ~ b_travel_time),
-    "fastest_travel_time" = case_when(
-      fastest_travel_time < 15 ~ 1,
-      fastest_travel_time < 30 ~ 2,
-      fastest_travel_time < 45 ~ 3,
-      fastest_travel_time < 60 ~ 5,
-      fastest_travel_time < 75 ~ 6,
-      fastest_travel_time < 90 ~ 7,
-      fastest_travel_time < 105 ~ 8,
-      fastest_travel_time < 120 ~ 9,
-      fastest_travel_time >= 120 ~ 10))
-```
-
-
-## Adding "isochrones" for time by bike
-
-
-### Continuous
-
-```{r}
-# Plotting:
-ggplot() + 
-  geom_sf(data = hexagons2,
-          aes(fill = b_travel_time,
-              color = b_travel_time)
-          ) + 
-  scale_fill_gradient(low = "#c88c47", high = "white", na.value = "red") +
-  scale_color_gradient(low = "#c88c47", high = "white", na.value = "red") +
-  new_scale_color() + # Reset the scale for the next geoms
-
-# THEN PLOT EVERYTHING ELSE ON TOP (JUST ROADS FOR THE MOMENT)
-  geom_sf( # We plot the roads:
-    data = hexroads_intersection,
-    aes(color = time_color),
-    linewidth = 1.1,  # To make roads thicker
-    show.legend = FALSE
-  ) +
-  scale_color_manual(
-    values = c(
-      "-2" = "#000000",   # bike >30 min faster
-      "-1" = "#000000",   # bike 10–30 min faster
-      "0"  = "#b7a6ac",   # similar travel time
-      "1"  = "#a36f96",   # transit 10–30 min faster
-      "2"  = "#6a4886"    # transit >30 min faster
-    )
-  ) +
-  geom_sf( # We plot the water:
-    data = water,
-    fill = "#a6b0b9",
-    color = "#a6b0b9",
-    linewidth =1.1 # To make water thicker
-    ) +
-  theme_void()
-
-```
-
-### Discrete
-
-
-```{r}
-# Creating discrete travel time by bike:
-hexagons2 <- hexagons |> 
-  mutate("iso_b_travel_time" = case_when(
-      b_travel_time < 15 ~ 1,
-      b_travel_time < 30 ~ 2,
-      b_travel_time < 45 ~ 3,
-      b_travel_time < 60 ~ 5,
-      b_travel_time < 75 ~ 6,
-      b_travel_time < 90 ~ 7,
-      b_travel_time >= 90 ~ 8))
-
-
-
-# Plotting:
-ggplot() + 
-  geom_sf(data = hexagons2,
-          aes(fill = iso_b_travel_time,
-              color = iso_b_travel_time),
-          alpha = 0.5
-          ) + 
-  scale_fill_gradient(low = "#c88c47", high = "white", na.value = "red") +
-  scale_color_gradient(low = "#c88c47", high = "white", na.value = "red") +
-  new_scale_color() + # Reset the scale for the next geoms
-
-# THEN PLOT EVERYTHING ELSE ON TOP
-  geom_sf( # We plot the roads:
-    data = hexroads_intersection,
-    aes(color = time_color),
-    linewidth = 1.3,  # To make roads thicker
-    show.legend = FALSE
-  ) +
-  scale_color_manual(
-    values = c(
-      "-2" = "#aa5312",   # bike >30 min faster
-      "-1" = "#c88c47",   # bike 10–30 min faster
-      "0"  = "#b7a6ac",   # similar travel time
-      "1"  = "#a36f96",   # transit 10–30 min faster
-      "2"  = "#6a4886"    # transit >30 min faster
-    )
-  ) +
-  geom_sf( # We plot the water:
-    data = water,
-    fill = "#a6b0b9",
-    color = "#a6b0b9",
-    linewidth =1.1 # To make water thicker
-    ) +
-  theme_void()
-```
-```{r}
-# 1. PRE-PROCESS: Merge hexagons into smooth "zones"
-# We group by the time value and dissolve internal boundaries
-hex_zones <- hexagons2 |>
-  group_by(iso_b_travel_time) |>
-  summarise(geometry = st_union(geometry)) |>
-  ungroup()
-
-# 2. PLOT
-ggplot() + 
-  # Plot the ZONES, not the original hexagons
-  geom_sf(
-    data = hex_zones,
-    aes(fill = iso_b_travel_time, color = iso_b_travel_time),
-    alpha = 0.7
-  ) + 
-  scale_fill_gradient(low = "#c88c47", high = "white", na.value = "white") +
-  scale_color_gradient(low = "#c88c47", high = "white", na.value = "white") +
-  new_scale_color() + # Reset scale color
-  
-  # THEN PLOT EVERYTHING ELSE ON TOP
-  geom_sf( # We plot the roads:
-    data = hexroads_intersection,
-    aes(color = time_color),
-    linewidth = 1.1,  # To make roads thicker
-    show.legend = FALSE
-  ) +
-  scale_color_manual(
-    values = c(
-      "-2" = "#aa5312",   # bike >30 min faster
-      "-1" = "#c88c47",   # bike 10–30 min faster
-      "0"  = "#b7a6ac",   # similar travel time
-      "1"  = "#a36f96",   # transit 10–30 min faster
-      "2"  = "#6a4886"    # transit >30 min faster
-    )
-  ) +
-  geom_sf( # We plot the water:
-    data = water,
-    fill = "#a6b0b9",
-    color = "#a6b0b9",
-    linewidth =1.1 # To make water thicker
-    ) +
-  theme_void()
-```
-
-## New idea: bike in roads, transit difference in map
+## [Changed] New idea: bike in roads, transit difference in map
 
 I've decided there will be discrete isochrones, continuous heatmap is an unreadable total mess.
 
@@ -1078,46 +872,52 @@ I've been trying different improvement ideas for the legend and travel times (li
 
 
 
-### Calculating isochrones:
+## Calculating isochrones (fastest):
 
-- Mergin polygons idea: https://stackoverflow.com/questions/49354393/r-how-do-i-merge-polygon-features-in-a-shapefile-with-many-polygons-reproducib
+- Mergin polygons idea from [here](https://stackoverflow.com/questions/49354393/r-how-do-i-merge-polygon-features-in-a-shapefile-with-many-polygons-reproducib)
 
-```{r compute_isochrones}
-# After quite some time of trial and error, 20' is the right balance between 
-# making the map informative, and a total line mess.
-
-# Calculating hexagons under each isochrone:
+```{r}
+# SAME BUT FASTEST TRAVEL TIME
 hexagons2 <- hexagons |> 
-  mutate("iso_b_travel_time" = case_when(
-      b_travel_time < 20 ~ 1,
-      b_travel_time < 40 ~ 2,
-      b_travel_time < 60 ~ 3,
-      b_travel_time < 80 ~ 5,
-      b_travel_time >= 80 ~ 6)) |> 
-  filter(iso_b_travel_time != 6) # So that we don't get an area for the 
+  mutate(
+    "fastest_travel_time" = case_when(
+      b_travel_time > travel_time ~ travel_time,
+      travel_time > b_travel_time ~ b_travel_time),
+    "fastest_travel_time" = case_when(
+      fastest_travel_time < 20 ~ 1,
+      fastest_travel_time < 40 ~ 2,
+      fastest_travel_time < 60 ~ 3,
+      fastest_travel_time < 80 ~ 5,
+      fastest_travel_time >= 80 ~ 6)) |> 
+  filter(fastest_travel_time != 6) # So that we don't get an area for the 
                                  # last isohrone (which is the bb limit)
+
 
 # To avoid "hexagon grid" effect, I need to merge adjacent hexagons where
 # travel time by bike is the same.
 hex_zones <- hexagons2 |>
-  group_by(iso_b_travel_time) |> # We group hexagons with the same travel time
+  group_by(fastest_travel_time) |> # We group hexagons with the same travel time
   summarise() # We could use st_union, but this is simpler
 ```
 
 
-### Black
+
+### Black fastest (will not do)
+
+Plotting the actual isocrhones is a mess: there's lots of lines, they don't form concentric areas, but there are islands within each other (probably due to public transport). Removing those islands to make the map readable would be liying with the data (that's real information, there's public transport stops there, i can't just omit those for the shake of the map looking good!)
 
 ```{r improved_black}
 ## Plotting in black background:
 
-ggplot() +
+black <- ggplot() +
   
 # A) We first plot the isochrone's areas (no borders yet)
   geom_sf(
     data = hex_zones, 
-    aes(fill = iso_b_travel_time),
+    aes(fill = fastest_travel_time),
     color = NA,
-    alpha = 0.7
+    alpha = 0.7,
+    show.legend = FALSE
   ) + 
   scale_fill_gradient(low = "#aa5312", # Central isochrone
                       high = "black", # Outer isochrone
@@ -1170,22 +970,26 @@ ggplot() +
     plot.background = element_rect(fill = "black", color = NA),
     panel.background = element_rect(fill = "black", color = NA)
   )
+
+black # To see it
 ```
 
 
-### White
 
-```{r improved_white}
+### White fastest (will not do)
+
+```{r}
 ## Plotting in white background:
 
-ggplot() +
+white <- ggplot() +
   
 # A) We first plot the isochrone's areas (no borders yet)
   geom_sf(
     data = hex_zones, 
-    aes(fill = iso_b_travel_time), 
+    aes(fill = fastest_travel_time), 
     color = NA, 
-    alpha = 0.1 
+    alpha = 0.075,
+    show.legend = FALSE
   ) + 
   scale_fill_gradient(
     low = "black", # Central isochrone
@@ -1240,4 +1044,517 @@ ggplot() +
     plot.background = element_rect(fill = "white", color = NA),
     panel.background = element_rect(fill = "white", color = NA)
   )
+
+white # To see it
 ```
+
+
+
+
+
+
+## Calculating isochrones (bike):
+
+- Mergin polygons idea from [here](https://stackoverflow.com/questions/49354393/r-how-do-i-merge-polygon-features-in-a-shapefile-with-many-polygons-reproducib)
+
+```{r compute_isochrones}
+# After quite some time of trial and error, 20' is the right balance between 
+# making the map informative, and a total line mess.
+
+# Calculating hexagons under each isochrone:
+hexagons2 <- hexagons |> 
+  mutate("iso_b_travel_time" = case_when(
+      b_travel_time < 20 ~ 1,
+      b_travel_time < 40 ~ 2,
+      b_travel_time < 60 ~ 3,
+      b_travel_time < 80 ~ 5,
+      b_travel_time >= 80 ~ 6)) |> 
+  filter(iso_b_travel_time != 6) # So that we don't get an area for the 
+                                 # last isohrone (which is the bb limit)
+
+
+# To avoid "hexagon grid" effect, I need to merge adjacent hexagons where
+# travel time by bike is the same.
+hex_zones <- hexagons2 |>
+  group_by(iso_b_travel_time) |> # We group hexagons with the same travel time
+  summarise() # We could use st_union, but this is simpler
+```
+### Black bike
+
+```{r improved_black}
+## Plotting in black background:
+
+black <- ggplot() +
+  
+# A) We first plot the isochrone's areas (no borders yet)
+  geom_sf(
+    data = hex_zones, 
+    aes(fill = iso_b_travel_time),
+    color = NA,
+    alpha = 0.3,
+    show.legend = FALSE
+  ) + 
+  scale_fill_gradient(low = "white", # Central isochrone
+                      high = "black", # Outer isochrone
+                      na.value = "black") +
+  new_scale_color() + 
+  new_scale_fill() + # We reset color an fill before continuing
+
+# We plot the water first (so that roads appear on top)
+    geom_sf( # We plot the water:
+    data = water,
+    fill = "#a6b0b9",
+    color = "#a6b0b9",
+    linewidth = 1.1 # To make water thicker
+    ) +
+  new_scale_color() + 
+  new_scale_fill() + # We reset color an fill before continuing
+
+# Then we plot the roads:
+  geom_sf(
+    data = hexroads_intersection,
+    aes(color = time_color),
+    linewidth = 0.5,  # To make roads thicker
+    show.legend = FALSE
+  ) +
+  scale_color_manual(
+    values = c(
+      "-2" = "#aa5312",   # bike >30 min faster
+      "-1" = "#c88c47",   # bike 10–30 min faster
+      "0"  = "#b7a6ac",   # similar travel time
+      "1"  = "#a36f96",   # transit 10–30 min faster
+      "2"  = "#6a4886"   # transit >30 min faster
+    )
+  ) +
+
+# Anf finally the isochrone's borders (so that they appear on top of roads)
+  geom_sf(
+    data = hex_zones, 
+    aes(fill = NA),
+    color = "#ce9d78", # I tried a gradient instead, but didn't look good.
+    fill = NA,
+    alpha = 1,
+    linewidth = 1
+  ) +
+  new_scale_color() + 
+  new_scale_fill() + # We reset color an fill before continuing
+  
+# Finally, theming to make the background black:
+  theme_void() +
+  theme( # To make the plot area and the whole image have black background
+    plot.background = element_rect(fill = "black", color = NA),
+    panel.background = element_rect(fill = "black", color = NA)
+  )
+
+black # To see it
+```
+
+
+
+
+### White bike
+
+```{r improved_white}
+## Plotting in white background:
+
+white <- ggplot() +
+  
+# A) We first plot the isochrone's areas (no borders yet)
+  geom_sf(
+    data = hex_zones, 
+    aes(fill = iso_b_travel_time), 
+    color = NA, 
+    alpha = 0.075,
+    show.legend = FALSE
+  ) + 
+  scale_fill_gradient(
+    low = "black", # Central isochrone
+    high = "#ffffff", # Outer isochrone
+    na.value = "white"
+  ) +
+  new_scale_color() + 
+  new_scale_fill() + # We reset color an fill before continuing
+
+# We plot the water first (so that roads appear on top)
+    geom_sf( # We plot the water:
+    data = water,
+    fill = "#a6b0b9",
+    color = "#a6b0b9",
+    linewidth = 1.1 # To make water thicker
+    ) +
+  new_scale_color() + 
+  new_scale_fill() + # We reset color an fill before continuing
+
+# Then we plot the roads:
+  geom_sf(
+    data = hexroads_intersection,
+    aes(color = time_color),
+    linewidth = 0.5,  # To make roads thicker
+    show.legend = FALSE
+  ) +
+  scale_color_manual(
+    values = c(
+      "-2" = "#aa5312",   # bike >30 min faster
+      "-1" = "#c88c47",   # bike 10–30 min faster
+      "0"  = "#b7a6ac",   # similar travel time
+      "1"  = "#a36f96",   # transit 10–30 min faster
+      "2"  = "#6a4886"   # transit >30 min faster
+    )
+  ) +
+
+# Anf finally the isochrone's borders (so that they appear on top of roads)
+  geom_sf(
+    data = hex_zones, 
+    aes(fill = NA),
+    color = "black", # I tried a gradient instead, but didn't look good.
+    fill = NA,
+    alpha = 1,
+    linewidth = 0.5
+  ) +
+  new_scale_color() + 
+  new_scale_fill() + # We reset color an fill before continuing
+  
+# Finally, theming to make the background white:
+  theme_void() +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA)
+  )
+
+white # To see it
+```
+
+
+## Adding street legend (white, top right)
+
+Actually this would be redundant with the legend, why not plot the legend like this instead?
+
+```{r lollipop_legend_top_right}
+# Settings:
+# =========
+
+# Lines settings:
+lines_x_end <- -113.90 # Same x end for all lines:
+lines_width <- 0.5 # Lines width
+
+purple_line_y_end <- 51.12 # Purple line y end + text y + point y
+light_purple_line_y_end <- 51.11 # Light purple line y end + text y + point y
+gray_line_y_end <- 51.10
+yellow_line_y_end <- 51.09 # Yellow line line y end + text y + point y
+
+dot_size <- 10 # Lollipop dot size
+
+text_color <- "black" # Text color
+text_family <- "atkinson" # Typography
+text_size <- 11
+text_h_just <- 0 # 0 left, 0.5 center, 1 right
+
+
+
+# Plot the legend:
+#=================
+white_lines <- white + 
+  
+#### Annotation for purple streets: ####
+  annotate( # Purple area line
+    "segment",
+    x = -113.945,
+    xend = lines_x_end,
+    y = 51.115,
+    yend = purple_line_y_end,
+    linewidth = lines_width
+  ) +
+  annotate( # Purple lollipop dot
+    "point",
+    x = lines_x_end,       
+    y = purple_line_y_end, 
+    size = dot_size,       # Using the new variable name
+    color = "#6a4886"
+  ) +
+  annotate( # Purple area text
+    "text",
+    label = "  +30' faster by transit",
+    x = lines_x_end,
+    y = purple_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  ) +
+
+#### Annotation for light purple streets: ####
+  annotate( # Light purple area line
+    "segment",
+    x = -113.965,
+    xend = lines_x_end,
+    y = 51.095,
+    yend = light_purple_line_y_end,
+    linewidth = lines_width
+  ) +
+  annotate( # Light purple lollipop dot
+    "point",
+    x = lines_x_end,
+    y = light_purple_line_y_end,
+    size = dot_size,
+    color = "#a36f96"
+  ) +
+  annotate( # Light purple area text
+    "text",
+    label = "  10-30' faster by transit",
+    x = lines_x_end,
+    y = light_purple_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  ) +
+
+#### Annotation for gray streets: ####
+  annotate( # Gray area line
+    "segment",
+    x = -113.965,                 
+    xend = lines_x_end, 
+    y = 51.0620,                  
+    yend = gray_line_y_end, 
+    linewidth = lines_width
+  ) +
+  annotate( # Gray lollipop dot
+    "point",
+    x = lines_x_end,
+    y = gray_line_y_end,
+    size = dot_size,
+    color = "#b7a6ac"
+  ) +
+  annotate( # Gray area text
+    "text",
+    label = "  Similar travel time", # Standard label for gray
+    x = lines_x_end,
+    y = gray_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  ) +
+  
+##### Annotation for yellow streets: ####
+  annotate( # Yellow area line
+    "segment",
+    x = -113.992, #-20
+    xend = lines_x_end, 
+    y = 51.033, # -2
+    yend = yellow_line_y_end,
+    linewidth = lines_width
+  ) +
+  annotate( # Yellow lollipop dot
+    "point",
+    x = lines_x_end,
+    y = yellow_line_y_end,
+    size = dot_size,
+    color = "#c88c47"
+  ) +
+  annotate( # Yellow area text
+    "text",
+    label = "  10-30' faster by bike",
+    x = lines_x_end,
+    y = yellow_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  ) 
+
+white_lines
+```
+
+
+### Adding street legend (white, bottom left)
+
+
+```{r lollipop_legend_bottom_left}
+# Settings:
+# =========
+
+# Lines settings:
+lines_x_end <- -114.18 # Same outside x for all lines
+lines_width <- 0.5 # Lines width
+
+purple_line_y_end <- 50.955 # Purple line y end + text y + point y
+light_purple_line_y_end <- 50.965 # Light purple line y end + text y + point y
+gray_line_y_end <- 50.975
+yellow_line_y_end <- 50.985 # Yellow line line y end + text y + point y
+
+dot_size <- 20 # Lollipop dot size
+dot_stroke <- 5
+
+text_color <- "black" # Text color
+text_family <- "atkinson" # Typography
+text_size <- 9
+text_h_just <- 1.2 # 0 left, 0.5 center, 1 right
+
+
+# Plot the legend:
+#=================
+white_main_legend <- white + 
+    
+#### The text paragraph #### 
+  annotate(
+    "text",
+    x = lines_x_end, 
+    y = 50.9970,
+    label = paste("What's the fastest way to get to",
+                  "Calgary Tower        on a weekday morning?",
+                  sep="\n"),
+    hjust = 0.95,
+    family = text_family,
+    size = 9.5,
+    color = text_color,
+    lineheight = 1
+  ) +
+  
+#### The blue point in the legend ####
+   annotate(  
+    "point",
+    x = -114.257, 
+    y = 50.9941,  
+    shape = 21, # Has to be one between 21 and 25 (according to documentation)
+    size = 8.25,
+    color = "#000000",
+    stroke = 4.75,
+    fill = "#69eafe"
+  ) +
+  
+#### The blue point in the map (Calgary Tower) ####
+  annotate(  # The blue point in the map (Calgary Tower)
+    "point",
+    x = -114.0631, 
+    y = 51.04465,
+    shape = 21, # Has to be one between 21 and 25 (according to documentation)
+    size = 8.25,
+    color = "#000000",
+    stroke = 4.75,
+    fill = "#69eafe"
+  ) +
+
+##### Annotation for yellow streets: ####
+  annotate( # Yellow area line
+    "segment",
+    x = -114.100, 
+    xend = lines_x_end, 
+    y = 51.03,
+    yend = yellow_line_y_end,
+    linewidth = lines_width
+  ) +
+  annotate( # Yellow lollipop dot
+    "point",
+    x = lines_x_end,
+    y = yellow_line_y_end,
+    size = dot_size,
+    shape = 21,        
+    fill = "#c88c47",  
+    color = "white", # Border
+    stroke = dot_stroke # Border stroke width
+  ) +
+  annotate( # Yellow area text
+    "text",
+    label = "10-30' faster by bike",
+    x = lines_x_end,
+    y = yellow_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  ) +
+  
+#### Annotation for gray streets: ####
+  annotate( # Gray area line
+    "segment",
+    x = -114.125,                 
+    xend = lines_x_end, 
+    y = 50.995,
+    yend = gray_line_y_end, 
+    linewidth = lines_width
+  ) +
+  annotate( # Gray lollipop dot
+    "point",
+    x = lines_x_end,
+    y = gray_line_y_end,
+    size = dot_size,
+    shape = 21,        
+    fill = "#b7a6ac",  
+    color = "white", # Border
+    stroke = dot_stroke # Border stroke width
+  ) +
+  annotate( # Gray area text
+    "text",
+    label = "similar travel time", # Standard label for gray
+    x = lines_x_end,
+    y = gray_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  ) +
+  
+#### Annotation for light purple streets: ####
+  annotate( # Light purple area line
+    "segment",
+    x = -114.130,
+    xend = lines_x_end,
+    y = 50.94,
+    yend = light_purple_line_y_end,
+    linewidth = lines_width
+  ) +
+  annotate( # Light purple lollipop dot
+    "point",
+    x = lines_x_end,
+    y = light_purple_line_y_end,
+    size = dot_size,
+    shape = 21,        
+    fill = "#a36f96",  
+    color = "white", # Border
+    stroke = dot_stroke # Border stroke width  
+  ) +
+  annotate( # Light purple area text
+    "text",
+    label = "10-30' faster by transit",
+    x = lines_x_end,
+    y = light_purple_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  ) +  
+
+#### Annotation for purple streets: ####
+  annotate( # Purple area line
+    "segment",
+    x = -114.110,
+    xend = lines_x_end,
+    y = 50.910,
+    yend = purple_line_y_end,
+    linewidth = lines_width
+  ) +
+  annotate( # Purple lollipop dot
+    "point",
+    x = lines_x_end,       
+    y = purple_line_y_end, 
+    size = dot_size,  
+    shape = 21,        
+    fill = "#6a4886",  
+    color = "white", # Border
+    stroke = dot_stroke # Border stroke width     
+  ) +
+  annotate( # Purple area text
+    "text",
+    label = "+30' faster by transit",
+    x = lines_x_end,
+    y = purple_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  )
+
+white_main_legend
+```
+
