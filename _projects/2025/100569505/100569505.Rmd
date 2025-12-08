@@ -14,7 +14,7 @@ I'm setting the chunk size to 34.375 because that will allow me to create a file
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(out.width = "100%", fig.align = "center",
-  fig.showtext = TRUE, fig.width = 34.375, fig.height = 34.375)
+  fig.showtext = TRUE, fig.width = 26.56057, fig.height = 34.375)
 ```
 
 ```{r set_options}
@@ -1264,7 +1264,7 @@ white # To see it
 ```
 
 
-## Adding street legend (white, top right)
+### Adding street legend (white, top right)
 
 Actually this would be redundant with the legend, why not plot the legend like this instead?
 
@@ -1596,7 +1596,7 @@ white_main_legend <- white +
 
 white_main_legend
 ```
-## Adding isochrone legend
+### Adding isochrone legend
 
 ```{r}
 
@@ -1739,7 +1739,9 @@ white_iso_legend
 
 ```
 
-## Adding example point
+## Finishing
+
+### Adding example point
 
 ```{r}
 white_example_legend <- white_iso_legend +
@@ -1778,5 +1780,255 @@ white_example_legend <- white_iso_legend +
   
 
 white_example_legend
+```
+
+### Adding arrow
+
+```{r}
+######## Settings to make it easier to manually adjust ###########
+######## I also think the code is more readable this way, but maybe
+######## I shouldn't do settings -> tibble -> ggplot
+######## and should do settings -> ggplot, or ggpplot directly, but gets messy
+######## ASK IÑAKI!
+
+# Arrow:
+arrow_color <- "#e3cdd5"
+# Arrow triangle 
+triangle_tip_x <- -114.2680 ######## LAST +5
+triangle_half_width <- 0.0076 ####### Last: +1
+triangle_bottom_y <- 50.8650 ######## last +50 #MASTEEEERRRRRRR
+triangle_height <- 0.0048 ### last:-1
+# Arrow rectangle:
+arrow_rectangle_width <- 0.455 # Relative to triangle width
+arrow_rectangle_height <- 1.495 # Relative to triangle height
+arrow_rectangle_radius <- 0.24 #
+
+# North text:
+space <- 0.55 # Relative to triangle height
+north_size <- 9
+north_color <- "#000000"
+
+# Outer box:
+box_width <- 2.22 # Relative to triangle width
+box_height <- 2.45 # Relative to triangle height
+box_radius <- 0.20
+box_y_position <- 0.255 # Relative to triangle tip (measured in triangle height)
+box_color <- "#575757"
+
+# Border thickness (i will use this to change size of inner box):
+border_thickness <- 0.03 # Range 0-1 (no border, full black box).
+inner_box_color <- "white"
+
+
+
+
+
+######### Create tibble according to settins ##########################
+# Create triangle tibble according to settings:
+triangle_polygon <- tibble(
+  x = c(
+    triangle_tip_x, # Tip x
+    triangle_tip_x - triangle_half_width, # Left corner x
+    triangle_tip_x + triangle_half_width # Right corner x
+  ),
+  y = c(
+    triangle_bottom_y + triangle_height, # Tip y 
+    triangle_bottom_y, # Left corner y
+    triangle_bottom_y)) # Right corner y
+  
+# Create rectangle tibble according to settings:
+arrow_rectangle <- tibble(
+  xmin = triangle_tip_x - (triangle_half_width*arrow_rectangle_width), # Left
+  xmax = triangle_tip_x + (triangle_half_width*arrow_rectangle_width), # Right
+  ymin = triangle_bottom_y - (triangle_height*arrow_rectangle_height), # Bottom
+  ymax = triangle_bottom_y + (0.25*triangle_height)) # Top, i add 0.25 of the
+                                                     # the triangle height to
+                                                     # hide curve on top
+  
+# Create the tibble for "north" text relative to previous:
+north <- tibble(
+  label = "North",
+  x = triangle_tip_x,
+  y = triangle_bottom_y + triangle_height + space*triangle_height
+)
+
+# Create the tibble for the box around the arrow (outer box):
+arrow_box <- tibble(
+  xmin = triangle_tip_x - (triangle_half_width*box_width), # Left
+  xmax = triangle_tip_x + (triangle_half_width*box_width), # Right
+  ymin = triangle_bottom_y - (triangle_height*box_height) +
+    (triangle_height*box_y_position), # Bottom
+  ymax = triangle_bottom_y + (triangle_height*box_height) +
+    (triangle_height*box_y_position)) # Top
+
+# Create the tibble for the inner box:
+# First we create an auxiliary object which we will add/substract to outer box:
+box_vertical_border <- ((arrow_box$xmax - arrow_box$xmin)*border_thickness)/2 
+box_horizontal_border <- ((arrow_box$ymax - arrow_box$ymin)*border_thickness)/2
+# And then the tibble:
+inner_box <- tibble(
+  xmin = arrow_box$xmin + box_vertical_border,
+  xmax = arrow_box$xmax - box_vertical_border,
+  ymin = arrow_box$ymin + box_horizontal_border,
+  ymax = arrow_box$ymax - box_horizontal_border
+)
+
+
+
+##### PLOTTING NORTH ARROW #####
+calgary_improved_arrow <- white_example_legend +
+  geom_rounded_rect( #### Plot outer box (for border) ####
+    data = arrow_box,
+    aes(xmin = xmin, xmax = xmax,
+        ymin = ymin, ymax = ymax),
+    radius = box_radius,
+    fill = box_color,
+    color = NA
+    ) +
+  geom_rounded_rect( ####Plot inner box (for border)
+    data = inner_box,
+    aes(xmin = xmin, xmax = xmax,
+        ymin = ymin, ymax = ymax),
+    radius = box_radius,
+    fill = inner_box_color,
+    color = NA
+    )+
+  geom_polygon( #### Plot the arrow triangle ####
+    data = triangle_polygon,
+    aes(x = x, y = y),
+    fill = arrow_color,
+    color = NA # No border
+    ) + 
+  geom_rounded_rect( #### Plot the arrow "body" ####
+    data = arrow_rectangle,
+    aes(xmin = xmin, xmax = xmax,
+        ymin = ymin, ymax = ymax),
+    radius = arrow_rectangle_radius,
+    fill = arrow_color,
+    color= NA # No border
+    ) + 
+  geom_text( #### Plot "North" text ####
+    data = north,
+    aes(x = x, y = y, label = label),
+    size = north_size,
+    fontface = "bold",
+    color = north_color, 
+    family = "atkinson"
+    )
+
+calgary_improved_arrow
+```
+
+### Adding scale
+
+```{r}
+########## SETTINGS #############
+# Horizontal line:
+scale_length <- 3000 # In meters
+scale_space <- 0.13 # Space between line and box, proportion of box width
+scale_color <- "#000000"
+scale_thickness <- 2 # For argument linedwidth = in segment
+  
+# Ticks:
+tick_length <- 0.08 # Proportion of the box height
+tick_color <- "#000000"
+tick_thickness <- 1.1 # For argument linewidth =
+
+# Kilometers:
+km_space <- 0.275 # Space between km and scale, proportion of box height
+km_size <- 9 # In points, not relativ to the map
+km_color <- "#000000"
+km_font <- "atkinson"
+
+#################################
+######### TIBBLES ###############
+################################
+
+
+### Tibble for scale horizontal line
+####################################
+
+# I first create an object with the actual outer box width, height, and x mid
+# point, it will make code easier later:
+box_actual_width <- arrow_box$xmax - arrow_box$xmin
+box_actual_height <- arrow_box$ymax - arrow_box$ymin
+box_mid_x <- arrow_box$xmin + (box_actual_width/2)
+
+
+# Then we compute what the end points of the scale should be with destPoint:
+scale_left <- as_tibble(destPoint( # I use as_tibble because it is more readable later
+  p = c(box_mid_x,  # Start x coordinate (the middle of the box)
+        arrow_box$ymin - box_actual_height*scale_space), # Start y (box bottom)
+  b = 90, # Bearing (direction) in degrees
+  d = -scale_length/2)) # Distance in meters 
+
+scale_right <- as_tibble(destPoint(
+  p = c(box_mid_x,  # Start x coordinate (middle of the box)
+        arrow_box$ymin - box_actual_height*scale_space), # Start y (box bottom)
+  b = 90, # Bearing (direction) in degress 
+  d = scale_length/2)) # Distance in meters 
+
+# Then the tibble for the scale horizontal_line (could omit, but to make
+# everything coherent (homogeneous) when plotting):
+scale_horizontal <- tibble(
+  x = scale_left$lon,
+  xend = scale_right$lon,
+  y = scale_left$lat,
+  yend = scale_left$lat)
+
+### Tibble for ticks
+####################################
+tick <- tibble(
+  x = c(
+    scale_left$lon,
+    box_mid_x,
+    scale_right$lon),
+  xend = c(
+    scale_left$lon,
+    box_mid_x,
+    scale_right$lon),
+  y = scale_left$lat - ((box_actual_height/2)*tick_length), 
+  yend = scale_left$lat + ((box_actual_height/2)*tick_length))
+
+### Tibble for kms
+####################################
+km <- tibble(
+  label = c("0", "1.5", "3", "  km"),
+  x = c(
+    scale_left$lon,
+    box_mid_x,
+    scale_right$lon,
+    scale_right$lon
+  ),
+  y = scale_left$lat - ((box_actual_height/2)*km_space),
+  hjust = c(0.5, 0.5, 0.5, 0)) # All justified center, "kilometers" left
+
+##############################
+####### PLOTTING #############
+##############################
+
+calgary_improved_done <- calgary_improved_arrow +
+  geom_segment( ### Plotting the horizontal line
+    data = scale_horizontal,
+    aes(x = x, xend = xend, 
+        y = y, yend = yend),
+    linewidth = scale_thickness,
+    color = scale_color
+    ) +
+  geom_segment( ### Plotting the ticks
+    data = tick,
+    aes(x = x, xend = xend, 
+        y = y, yend = yend),
+    linewidth = tick_thickness,
+    color = tick_color
+    ) +
+  geom_text(
+    data = km,
+    aes(x = x, y = y, hjust = hjust, label = label),
+    size = km_size,
+    color = km_color, 
+    family = km_font)
+
+calgary_improved_done
 ```
 
