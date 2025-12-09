@@ -43,7 +43,10 @@ library(osmextract) # To download data necesesary to use r5r
 library(ggnewscale)
 library(ggtext) # To plot "highlighted" text easily.
 library(nngeo) # To remove wholes in isochrones 
-library(smoothr)
+library(smoothr) # To smoothen out the borders of the isochrones
+library(scales) # To be able to define alpha in certain arguments where it is
+                # not possible by default
+library(shadowtext) # To add shadows in the isochrone legend
 ```
 
 ## Replica
@@ -205,6 +208,7 @@ Another possibility for rounded corners is package `funkyheatmap` see [this](htt
 ######### Legend 2 settings #########
 # To make it easier to manually adjust, i will set the settings for the
 # rectangle sizes like this, and the plot calling this objects:
+
 # Rectangles:
 rectangle_left <- -114.3080
 rectangle_top <- 50.9490 
@@ -212,11 +216,13 @@ rectangle_width <- 0.0250
 rectangle_height <- 0.0050
 rectangle_space <- 0.0005
 rectangle_color <- c("#d26716", "#f8ad58", "#e3cdd5", "#ca8aba", "#8359a6")
+
 # Minutes:
 minute_separation <- 1.66 # Relative to rectangle_height
 minute_size <- 9 # In points, not relativ to the map
 minute_color <- "#000000"
 minute_font <- "atkinson"
+
 # Faster by:
 faster_separation <- 0.7 # Relative to rectangle_height
 faster_size <- 11 # In points, not relative to the map
@@ -704,7 +710,7 @@ ggsave(
 ```
 
 
-### From where in 30 minutes or less
+
 
 #### Less than 30 minutes by bike
 
@@ -875,7 +881,9 @@ I've been trying different improvement ideas for the legend and travel times (li
 
 
 
-## Calculating isochrones (fastest):
+## A) Isochrones by fastest
+
+### Calculating isochrones (fastest):
 
 - Mergin polygons idea from [here](https://stackoverflow.com/questions/49354393/r-how-do-i-merge-polygon-features-in-a-shapefile-with-many-polygons-reproducib)
 
@@ -887,53 +895,64 @@ hexagons2 <- hexagons |>
       b_travel_time > travel_time ~ travel_time,
       travel_time > b_travel_time ~ b_travel_time),
     "fastest_travel_time" = case_when(
-      fastest_travel_time < 20 ~ 1,
-      fastest_travel_time < 40 ~ 2,
-      fastest_travel_time < 60 ~ 3,
-      fastest_travel_time >= 60 ~ 4)) |> 
-  filter(fastest_travel_time != 4) # So that we don't get an area for the 
+      fastest_travel_time < 20 ~ 4,
+      fastest_travel_time < 40 ~ 3,
+      fastest_travel_time < 60 ~ 2,
+      fastest_travel_time >= 60 ~ 1)) |> 
+  filter(fastest_travel_time != 1) # So that we don't get an area for the 
                                  # last isohrone (which is the bb limit)
+# Decreasing order because they will be plotted in this order, and i want
+# the central ones to be on top.
 
 
 # To avoid "hexagon grid" effect, I need to merge adjacent hexagons where
 # travel time by bike is the same.
-hex_zones <- hexagons2 |>
+iso_fastest <- hexagons2 |>
   group_by(fastest_travel_time) |> # We group hexagons with the same travel time
   summarise() # We could use st_union, but this is simpler
 
-# To fix holes (se more detail below)
-hex_zones <- hex_zones |>
+# To fix holes [see more details in "Calculating ischrones (bike)"]
+iso_fastest <- iso_fastest |>
   st_cast("POLYGON") |>  # We separate multipolygons into polygons
   mutate("area" = st_area(geometry)) |>  # We calculate area of each polygon
-  group_by(fastest_travel_time) |> # We group them by the same travel times
-  slice_max(area, n = 1) |>  # We keep only the polygons with the bigger ares
+  mutate("area" = as.numeric(area)) |> # To be able to filter
+  #group_by(fastest_travel_time) |> # We group them by the same travel times
+  filter(area > 500000) |>  # We keep only the polygons with a big area (m2)
   #select(-area)  |>  # Remove the area column
   st_remove_holes()
 
+
+### Making area less sharp ("rounding" hexagons): 
+#================================================
+# I tried st_buffer (needed st_transform first for the function to work 
+# properly, but it didn't look good).
+iso_fastest <- iso_fastest |> 
+  smooth(method = "ksmooth", smoothness = 4) # smooth(method = chaikin) also
+                                             # looks good (more detailed though)  
 
 ```
 
 
 
-### Black fastest (will not do)
+### A.1 - Black fastest
 
-Plotting the actual isocrhones is a mess: there's lots of lines, they don't form concentric areas, but there are islands within each other (probably due to public transport). Removing those islands to make the map readable would be liying with the data (that's real information, there's public transport stops there, i can't just omit those for the shake of the map looking good!)
+Plotting the actual isocrohones is a mess: there's lots of lines, they don't form concentric areas, but there are islands within each other (probably due to public transport). Removing those islands to make the map readable would be liying with the data (that's real information, there's public transport stops there, i can't just omit those for the shake of the map looking good!)
 
-```{r improved_black}
+```{r black_isochr_fastest}
 ## Plotting in black background:
 
-black <- ggplot() +
+black_fastest <- ggplot() +
   
 # A) We first plot the isochrone's areas (no borders yet)
   geom_sf(
-    data = hex_zones, 
+    data = iso_fastest, 
     aes(fill = fastest_travel_time),
     color = NA,
-    alpha = 0.7,
+    alpha = 0.2,
     show.legend = FALSE
   ) + 
-  scale_fill_gradient(low = "green", # Central isochrone
-                      high = "red" # Outer isochrone
+  scale_fill_gradient(low = "gray", # Outer isochrone
+                      high = "cyan" # Inner isochrone
                       ) +
   new_scale_color() + 
   new_scale_fill() + # We reset color an fill before continuing
@@ -952,26 +971,30 @@ black <- ggplot() +
   geom_sf(
     data = hexroads_intersection,
     aes(color = time_color),
-    linewidth = 0.5,  # To make roads thicker
+    linewidth = 0.6,  # To make roads thicker
     show.legend = FALSE
   ) +
   scale_color_manual(
     values = c(
-      "-2" = "white",   # bike >30 min faster
-      "-1" = "white",   # bike 10–30 min faster
-      "0"  = "lightgray",   # similar travel time
-      "1"  = "#a36f96",   # transit 10–30 min faster
-      "2"  = "#6a4886"    # transit >30 min faster
+      "-2" = "#c88c47", # Decided to plot it this color because it makes more
+                        # sense (seems like a result of faulty data)
+      "-1" = "#c88c47", # bike 10–30 min faster
+      "0"  = "#b7a6ac", # similar travel time
+      "1"  = "#a36f96", # transit 10–30 min faster
+      "2"  = "#6a4886" # transit >30 min faster
     )
   ) +
 
 # Anf finally the isochrone's borders (so that they appear on top of roads)
   geom_sf(
-    data = hex_zones, 
+    data = iso_fastest, 
     aes(fill = NA),
-    color = "#ce9d78", # I tried a gradient instead, but didn't look good.
+    #color = "#E0FFFF", # I tried a gradient instead, but didn't look good.
+    #color = "#c88c47", # Alternative color
+    #color = alpha("#47c8c8", 0.7), # Alternative color
+    color = alpha("#e5fcff", 0.7), # Alternative color
     fill = NA,
-    alpha = 1,
+    alpha = 0,
     linewidth = 1
   ) +
   new_scale_color() + 
@@ -984,30 +1007,901 @@ black <- ggplot() +
     panel.background = element_rect(fill = "black", color = NA)
   )
 
-black # To see it
+black_fastest # To see it
+```
+
+
+#### Option A) *Lollipops* legend
+
+```{r black_isochr_fastest_street_legend}
+# Settings:
+# =========
+
+# Lines settings:
+lines_x_end <- -114.18 # Same outside x for all lines
+lines_width <- 1 # Lines width
+
+yellow_line_y_end <- 50.980 # Yellow line line y end + text y + point y
+gray_line_y_end <- 50.965
+light_purple_line_y_end <- 50.950 # Light purple line y end + text y + point y
+purple_line_y_end <- 50.935 # Purple line y end + text y + point y
+
+dot_size <- 25 # Lollipop dot size
+dot_stroke <- 2
+dot_stroke_color <- "white"
+
+text_color <- "white" # Text color
+text_family <- "atkinson" # Typography
+text_size <- 10
+text_h_just <- 1 # 0 left, 0.5 center, 1 right
+text_dot_space <- 0.0125 # Space between the text and the dots
+
+
+?geom_shadowtext
+
+# Plot the legend:
+#=================
+# black_fastest <- I don't save it because I prefer option B.
+  black_fastest + 
+    
+# The text paragraph
+  annotate(
+    "text",
+    x = lines_x_end + 0.0075,
+    y = 50.9970,
+    label = paste("What's the fastest way to get to",
+                  "Calgary Tower     on a weekday morning?",
+                  sep="\n"),
+    hjust = 1,
+    family = text_family,
+    size = 10,
+    color = text_color,
+    lineheight = 1.15
+  ) +
+
+# The blue point in the legend
+   annotate(  
+    "point",
+    x = -114.2535,
+    y = 50.9935,  
+    shape = 21, 
+    size = 4,
+    color = "#61d7ea",
+    stroke = 4.5,
+    fill = "white"
+  ) +
+  
+# The blue point in the map (Calgary Tower)
+  annotate(  
+    "point",
+    x = -114.0631, 
+    y = 51.04465,
+    shape = 21, 
+    size = 4,
+    color = "#61d7ea",
+    stroke = 4.5,
+    fill = "white"
+  ) +
+
+##### Street color legend #####
+# Yellow streets
+  annotate( # Yellow line
+    "segment",
+    x = -114.105,
+    xend = lines_x_end,
+    y = 51.03,
+    yend = yellow_line_y_end,
+    linewidth = lines_width,
+    color = dot_stroke_color
+  ) +
+  annotate( # Yellow lollipop dot
+    "point",
+    x = lines_x_end,
+    y = yellow_line_y_end,
+    size = dot_size,
+    shape = 21,
+    fill = "#f8ad58",
+    color = dot_stroke_color, # Border
+    stroke = dot_stroke # Border stroke width
+  ) +
+  annotate( # Yellow text
+    "text",
+    label = "10-30' faster by bike",
+    x = lines_x_end - text_dot_space,
+    y = yellow_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  ) +
+
+# Gray streets
+  annotate( # Gray line
+    "segment",
+    x = -114.125,
+    xend = lines_x_end,
+    y = 50.995,
+    yend = gray_line_y_end,
+    linewidth = lines_width,
+    color = dot_stroke_color
+  ) +
+  annotate( # Gray lollipop dot
+    "point",
+    x = lines_x_end,
+    y = gray_line_y_end,
+    size = dot_size,
+    shape = 21,
+    fill = "#e3cdd5",
+    color = dot_stroke_color, 
+    stroke = dot_stroke 
+  ) +
+  annotate( # Gray area text
+    "text",
+    label = "similar travel time", # Standard label for gray
+    x = lines_x_end - text_dot_space,
+    y = gray_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  ) +
+
+#### Annotation for light purple streets: ####
+  annotate( # Light purple area line
+    "segment",
+    x = -114.130,
+    xend = lines_x_end,
+    y = 50.94,
+    yend = light_purple_line_y_end,
+    linewidth = lines_width,
+    color = dot_stroke_color
+  ) +
+  annotate( # Light purple lollipop dot
+    "point",
+    x = lines_x_end,
+    y = light_purple_line_y_end,
+    size = dot_size,
+    shape = 21,
+    fill = "#ca8aba",
+    color = dot_stroke_color, # Border
+    stroke = dot_stroke # Border stroke width
+  ) +
+  annotate( # Light purple area text
+    "text",
+    label = "10-30' faster by transit",
+    x = lines_x_end - text_dot_space,
+    y = light_purple_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  ) +
+
+#### Annotation for purple streets: ####
+  annotate( # Purple area line
+    "segment",
+    x = -114.110,
+    xend = lines_x_end,
+    y = 50.910,
+    yend = purple_line_y_end,
+    linewidth = lines_width,
+    color = dot_stroke_color
+  ) +
+  annotate( # Purple lollipop dot
+    "point",
+    x = lines_x_end,
+    y = purple_line_y_end,
+    size = dot_size,
+    shape = 21,
+    fill = "#8359a6",
+    color = dot_stroke_color, # Border
+    stroke = dot_stroke # Border stroke width
+  ) +
+  annotate( # Purple area text
+    "text",
+    label = "+30' faster by transit",
+    x = lines_x_end - text_dot_space,
+    y = purple_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  )
+```
+
+#### Option B) Street legend
+
+```{r}
+# Settings
+#=========
+v_rectangle_top_y <- 50.984
+v_rectangle_mid_x <- -114.17
+v_rectangle_width <- 0.003
+v_rectangle_height <- 0.0141
+v_rectangle_space <- 0.001
+v_rectangle_radius <- 0.3
+v_rectangle_fill <- c("#c88c47", "#b7a6ac", "#a36f96", "#6a4886")
+v_rectangle_line_color <- "white"
+v_rectangle_line_width <- 0.5
+
+
+  
+# We calculate the coordinates:
+#==============================
+v_rectangles <- tibble(
+  "xmin" = v_rectangle_mid_x - (v_rectangle_width/2),
+  "xmax" = v_rectangle_mid_x + (v_rectangle_width/2),
+  "ymin" = c(
+    v_rectangle_top_y - v_rectangle_height,
+    v_rectangle_top_y - ((2*v_rectangle_height) + v_rectangle_space),
+    v_rectangle_top_y - ((3*v_rectangle_height) + (2*v_rectangle_space)),
+    v_rectangle_top_y - ((4*v_rectangle_height) + (3*v_rectangle_space))),
+  "ymax" = c(
+    v_rectangle_top_y,
+    v_rectangle_top_y - (v_rectangle_height + v_rectangle_space),
+    v_rectangle_top_y - 2*(v_rectangle_height + v_rectangle_space),
+    v_rectangle_top_y - 3*(v_rectangle_height + v_rectangle_space)),
+  "fill" = v_rectangle_fill
+  )
+
+# We plot the rectangles:
+#========================
+# black_fastest <-
+  black_fastest +
+  geom_rounded_rect(
+    data = v_rectangles,
+    aes(xmin = xmin, xmax = xmax,
+        ymin = ymin, ymax = ymax, 
+        fill = fill),
+    radius = v_rectangle_radius,
+    linewidth = v_rectangle_line_width,
+    color = v_rectangle_line_color,
+    show.legend = FALSE
+  ) +
+  scale_fill_identity()
+```
+
+Once we have the rectangles, we can plot the legend text relative to them:
+
+```{r}
+# Settings:
+# =========
+v_rect_text_color <- "white"
+v_rect_text_size <- 8
+v_rect_text_family <- "atkinson"
+
+v_rect_h_just <- 1 # Right
+v_rect_text_h_space <- 0.005
+v_rect_text_text <- c("10-30' faster by bike",
+                      "similar travel time",
+                      "10-30' faster by transit",
+                      "+30' faster by transit")
+  
+# We calculate the coordinates:
+#==============================
+v_rect_text <- tibble(
+  "x" = v_rectangle_mid_x - v_rect_text_h_space,
+  "y" = v_rectangles$ymax - (v_rectangle_height/2),
+  "label" = v_rect_text_text,
+  "hjust" = v_rect_h_just
+)
+
+# We plot the text:
+#==================
+black_fastest <- black_fastest + 
+  geom_text(
+    data = v_rect_text,
+    aes(x = x, y = y, hjust = hjust, label = label),
+    size = v_rect_text_size,
+    color = v_rect_text_color,
+    family = v_rect_text_family)
+```
+
+Finally, we plot the title question (and the Calgary Tower points) on top:
+
+```{r}
+# Settings:
+# =========
+
+# Text:
+question_text_x <- v_rectangle_mid_x + (v_rectangle_width/2)
+question_text_y <- 50.9960
+question_text_h_space <- -0.03 # Relative to vertical rectangles mid x
+
+question_text_size <- 11 
+question_text_line_height <- 1.1
+question_text_color <- "white" 
+question_text_family <- "atkinson"
+question_text_h_just <- 1 # Right alignment
+
+
+# Blue point:
+legend_blue_point_x <- -114.1893
+legend_blue_point_y <- 50.9957
+
+blue_point_size <- 4
+blue_point_stroke <- 4.5 
+blue_point_fill <- "#61d7ea"
+blue_point_color <- "white"
+
+
+
+# Plot the legend:
+#=================
+
+black_fastest <- black_fastest + 
+    
+# The question text:
+  annotate(
+    "text",
+    x = question_text_x,
+    y = question_text_y,
+    label = paste("What's the fastest way to get",
+                  "to Calgary Tower     on a",
+                  "weekday morning?",
+                  sep = "\n"),
+    hjust = question_text_h_just,
+    family = question_text_family,
+    size = question_text_size,
+    color = question_text_color,
+    lineheight = question_text_line_height
+  ) +
+
+# The blue point inside the question:
+   annotate(  
+    "point",
+    x = legend_blue_point_x, 
+    y = legend_blue_point_y,  
+    shape = 21, 
+    size = blue_point_size,
+    fill = blue_point_fill,
+    color = blue_point_color,
+    stroke = blue_point_stroke
+    ) +
+
+# The blue point in the map (Calgary Tower)  
+  annotate(
+    "point",
+    x = -114.0631, 
+    y = 51.04465,
+    shape = 21, 
+    size = blue_point_size,
+    fill = blue_point_fill,
+    color = blue_point_color,
+    stroke = blue_point_stroke
+  )
 ```
 
 
 
-### White fastest (will not do)
+#### Adding isochrone legend
+
+For text following path: https://allancameron.github.io/geomtextpath/reference/geom_textpath.html
+
+```{r black_isochr_fastest_isochr_legend}
+
+# Settings
+# ========
+
+# Point
+iso_point_size <- 12.5
+iso_point_fill <- "black"
+iso_point_stroke_width <- 1.5
+iso_point_stroke_color <- alpha("#e5fcff", 0.7)
+
+# Text
+iso_text_size <- 6
+iso_text_color <- "white"
+
+
+# Point and text position
+x_20 <- -114.045
+y_20 <- 51.0632
+
+x_40 <- -114.0263
+y_40 <- 51.082
+
+x_60 <- -114.0096
+y_60 <- 51.099
+
+x_80 <- -113.990
+y_80 <- 51.00
+
+
+#white_fastest1 <- 
+black_fastest <- black_fastest + 
+
+#### "minutes by bike" curve and text ####
+  annotate( # The curve
+    "curve",
+    x = x_60 - 0.001, #asdf
+    y = y_60 + 0.001,
+    xend = x_60 + 0.0015,
+    yend = y_60 + 0.007,
+    curvature = 0.9,
+    linewidth = 0.85,
+    color = "white",
+    arrow = arrow(angle = 30,
+                  length = unit(0.1, "in"),
+                  ends = "last",
+                  type = "closed")
+  ) +
+  geom_shadowtext( # The text
+    aes(x = x_60 - 0.005,
+      y = y_60 + 0.009,
+      label = "minutes\nby fastest\nmode"),
+   size = iso_text_size,
+   lineheight = 0.85,
+   vjust = 0.5,
+   hjust = 0.5,
+   color = iso_text_color, # Text color
+   bg.color = NA, # Shadow color
+   bg.r = 0, # Shadow width
+   family = "atkinson"
+ ) +
+  
+#### 20' isochrone point and text ####
+  annotate(
+   "point",
+   x = x_20,
+   y = y_20,
+   size = iso_point_size,
+   shape = 21,
+   fill = iso_point_fill,
+   #alpha = iso_point_alpha,
+   stroke = iso_point_stroke_width,
+   color = iso_point_stroke_color
+   
+ ) +
+ annotate(
+   "text",
+   label = "20",
+   x = x_20,
+   y = y_20,
+   size = iso_text_size,
+   family = "atkinson",
+   color = iso_text_color
+ ) +
+    
+#### 40' isochrone point and text ####
+  annotate(
+   "point",
+   x = x_40,
+   y = y_40,
+   size = iso_point_size,
+   shape = 21,
+   fill = iso_point_fill,
+   #alpha = iso_point_alpha,
+   stroke = iso_point_stroke_width,
+   color = iso_point_stroke_color
+ ) +
+ annotate(
+   "text",
+   label = "40",
+   x = x_40,
+   y = y_40,
+   size = iso_text_size,
+   family = "atkinson",
+   color = iso_text_color
+ ) +
+
+#### 60' isochrone point and text ####
+ annotate(
+   "point",
+   x = x_60,
+   y = y_60,
+   size = iso_point_size,
+   shape = 21,
+   fill = iso_point_fill,
+   #alpha = iso_point_alpha,
+   stroke = iso_point_stroke_width,
+   color = iso_point_stroke_color
+ ) +
+ annotate(
+   "text",
+   label = "60",
+   x = x_60,
+   y = y_60,
+   size = iso_text_size,
+   family = "atkinson",
+   color = iso_text_color
+ )
+  
+  
+### Other options for "minutes by fastest mode" #### [Keep them just in case]
+# Option A) As line between 40 and 60
+ #  geom_shadowtext(
+ #   aes(x = x_40-((x_40-x_60)/2), # To place it in the middle of both points
+ #      y = y_40+((y_60-y_40)/2),
+ #      label = "minutes by\nfastest mode"),
+ #   size = 5.4,
+ #   lineheight = 0.85,
+ #   color = "black", # Text color
+ #   bg.color = "white", # Shadow color
+ #   bg.r = 0.15, # Shadow width
+ #   family = "atkinson",
+ #   angle = 58.33
+ # )
+
+# Option B) Centered on top
+#   geom_shadowtext(
+#   aes(x = x_60,
+#       y = y_60,
+#       label = "minutes by\nfastest mode"),
+#   size = iso_text_size,
+#   lineheight = 0.85,
+#   vjust = -0.67,
+#   hjust = 0.5,
+#   color = "black", # Text color
+#   bg.color = "white", # Shadow color
+#   bg.r = 0.15, # Shadow width
+#   family = "atkinson"
+# )
+
+# #### ALTERNATIVE MINUTES #### [I like them worse, I'll keep them just in case]
+#   geom_shadowtext(
+#     aes(x = x_20,
+#         y = y_20,
+#         label = "20"),
+#     size = iso_text_size,
+#     lineheight = 0.85,
+#     hjust = 0.5,
+#     color = "white", # Text color
+#     bg.color = "black", # Shadow color
+#     bg.r = 0.25, # Shadow width
+#     family = "atkinson"
+# ) +
+#   geom_shadowtext(
+#     aes(x = x_40,
+#         y = y_40,
+#         label = "60"),
+#     size = iso_text_size,
+#     lineheight = 0.85,
+#     hjust = 0.5,
+#     color = "white", # Text color
+#     bg.color = "black", # Shadow color
+#     bg.r = 0.25, # Shadow width
+#     family = "atkinson"
+# ) +
+#   geom_shadowtext(
+#     aes(x = x_60,
+#         y = y_60,
+#         label = "60"),
+#     size = iso_text_size,
+#     lineheight = 0.85,
+#     hjust = 0.5,
+#     color = "white", # Text color
+#     bg.color = "black", # Shadow color
+#     bg.r = 0.25, # Shadow width
+#     family = "atkinson"
+# )
+
+black_fastest
+```
+
+#### Adding example point
+
+```{r}
+black_fastest <- black_fastest +
+  annotate( # The text
+    "richtext",
+    label = "Bike is faster and<br>travel takes under 40'",
+    x = -114.109,
+    y = 51.105,
+    size = iso_text_size,
+    vjust = 0,
+    color = "white",
+    family = "atkinson",
+    fill = NA,
+    label.color = NA
+  ) +
+#?geom_curve
+  annotate(
+    "curve",
+    x = -114.109,
+    y = 51.105,
+    xend = -114.085,
+    yend = 51.0935,
+    curvature = 0.5,
+    linewidth = 0.7,
+    color = "white",
+    arrow = arrow(angle = 30,
+                  length = unit(0.1, "in"),
+                  ends = "first",
+                  type = "closed")
+  ) +
+  annotate( # The yellow dot in map
+    "point",
+    x = -114.085,
+    y = 51.0935,
+    size = 5,
+    shape = 21,        
+    fill = "#f8ad58",  
+    color = "white", 
+    stroke = 2
+  ) 
+
+```
+
+#### Finishing
+
+##### Adding arrow
+
+```{r}
+######## Settings to make it easier to manually adjust ###########
+######## I also think the code is more readable this way, but maybe
+######## I shouldn't do settings -> tibble -> ggplot
+######## and should do settings -> ggplot, or ggpplot directly, but gets messy
+######## ASK IÑAKI!
+
+# Arrow:
+arrow_color <- "#e3cdd5"
+# Arrow triangle 
+triangle_tip_x <- -114.2680 ######## LAST +5
+triangle_half_width <- 0.0076 ####### Last: +1
+triangle_bottom_y <- 50.8650 ######## last +50 #MASTEEEERRRRRRR
+triangle_height <- 0.0048 ### last:-1
+# Arrow rectangle:
+arrow_rectangle_width <- 0.455 # Relative to triangle width
+arrow_rectangle_height <- 1.495 # Relative to triangle height
+arrow_rectangle_radius <- 0.24 #
+
+# North text:
+space <- 0.55 # Relative to triangle height
+north_size <- 9
+north_color <- "white"
+
+# Outer box:
+box_width <- 2.22 # Relative to triangle width
+box_height <- 2.45 # Relative to triangle height
+box_radius <- 0.20
+box_y_position <- 0.255 # Relative to triangle tip (measured in triangle height)
+box_color <- "#e5fcff"
+
+# Border thickness (i will use this to change size of inner box):
+border_thickness <- 0.03 # Range 0-1 (no border, full black box).
+inner_box_color <- "black"
+
+
+
+
+######### Create tibble according to settins ##########################
+# Create triangle tibble according to settings:
+triangle_polygon <- tibble(
+  x = c(
+    triangle_tip_x, # Tip x
+    triangle_tip_x - triangle_half_width, # Left corner x
+    triangle_tip_x + triangle_half_width # Right corner x
+  ),
+  y = c(
+    triangle_bottom_y + triangle_height, # Tip y 
+    triangle_bottom_y, # Left corner y
+    triangle_bottom_y)) # Right corner y
+  
+# Create rectangle tibble according to settings:
+arrow_rectangle <- tibble(
+  xmin = triangle_tip_x - (triangle_half_width*arrow_rectangle_width), # Left
+  xmax = triangle_tip_x + (triangle_half_width*arrow_rectangle_width), # Right
+  ymin = triangle_bottom_y - (triangle_height*arrow_rectangle_height), # Bottom
+  ymax = triangle_bottom_y + (0.25*triangle_height)) # Top, i add 0.25 of the
+                                                     # the triangle height to
+                                                     # hide curve on top
+  
+# Create the tibble for "north" text relative to previous:
+north <- tibble(
+  label = "North",
+  x = triangle_tip_x,
+  y = triangle_bottom_y + triangle_height + space*triangle_height
+)
+
+# Create the tibble for the box around the arrow (outer box):
+arrow_box <- tibble(
+  xmin = triangle_tip_x - (triangle_half_width*box_width), # Left
+  xmax = triangle_tip_x + (triangle_half_width*box_width), # Right
+  ymin = triangle_bottom_y - (triangle_height*box_height) +
+    (triangle_height*box_y_position), # Bottom
+  ymax = triangle_bottom_y + (triangle_height*box_height) +
+    (triangle_height*box_y_position)) # Top
+
+# Create the tibble for the inner box:
+# First we create an auxiliary object which we will add/substract to outer box:
+box_vertical_border <- ((arrow_box$xmax - arrow_box$xmin)*border_thickness)/2 
+box_horizontal_border <- ((arrow_box$ymax - arrow_box$ymin)*border_thickness)/2
+# And then the tibble:
+inner_box <- tibble(
+  xmin = arrow_box$xmin + box_vertical_border,
+  xmax = arrow_box$xmax - box_vertical_border,
+  ymin = arrow_box$ymin + box_horizontal_border,
+  ymax = arrow_box$ymax - box_horizontal_border
+)
+
+
+
+##### PLOTTING NORTH ARROW #####
+# ===============================
+black_fastest <- black_fastest +
+  geom_rounded_rect( #### Plot outer box (for border) ####
+    data = arrow_box,
+    aes(xmin = xmin, xmax = xmax,
+        ymin = ymin, ymax = ymax),
+    radius = box_radius,
+    fill = box_color,
+    color = NA
+    ) +
+  geom_rounded_rect( ####Plot inner box (for border)
+    data = inner_box,
+    aes(xmin = xmin, xmax = xmax,
+        ymin = ymin, ymax = ymax),
+    radius = box_radius,
+    fill = inner_box_color,
+    color = NA
+    )+
+  geom_polygon( #### Plot the arrow triangle ####
+    data = triangle_polygon,
+    aes(x = x, y = y),
+    fill = arrow_color,
+    color = NA # No border
+    ) + 
+  geom_rounded_rect( #### Plot the arrow "body" ####
+    data = arrow_rectangle,
+    aes(xmin = xmin, xmax = xmax,
+        ymin = ymin, ymax = ymax),
+    radius = arrow_rectangle_radius,
+    fill = arrow_color,
+    color= NA # No border
+    ) + 
+  geom_text( #### Plot "North" text ####
+    data = north,
+    aes(x = x, y = y, label = label),
+    size = north_size,
+    fontface = "bold",
+    color = north_color, 
+    family = "atkinson"
+    )
+
+black_fastest
+```
+
+##### Adding scale
+
+```{r}
+########## SETTINGS #############
+# Horizontal line:
+scale_length <- 3000 # In meters
+scale_space <- 0.13 # Space between line and box, proportion of box width
+scale_color <- "white"
+scale_thickness <- 2 # For argument linedwidth = in segment
+  
+# Ticks:
+tick_length <- 0.08 # Proportion of the box height
+tick_color <- "white"
+tick_thickness <- 1.1 # For argument linewidth =
+
+# Kilometers:
+km_space <- 0.275 # Space between km and scale, proportion of box height
+km_size <- 9 # In points, not relativ to the map
+km_color <- "white"
+km_font <- "atkinson"
+
+#################################
+######### TIBBLES ###############
+################################
+
+
+### Tibble for scale horizontal line
+####################################
+
+# I first create an object with the actual outer box width, height, and x mid
+# point, it will make code easier later:
+box_actual_width <- arrow_box$xmax - arrow_box$xmin
+box_actual_height <- arrow_box$ymax - arrow_box$ymin
+box_mid_x <- arrow_box$xmin + (box_actual_width/2)
+
+
+# Then we compute what the end points of the scale should be with destPoint:
+scale_left <- as_tibble(destPoint( # I use as_tibble because it is more readable later
+  p = c(box_mid_x,  # Start x coordinate (the middle of the box)
+        arrow_box$ymin - box_actual_height*scale_space), # Start y (box bottom)
+  b = 90, # Bearing (direction) in degrees
+  d = -scale_length/2)) # Distance in meters 
+
+scale_right <- as_tibble(destPoint(
+  p = c(box_mid_x,  # Start x coordinate (middle of the box)
+        arrow_box$ymin - box_actual_height*scale_space), # Start y (box bottom)
+  b = 90, # Bearing (direction) in degress 
+  d = scale_length/2)) # Distance in meters 
+
+# Then the tibble for the scale horizontal_line (could omit, but to make
+# everything coherent (homogeneous) when plotting):
+scale_horizontal <- tibble(
+  x = scale_left$lon,
+  xend = scale_right$lon,
+  y = scale_left$lat,
+  yend = scale_left$lat)
+
+### Tibble for ticks
+####################################
+tick <- tibble(
+  x = c(
+    scale_left$lon,
+    box_mid_x,
+    scale_right$lon),
+  xend = c(
+    scale_left$lon,
+    box_mid_x,
+    scale_right$lon),
+  y = scale_left$lat - ((box_actual_height/2)*tick_length), 
+  yend = scale_left$lat + ((box_actual_height/2)*tick_length))
+
+### Tibble for kms
+####################################
+km <- tibble(
+  label = c("0", "1.5", "3", "  km"),
+  x = c(
+    scale_left$lon,
+    box_mid_x,
+    scale_right$lon,
+    scale_right$lon
+  ),
+  y = scale_left$lat - ((box_actual_height/2)*km_space),
+  hjust = c(0.5, 0.5, 0.5, 0)) # All justified center, "kilometers" left
+
+##############################
+####### PLOTTING #############
+##############################
+
+black_fastest <- black_fastest +
+  geom_segment( ### Plotting the horizontal line
+    data = scale_horizontal,
+    aes(x = x, xend = xend, 
+        y = y, yend = yend),
+    linewidth = scale_thickness,
+    color = scale_color
+    ) +
+  geom_segment( ### Plotting the ticks
+    data = tick,
+    aes(x = x, xend = xend, 
+        y = y, yend = yend),
+    linewidth = tick_thickness,
+    color = tick_color
+    ) +
+  geom_text(
+    data = km,
+    aes(x = x, y = y, hjust = hjust, label = label),
+    size = km_size,
+    color = km_color, 
+    family = km_font)
+
+black_fastest
+
+ggsave(
+  filename = "black_fastest.png",
+  plot = black_fastest,
+  width = 26.56,
+  height = 34.375,
+  dpi = 96,
+  bg = "black"
+)
+```
+
+### A.2 - White fastest 
 
 ```{r}
 ## Plotting in white background:
 
-white <- ggplot() +
+white_fastest <- ggplot() +
   
 # A) We first plot the isochrone's areas (no borders yet)
   geom_sf(
-    data = hex_zones, 
+    data = iso_fastest, 
     aes(fill = fastest_travel_time), 
     color = NA, 
-    alpha = 0.075,
+    alpha = 0.1,
     show.legend = FALSE
   ) + 
   scale_fill_gradient(
-    low = "black", # Central isochrone
-    high = "white") # Outer isochrone
-    
+    low = "gray", # Central isochrone
+    high = "black" # Outer isochrone
   ) +
   new_scale_color() + 
   new_scale_fill() + # We reset color an fill before continuing
@@ -1026,7 +1920,7 @@ white <- ggplot() +
   geom_sf(
     data = hexroads_intersection,
     aes(color = time_color),
-    linewidth = 0.5,  # To make roads thicker
+    linewidth = 0.6,  # To make roads thicker
     show.legend = FALSE
   ) +
   scale_color_manual(
@@ -1041,12 +1935,27 @@ white <- ggplot() +
 
 # Anf finally the isochrone's borders (so that they appear on top of roads)
   geom_sf(
-    data = hex_zones, 
+    data = iso_fastest, 
+    aes(fill = NA),
+    #color = "#E0FFFF", # I tried a gradient instead, but didn't look good.
+    #color = "#c88c47", # Alternative color
+    #color = alpha("#47c8c8", 0.7), # Alternative color
+    color = alpha("#e5fcff", 0.7), # Alternative color
+    fill = NA,
+    alpha = 0,
+    linewidth = 1
+  ) +
+  new_scale_color() + 
+  new_scale_fill() + # We reset color an fill before continuing
+
+# Anf finally the isochrone's borders (so that they appear on top of roads)
+  geom_sf(
+    data = iso_fastest, 
     aes(fill = NA),
     color = "black", # I tried a gradient instead, but didn't look good.
     fill = NA,
     alpha = 1,
-    linewidth = 0.5
+    linewidth = 0.6
   ) +
   new_scale_color() + 
   new_scale_fill() + # We reset color an fill before continuing
@@ -1058,15 +1967,694 @@ white <- ggplot() +
     panel.background = element_rect(fill = "white", color = NA)
   )
 
-white # To see it
+white_fastest # To see it
+```
+
+#### Adding street legend
+
+```{r lollipop_legend_bottom_left_fastest}
+# Settings:
+# =========
+
+# Lines settings:
+lines_x_end <- -114.18 # Same outside x for all lines
+lines_width <- 1 # Lines width
+
+purple_line_y_end <- 50.935 # Purple line y end + text y + point y
+light_purple_line_y_end <- 50.950 # Light purple line y end + text y + point y
+gray_line_y_end <- 50.965
+yellow_line_y_end <- 50.980 # Yellow line line y end + text y + point y
+
+dot_size <- 25 # Lollipop dot size
+dot_stroke <- 2
+dot_stroke_color <- "black"
+
+text_color <- "black" # Text color
+text_family <- "atkinson" # Typography
+text_size <- 10
+text_h_just <- 1 # 0 left, 0.5 center, 1 right
+text_dot_space <- 0.0125 # Space between the text and the dots
+
+
+# Plot the legend:
+#=================
+white_fastest <- white_fastest + 
+    
+#### The text paragraph #### 
+  annotate(
+    "text",
+    x = lines_x_end, 
+    y = 50.9970,
+    label = paste("What's the fastest way to get to",
+                  "Calgary Tower     on a weekday morning?",
+                  sep="\n"),
+    hjust = 0.95,
+    family = text_family,
+    size = 10,
+    color = text_color,
+    lineheight = 1.15
+  ) +
+  
+#### The blue point in the legend ####
+   annotate(  
+    "point",
+    x = -114.255, 
+    y = 50.9935,  
+    shape = 21, # Has to be one between 21 and 25 (according to documentation)
+    size = 7, # Make it a bit smaller than the point in the map
+    color = "#000000",
+    stroke = 4.03,
+    fill = "#69eafe"
+  ) +
+  
+#### The blue point in the map (Calgary Tower) ####
+  annotate(  # The blue point in the map (Calgary Tower)
+    "point",
+    x = -114.0631, 
+    y = 51.04465,
+    shape = 21, # Has to be one between 21 and 25 (according to documentation)
+    size = 8.25,
+    color = "#000000",
+    stroke = 4.75,
+    fill = "#69eafe"
+  ) +
+
+##### Annotation for yellow streets: ####
+  annotate( # Yellow area line
+    "segment",
+    x = -114.105, 
+    xend = lines_x_end, 
+    y = 51.03,
+    yend = yellow_line_y_end,
+    linewidth = lines_width
+  ) +
+  annotate( # Yellow lollipop dot
+    "point",
+    x = lines_x_end,
+    y = yellow_line_y_end,
+    size = dot_size,
+    shape = 21,        
+    fill = "#f8ad58",  
+    color = dot_stroke_color, # Border
+    stroke = dot_stroke # Border stroke width
+  ) +
+  annotate( # Yellow area text
+    "text",
+    label = "10-30' faster by bike",
+    x = lines_x_end - text_dot_space,
+    y = yellow_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  ) +
+  
+#### Annotation for gray streets: ####
+  annotate( # Gray area line
+    "segment",
+    x = -114.125,                 
+    xend = lines_x_end, 
+    y = 50.995,
+    yend = gray_line_y_end, 
+    linewidth = lines_width
+  ) +
+  annotate( # Gray lollipop dot
+    "point",
+    x = lines_x_end,
+    y = gray_line_y_end,
+    size = dot_size,
+    shape = 21,        
+    fill = "#e3cdd5",  
+    color = dot_stroke_color, # Border
+    stroke = dot_stroke # Border stroke width
+  ) +
+  annotate( # Gray area text
+    "text",
+    label = "similar travel time", # Standard label for gray
+    x = lines_x_end - text_dot_space,
+    y = gray_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  ) +
+  
+#### Annotation for light purple streets: ####
+  annotate( # Light purple area line
+    "segment",
+    x = -114.130,
+    xend = lines_x_end,
+    y = 50.94,
+    yend = light_purple_line_y_end,
+    linewidth = lines_width
+  ) +
+  annotate( # Light purple lollipop dot
+    "point",
+    x = lines_x_end,
+    y = light_purple_line_y_end,
+    size = dot_size,
+    shape = 21,        
+    fill = "#ca8aba",  
+    color = dot_stroke_color, # Border
+    stroke = dot_stroke # Border stroke width  
+  ) +
+  annotate( # Light purple area text
+    "text",
+    label = "10-30' faster by transit",
+    x = lines_x_end - text_dot_space,
+    y = light_purple_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  ) +  
+
+#### Annotation for purple streets: ####
+  annotate( # Purple area line
+    "segment",
+    x = -114.110,
+    xend = lines_x_end,
+    y = 50.910,
+    yend = purple_line_y_end,
+    linewidth = lines_width
+  ) +
+  annotate( # Purple lollipop dot
+    "point",
+    x = lines_x_end,       
+    y = purple_line_y_end, 
+    size = dot_size,  
+    shape = 21,        
+    fill = "#8359a6",  
+    color = dot_stroke_color, # Border
+    stroke = dot_stroke # Border stroke width     
+  ) +
+  annotate( # Purple area text
+    "text",
+    label = "+30' faster by transit",
+    x = lines_x_end - text_dot_space,
+    y = purple_line_y_end,
+    hjust = text_h_just,
+    color = text_color,
+    family = text_family,
+    size = text_size
+  )
+
+white_fastest
+```
+#### Adding isochrone legend
+
+For text following path: https://allancameron.github.io/geomtextpath/reference/geom_textpath.html
+
+```{r}
+
+# Settings
+# ========
+
+# Point
+iso_point_size <- 15
+iso_point_fill <- "black"
+iso_point_alpha <- 1
+
+# Text
+iso_text_size <- 6
+iso_text_color <- "white"
+
+
+# Point and text position
+x_20 <- -114.045
+y_20 <- 51.0632
+
+x_40 <- -114.0263
+y_40 <- 51.082
+
+x_60 <- -114.0096
+y_60 <- 51.099
+
+x_80 <- -113.990
+y_80 <- 51.00
+
+
+#white_fastest1 <- 
+white_fastest <- white_fastest + 
+
+#### "minutes by bike" curve and text ####
+  annotate( # The curve
+    "curve",
+    x = x_60 - 0.001, #asdf
+    y = y_60 + 0.001,
+    xend = x_60 + 0.0015,
+    yend = y_60 + 0.007,
+    curvature = 0.9,
+    linewidth = 0.85
+  ) +
+  geom_shadowtext( # The text
+    aes(x = x_60 - 0.005,
+      y = y_60 + 0.009,
+      label = "minutes\nby fastest\nmode"),
+   size = iso_text_size,
+   lineheight = 0.85,
+   vjust = 0.5,
+   hjust = 0.5,
+   color = "black", # Text color
+   bg.color = NA, # Shadow color
+   bg.r = 0, # Shadow width
+   family = "atkinson"
+ ) +
+  
+#### 20' isochrone point and text ####
+  annotate(
+   "point",
+   x = x_20,
+   y = y_20,
+   size = iso_point_size,
+   shape = 21,
+   fill = iso_point_fill,
+   alpha = iso_point_alpha
+ ) +
+ annotate(
+   "text",
+   label = "20",
+   x = x_20,
+   y = y_20,
+   size = iso_text_size,
+   family = "atkinson",
+   color = "white"
+ ) +
+    
+#### 40' isochrone point and text ####
+  annotate(
+   "point",
+   x = x_40,
+   y = y_40,
+   size = iso_point_size,
+   shape = 21,
+   fill = iso_point_fill,
+   alpha = iso_point_alpha
+ ) +
+ annotate(
+   "text",
+   label = "40",
+   x = x_40,
+   y = y_40,
+   size = iso_text_size,
+   family = "atkinson",
+   color = "white"
+ ) +
+
+#### 60' isochrone point and text ####
+ annotate(
+   "point",
+   x = x_60,
+   y = y_60,
+   size = iso_point_size,
+   shape = 21,
+   fill = iso_point_fill,
+   alpha = iso_point_alpha
+ ) +
+ annotate(
+   "text",
+   label = "60",
+   x = x_60,
+   y = y_60,
+   size = iso_text_size,
+   family = "atkinson",
+   color = "white"
+ )
+  
+  
+### Other options for "minutes by fastest mode" #### [Keep them just in case]
+# Option A) As line between 40 and 60
+ #  geom_shadowtext(
+ #   aes(x = x_40-((x_40-x_60)/2), # To place it in the middle of both points
+ #      y = y_40+((y_60-y_40)/2),
+ #      label = "minutes by\nfastest mode"),
+ #   size = 5.4,
+ #   lineheight = 0.85,
+ #   color = "black", # Text color
+ #   bg.color = "white", # Shadow color
+ #   bg.r = 0.15, # Shadow width
+ #   family = "atkinson",
+ #   angle = 58.33
+ # )
+
+# Option B) Centered on top
+#   geom_shadowtext(
+#   aes(x = x_60,
+#       y = y_60,
+#       label = "minutes by\nfastest mode"),
+#   size = iso_text_size,
+#   lineheight = 0.85,
+#   vjust = -0.67,
+#   hjust = 0.5,
+#   color = "black", # Text color
+#   bg.color = "white", # Shadow color
+#   bg.r = 0.15, # Shadow width
+#   family = "atkinson"
+# )
+
+# #### ALTERNATIVE MINUTES #### [I like them worse, I'll keep them just in case]
+#   geom_shadowtext(
+#     aes(x = x_20,
+#         y = y_20,
+#         label = "20"),
+#     size = iso_text_size,
+#     lineheight = 0.85,
+#     hjust = 0.5,
+#     color = "white", # Text color
+#     bg.color = "black", # Shadow color
+#     bg.r = 0.25, # Shadow width
+#     family = "atkinson"
+# ) +
+#   geom_shadowtext(
+#     aes(x = x_40,
+#         y = y_40,
+#         label = "60"),
+#     size = iso_text_size,
+#     lineheight = 0.85,
+#     hjust = 0.5,
+#     color = "white", # Text color
+#     bg.color = "black", # Shadow color
+#     bg.r = 0.25, # Shadow width
+#     family = "atkinson"
+# ) +
+#   geom_shadowtext(
+#     aes(x = x_60,
+#         y = y_60,
+#         label = "60"),
+#     size = iso_text_size,
+#     lineheight = 0.85,
+#     hjust = 0.5,
+#     color = "white", # Text color
+#     bg.color = "black", # Shadow color
+#     bg.r = 0.25, # Shadow width
+#     family = "atkinson"
+# )
+
+white_fastest
+```
+
+#### Adding example point
+
+```{r}
+white_fastest <- white_fastest +
+  annotate( # The text
+    "richtext",
+    label = "Bike is faster and<br>travel takes under 40'",
+    x = -114.109,
+    y = 51.105,
+    size = iso_text_size,
+    vjust = 0,
+    color = "black",
+    family = "atkinson",
+    fill = NA,
+    label.color = NA
+  ) +
+#?geom_curve
+  annotate(
+    "curve",
+    x = -114.109,
+    y = 51.105,
+    xend = -114.085,
+    yend = 51.0935,
+    curvature = 0.5,
+    linewidth = 0.7,
+    arrow = arrow(angle = 30,
+                  length = unit(0.1, "in"),
+                  ends = "first",
+                  type = "closed")
+  ) +
+  annotate( # The yellow dot in map
+    "point",
+    x = -114.085,
+    y = 51.0935,
+    size = 5,
+    shape = 21,        
+    fill = "#f8ad58",  
+    color = "black", 
+    stroke = 2
+  ) 
+
+
+
+```
+#### Finishing
+
+##### Adding arrow
+
+```{r}
+######## Settings to make it easier to manually adjust ###########
+######## I also think the code is more readable this way, but maybe
+######## I shouldn't do settings -> tibble -> ggplot
+######## and should do settings -> ggplot, or ggpplot directly, but gets messy
+######## ASK IÑAKI!
+
+# Arrow:
+arrow_color <- "#e3cdd5"
+# Arrow triangle 
+triangle_tip_x <- -114.2680 ######## LAST +5
+triangle_half_width <- 0.0076 ####### Last: +1
+triangle_bottom_y <- 50.8650 ######## last +50 #MASTEEEERRRRRRR
+triangle_height <- 0.0048 ### last:-1
+# Arrow rectangle:
+arrow_rectangle_width <- 0.455 # Relative to triangle width
+arrow_rectangle_height <- 1.495 # Relative to triangle height
+arrow_rectangle_radius <- 0.24 #
+
+# North text:
+space <- 0.55 # Relative to triangle height
+north_size <- 9
+north_color <- "#000000"
+
+# Outer box:
+box_width <- 2.22 # Relative to triangle width
+box_height <- 2.45 # Relative to triangle height
+box_radius <- 0.20
+box_y_position <- 0.255 # Relative to triangle tip (measured in triangle height)
+box_color <- "#575757"
+
+# Border thickness (i will use this to change size of inner box):
+border_thickness <- 0.03 # Range 0-1 (no border, full black box).
+inner_box_color <- "white"
+
+
+
+
+
+######### Create tibble according to settins ##########################
+# Create triangle tibble according to settings:
+triangle_polygon <- tibble(
+  x = c(
+    triangle_tip_x, # Tip x
+    triangle_tip_x - triangle_half_width, # Left corner x
+    triangle_tip_x + triangle_half_width # Right corner x
+  ),
+  y = c(
+    triangle_bottom_y + triangle_height, # Tip y 
+    triangle_bottom_y, # Left corner y
+    triangle_bottom_y)) # Right corner y
+  
+# Create rectangle tibble according to settings:
+arrow_rectangle <- tibble(
+  xmin = triangle_tip_x - (triangle_half_width*arrow_rectangle_width), # Left
+  xmax = triangle_tip_x + (triangle_half_width*arrow_rectangle_width), # Right
+  ymin = triangle_bottom_y - (triangle_height*arrow_rectangle_height), # Bottom
+  ymax = triangle_bottom_y + (0.25*triangle_height)) # Top, i add 0.25 of the
+                                                     # the triangle height to
+                                                     # hide curve on top
+  
+# Create the tibble for "north" text relative to previous:
+north <- tibble(
+  label = "North",
+  x = triangle_tip_x,
+  y = triangle_bottom_y + triangle_height + space*triangle_height
+)
+
+# Create the tibble for the box around the arrow (outer box):
+arrow_box <- tibble(
+  xmin = triangle_tip_x - (triangle_half_width*box_width), # Left
+  xmax = triangle_tip_x + (triangle_half_width*box_width), # Right
+  ymin = triangle_bottom_y - (triangle_height*box_height) +
+    (triangle_height*box_y_position), # Bottom
+  ymax = triangle_bottom_y + (triangle_height*box_height) +
+    (triangle_height*box_y_position)) # Top
+
+# Create the tibble for the inner box:
+# First we create an auxiliary object which we will add/substract to outer box:
+box_vertical_border <- ((arrow_box$xmax - arrow_box$xmin)*border_thickness)/2 
+box_horizontal_border <- ((arrow_box$ymax - arrow_box$ymin)*border_thickness)/2
+# And then the tibble:
+inner_box <- tibble(
+  xmin = arrow_box$xmin + box_vertical_border,
+  xmax = arrow_box$xmax - box_vertical_border,
+  ymin = arrow_box$ymin + box_horizontal_border,
+  ymax = arrow_box$ymax - box_horizontal_border
+)
+
+
+
+##### PLOTTING NORTH ARROW #####
+# ===============================
+white_fastest <- white_fastest +
+  geom_rounded_rect( #### Plot outer box (for border) ####
+    data = arrow_box,
+    aes(xmin = xmin, xmax = xmax,
+        ymin = ymin, ymax = ymax),
+    radius = box_radius,
+    fill = box_color,
+    color = NA
+    ) +
+  geom_rounded_rect( ####Plot inner box (for border)
+    data = inner_box,
+    aes(xmin = xmin, xmax = xmax,
+        ymin = ymin, ymax = ymax),
+    radius = box_radius,
+    fill = inner_box_color,
+    color = NA
+    )+
+  geom_polygon( #### Plot the arrow triangle ####
+    data = triangle_polygon,
+    aes(x = x, y = y),
+    fill = arrow_color,
+    color = NA # No border
+    ) + 
+  geom_rounded_rect( #### Plot the arrow "body" ####
+    data = arrow_rectangle,
+    aes(xmin = xmin, xmax = xmax,
+        ymin = ymin, ymax = ymax),
+    radius = arrow_rectangle_radius,
+    fill = arrow_color,
+    color= NA # No border
+    ) + 
+  geom_text( #### Plot "North" text ####
+    data = north,
+    aes(x = x, y = y, label = label),
+    size = north_size,
+    fontface = "bold",
+    color = north_color, 
+    family = "atkinson"
+    )
+
+white_fastest
+```
+
+##### Adding scale
+
+```{r}
+########## SETTINGS #############
+# Horizontal line:
+scale_length <- 3000 # In meters
+scale_space <- 0.13 # Space between line and box, proportion of box width
+scale_color <- "#000000"
+scale_thickness <- 2 # For argument linedwidth = in segment
+  
+# Ticks:
+tick_length <- 0.08 # Proportion of the box height
+tick_color <- "#000000"
+tick_thickness <- 1.1 # For argument linewidth =
+
+# Kilometers:
+km_space <- 0.275 # Space between km and scale, proportion of box height
+km_size <- 9 # In points, not relativ to the map
+km_color <- "#000000"
+km_font <- "atkinson"
+
+#################################
+######### TIBBLES ###############
+################################
+
+
+### Tibble for scale horizontal line
+####################################
+
+# I first create an object with the actual outer box width, height, and x mid
+# point, it will make code easier later:
+box_actual_width <- arrow_box$xmax - arrow_box$xmin
+box_actual_height <- arrow_box$ymax - arrow_box$ymin
+box_mid_x <- arrow_box$xmin + (box_actual_width/2)
+
+
+# Then we compute what the end points of the scale should be with destPoint:
+scale_left <- as_tibble(destPoint( # I use as_tibble because it is more readable later
+  p = c(box_mid_x,  # Start x coordinate (the middle of the box)
+        arrow_box$ymin - box_actual_height*scale_space), # Start y (box bottom)
+  b = 90, # Bearing (direction) in degrees
+  d = -scale_length/2)) # Distance in meters 
+
+scale_right <- as_tibble(destPoint(
+  p = c(box_mid_x,  # Start x coordinate (middle of the box)
+        arrow_box$ymin - box_actual_height*scale_space), # Start y (box bottom)
+  b = 90, # Bearing (direction) in degress 
+  d = scale_length/2)) # Distance in meters 
+
+# Then the tibble for the scale horizontal_line (could omit, but to make
+# everything coherent (homogeneous) when plotting):
+scale_horizontal <- tibble(
+  x = scale_left$lon,
+  xend = scale_right$lon,
+  y = scale_left$lat,
+  yend = scale_left$lat)
+
+### Tibble for ticks
+####################################
+tick <- tibble(
+  x = c(
+    scale_left$lon,
+    box_mid_x,
+    scale_right$lon),
+  xend = c(
+    scale_left$lon,
+    box_mid_x,
+    scale_right$lon),
+  y = scale_left$lat - ((box_actual_height/2)*tick_length), 
+  yend = scale_left$lat + ((box_actual_height/2)*tick_length))
+
+### Tibble for kms
+####################################
+km <- tibble(
+  label = c("0", "1.5", "3", "  km"),
+  x = c(
+    scale_left$lon,
+    box_mid_x,
+    scale_right$lon,
+    scale_right$lon
+  ),
+  y = scale_left$lat - ((box_actual_height/2)*km_space),
+  hjust = c(0.5, 0.5, 0.5, 0)) # All justified center, "kilometers" left
+
+##############################
+####### PLOTTING #############
+##############################
+
+white_fastest <- white_fastest +
+  geom_segment( ### Plotting the horizontal line
+    data = scale_horizontal,
+    aes(x = x, xend = xend, 
+        y = y, yend = yend),
+    linewidth = scale_thickness,
+    color = scale_color
+    ) +
+  geom_segment( ### Plotting the ticks
+    data = tick,
+    aes(x = x, xend = xend, 
+        y = y, yend = yend),
+    linewidth = tick_thickness,
+    color = tick_color
+    ) +
+  geom_text(
+    data = km,
+    aes(x = x, y = y, hjust = hjust, label = label),
+    size = km_size,
+    color = km_color, 
+    family = km_font)
+
+calgary_improved_done
 ```
 
 
 
+## B) Isochrones by bike
 
-
-
-## Calculating isochrones (bike):
+### Calculating isochrones (bike):
 
 - Mergin polygons idea from [here](https://stackoverflow.com/questions/49354393/r-how-do-i-merge-polygon-features-in-a-shapefile-with-many-polygons-reproducib)
 
@@ -1088,13 +2676,13 @@ hexagons2 <- hexagons |>
 
 # To avoid "hexagon grid" effect, I need to merge adjacent hexagons where
 # travel time by bike is the same.
-hex_zones <- hexagons2 |>
+iso_bike <- hexagons2 |>
   group_by(iso_b_travel_time) |> # We group hexagons with the same travel time
   summarise() # We could use st_union, but this is simpler
 
 ##### A problem to fix: holes.
 # ============================
-# When plotting hex_zones small holes appear. I need to get those removed.
+# When plotting iso_bike small holes appear. I need to get those removed.
 
 # I initially tried function st_remove_holes()  from package nngeo directly,
 # like this:
@@ -1108,11 +2696,11 @@ hex_zones <- hexagons2 |>
 # So I tried a new approach: first splitting the multipolygons into single 
 # polygons, selecting only the biggest ones (thus removing the small "holes"),
 # and then running st_remove_holes.
-hex_zones <- hex_zones |>
+iso_bike <- iso_bike |>
   st_cast("POLYGON") |>  # We separate multipolygons into polygons
   mutate("area" = st_area(geometry)) |>  # We calculate area of each polygon
   group_by(iso_b_travel_time) |> # We group them by the same travel times
-  slice_max(area, n = 1) |>  # We keep only the polygons with the bigger ares
+  slice_max(area, n = 1) |>  # We keep only the polygons with the biggest area
   #select(-area)  |>  # Remove the area column
   st_remove_holes()
 
@@ -1126,7 +2714,7 @@ hex_zones <- hex_zones |>
 #================================================
 # I tried st_buffer (needed st_transform first for the function to work 
 # properly, but it didn't look good).
-hex_zones <- hex_zones |> 
+iso_bike <- iso_bike |> 
   smooth(method = "ksmooth", smoothness = 4) # smooth(method = chaikin) also
                                              # looks good (more detailed though)  
 ```
@@ -1140,7 +2728,7 @@ black <- ggplot() +
   
 # A) We first plot the isochrone's areas (no borders yet)
   geom_sf(
-    data = hex_zones, 
+    data = iso_bike, 
     aes(fill = iso_b_travel_time),
     color = NA,
     alpha = 0.3,
@@ -1181,7 +2769,7 @@ black <- ggplot() +
 
 # Anf finally the isochrone's borders (so that they appear on top of roads)
   geom_sf(
-    data = hex_zones, 
+    data = iso_bike, 
     aes(fill = NA),
     color = "#ce9d78", # I tried a gradient instead, but didn't look good.
     fill = NA,
@@ -1213,7 +2801,7 @@ white <- ggplot() +
   
 # A) We first plot the isochrone's areas (no borders yet)
   geom_sf(
-    data = hex_zones, 
+    data = iso_bike, 
     aes(fill = iso_b_travel_time), 
     color = NA, 
     alpha = 0.1,
@@ -1255,7 +2843,7 @@ white <- ggplot() +
 
 # Anf finally the isochrone's borders (so that they appear on top of roads)
   geom_sf(
-    data = hex_zones, 
+    data = iso_bike, 
     aes(fill = NA),
     color = "black", # I tried a gradient instead, but didn't look good.
     fill = NA,
@@ -1277,10 +2865,10 @@ white # To see it
 
 
 
-### Adding street legend (white, bottom left)
+### Adding street legend (white, bottom left) (BIKE)
 
 
-```{r lollipop_legend_bottom_left}
+```{r lollipop_legend_bottom_left_bike}
 # Settings:
 # =========
 
@@ -1513,20 +3101,34 @@ white_iso_legend <- white_main_legend +
   ) +
   annotate(
     "richtext", # Allows us to fill or "highlight" the text background
-    label = "minutes <br> by bike", # I should change previous annotations to this
-    x = -113.9995,
-    y = 51.10905,
+    label = "minutes<br>by bike", # I should change previous annotations to this
+    x = x_80+((x_60-x_80)/2),  # To place it in the middle of both points
+    y = y_60+((y_80-y_60)/2),
     size = iso_text_size,
     color = iso_point_fill,
     family = "atkinson",
     hjust = 0.5,
-    angle = 59,   
+    angle = 59,
     fill = "white", # To make it readable (covering roads behind text)
     label.color = NA
   ) +
   
+# Could have an a possibility, but looks worse in this case:
+  # geom_shadowtext(
+  #   aes(x = x_80+((x_60-x_80)/2), # To place it in the middle of both points
+  #       y = y_60+((y_80-y_60)/2),
+  #       label = "minutes by bike"),
+  #   size = iso_text_size,
+  #   lineheight = 0.80,
+  #   color = "black", # Text color
+  #   bg.color = "white", # Shadow color
+  #   bg.r = 0.15, # Shadow width
+  #   family = "atkinson",
+  #   angle = 58.33
+  # ) +
+  
 #### 20' isochrone point and text ####
-     annotate(
+  annotate(
     "point",
     x = x_20,
     y = y_20,
@@ -1612,11 +3214,11 @@ white_iso_legend
 
 ```
 
-### Adding example point
+### Adding example point (bike)
 
 ```{r}
 white_example_legend <- white_iso_legend +
-  annotate(
+  annotate( # The text
     "richtext",
     label = "Bike is faster and<br>travel takes under 40'",
     x = -114.109,
@@ -1627,17 +3229,22 @@ white_example_legend <- white_iso_legend +
     family = "atkinson",
     fill = NA,
     label.color = NA
-    
   ) +
+  
   annotate(
-    "segment",
-    x = -114.105,
+    "curve",
+    x = -114.109,
     y = 51.105,
     xend = -114.085,
     yend = 51.0935,
-    linewidth = 0.7
+    curvature = 0.5,
+    linewidth = 0.7,
+    arrow = arrow(angle = 30,
+                  length = unit(0.1, "in"),
+                  ends = "first",
+                  type = "closed")
   ) +
-  annotate( # Yellow dot in map
+  annotate( # The yellow dot in map
     "point",
     x = -114.085,
     y = 51.0935,
@@ -1654,9 +3261,9 @@ white_example_legend
 ```
 
 
-## Finishing
+### Finishing
 
-### Adding arrow
+#### Adding arrow
 
 ```{r}
 ######## Settings to make it easier to manually adjust ###########
@@ -1793,7 +3400,7 @@ calgary_improved_arrow <- white_example_legend +
 calgary_improved_arrow
 ```
 
-### Adding scale
+#### Adding scale
 
 ```{r}
 ########## SETTINGS #############
