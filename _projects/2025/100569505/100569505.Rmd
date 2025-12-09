@@ -43,6 +43,7 @@ library(osmextract) # To download data necesesary to use r5r
 library(ggnewscale)
 library(ggtext) # To plot "highlighted" text easily.
 library(nngeo) # To remove wholes in isochrones 
+library(smoothr)
 ```
 
 ## Replica
@@ -908,6 +909,8 @@ hex_zones <- hex_zones |>
   slice_max(area, n = 1) |>  # We keep only the polygons with the bigger ares
   #select(-area)  |>  # Remove the area column
   st_remove_holes()
+
+
 ```
 
 
@@ -929,9 +932,9 @@ black <- ggplot() +
     alpha = 0.7,
     show.legend = FALSE
   ) + 
-  scale_fill_gradient(low = "#aa5312", # Central isochrone
-                      high = "black", # Outer isochrone
-                      na.value = "black") +
+  scale_fill_gradient(low = "green", # Central isochrone
+                      high = "red" # Outer isochrone
+                      ) +
   new_scale_color() + 
   new_scale_fill() + # We reset color an fill before continuing
 
@@ -1003,8 +1006,8 @@ white <- ggplot() +
   ) + 
   scale_fill_gradient(
     low = "black", # Central isochrone
-    high = "#ffffff", # Outer isochrone
-    na.value = "white"
+    high = "white") # Outer isochrone
+    
   ) +
   new_scale_color() + 
   new_scale_fill() + # We reset color an fill before continuing
@@ -1116,6 +1119,16 @@ hex_zones <- hex_zones |>
 # We see some warnings. Documentation says "If information gets lost while type
 # casting, a warning is raised". I'm not sure what information is lost, but
 # everything seems to work fine, so it isn't a problem.
+
+
+
+### Making area less sharp ("rounding" hexagons): 
+#================================================
+# I tried st_buffer (needed st_transform first for the function to work 
+# properly, but it didn't look good).
+hex_zones <- hex_zones |> 
+  smooth(method = "ksmooth", smoothness = 4) # smooth(method = chaikin) also
+                                             # looks good (more detailed though)  
 ```
 
 ### Black bike
@@ -1134,8 +1147,8 @@ black <- ggplot() +
     show.legend = FALSE
   ) + 
   scale_fill_gradient(low = "white", # Central isochrone
-                      high = "black", # Outer isochrone
-                      na.value = "black") +
+                      high = "black" # Outer isochrone
+  )+
   new_scale_color() + 
   new_scale_fill() + # We reset color an fill before continuing
 
@@ -1203,13 +1216,12 @@ white <- ggplot() +
     data = hex_zones, 
     aes(fill = iso_b_travel_time), 
     color = NA, 
-    alpha = 0.075,
+    alpha = 0.1,
     show.legend = FALSE
   ) + 
   scale_fill_gradient(
     low = "black", # Central isochrone
-    high = "#ffffff", # Outer isochrone
-    na.value = "white"
+    high = "white" # Outer isochrone
   ) +
   new_scale_color() + 
   new_scale_fill() + # We reset color an fill before continuing
@@ -1228,7 +1240,7 @@ white <- ggplot() +
   geom_sf(
     data = hexroads_intersection,
     aes(color = time_color),
-    linewidth = 0.5,  # To make roads thicker
+    linewidth = 1.1,  # To make roads thicker
     show.legend = FALSE
   ) +
   scale_color_manual(
@@ -1248,7 +1260,7 @@ white <- ggplot() +
     color = "black", # I tried a gradient instead, but didn't look good.
     fill = NA,
     alpha = 1,
-    linewidth = 0.5
+    linewidth = 0.6
   ) +
   new_scale_color() + 
   new_scale_fill() + # We reset color an fill before continuing
@@ -1264,147 +1276,6 @@ white # To see it
 ```
 
 
-### Adding street legend (white, top right)
-
-Actually this would be redundant with the legend, why not plot the legend like this instead?
-
-```{r lollipop_legend_top_right}
-# Settings:
-# =========
-
-# Lines settings:
-lines_x_end <- -113.90 # Same x end for all lines:
-lines_width <- 0.5 # Lines width
-
-purple_line_y_end <- 51.12 # Purple line y end + text y + point y
-light_purple_line_y_end <- 51.11 # Light purple line y end + text y + point y
-gray_line_y_end <- 51.10
-yellow_line_y_end <- 51.09 # Yellow line line y end + text y + point y
-
-dot_size <- 10 # Lollipop dot size
-
-text_color <- "black" # Text color
-text_family <- "atkinson" # Typography
-text_size <- 11
-text_h_just <- 0 # 0 left, 0.5 center, 1 right
-
-
-
-# Plot the legend:
-#=================
-white_lines <- white + 
-  
-#### Annotation for purple streets: ####
-  annotate( # Purple area line
-    "segment",
-    x = -113.945,
-    xend = lines_x_end,
-    y = 51.115,
-    yend = purple_line_y_end,
-    linewidth = lines_width
-  ) +
-  annotate( # Purple lollipop dot
-    "point",
-    x = lines_x_end,       
-    y = purple_line_y_end, 
-    size = dot_size,       # Using the new variable name
-    color = "#6a4886"
-  ) +
-  annotate( # Purple area text
-    "text",
-    label = "  +30' faster by transit",
-    x = lines_x_end,
-    y = purple_line_y_end,
-    hjust = text_h_just,
-    color = text_color,
-    family = text_family,
-    size = text_size
-  ) +
-
-#### Annotation for light purple streets: ####
-  annotate( # Light purple area line
-    "segment",
-    x = -113.965,
-    xend = lines_x_end,
-    y = 51.095,
-    yend = light_purple_line_y_end,
-    linewidth = lines_width
-  ) +
-  annotate( # Light purple lollipop dot
-    "point",
-    x = lines_x_end,
-    y = light_purple_line_y_end,
-    size = dot_size,
-    color = "#a36f96"
-  ) +
-  annotate( # Light purple area text
-    "text",
-    label = "  10-30' faster by transit",
-    x = lines_x_end,
-    y = light_purple_line_y_end,
-    hjust = text_h_just,
-    color = text_color,
-    family = text_family,
-    size = text_size
-  ) +
-
-#### Annotation for gray streets: ####
-  annotate( # Gray area line
-    "segment",
-    x = -113.965,                 
-    xend = lines_x_end, 
-    y = 51.0620,                  
-    yend = gray_line_y_end, 
-    linewidth = lines_width
-  ) +
-  annotate( # Gray lollipop dot
-    "point",
-    x = lines_x_end,
-    y = gray_line_y_end,
-    size = dot_size,
-    color = "#b7a6ac"
-  ) +
-  annotate( # Gray area text
-    "text",
-    label = "  Similar travel time", # Standard label for gray
-    x = lines_x_end,
-    y = gray_line_y_end,
-    hjust = text_h_just,
-    color = text_color,
-    family = text_family,
-    size = text_size
-  ) +
-  
-##### Annotation for yellow streets: ####
-  annotate( # Yellow area line
-    "segment",
-    x = -113.992, #-20
-    xend = lines_x_end, 
-    y = 51.033, # -2
-    yend = yellow_line_y_end,
-    linewidth = lines_width
-  ) +
-  annotate( # Yellow lollipop dot
-    "point",
-    x = lines_x_end,
-    y = yellow_line_y_end,
-    size = dot_size,
-    color = "#c88c47"
-  ) +
-  annotate( # Yellow area text
-    "text",
-    label = "  10-30' faster by bike",
-    x = lines_x_end,
-    y = yellow_line_y_end,
-    hjust = text_h_just,
-    color = text_color,
-    family = text_family,
-    size = text_size
-  ) 
-
-white_lines
-```
-
 
 ### Adding street legend (white, bottom left)
 
@@ -1415,20 +1286,22 @@ white_lines
 
 # Lines settings:
 lines_x_end <- -114.18 # Same outside x for all lines
-lines_width <- 0.5 # Lines width
+lines_width <- 1 # Lines width
 
-purple_line_y_end <- 50.955 # Purple line y end + text y + point y
-light_purple_line_y_end <- 50.965 # Light purple line y end + text y + point y
-gray_line_y_end <- 50.975
-yellow_line_y_end <- 50.985 # Yellow line line y end + text y + point y
+purple_line_y_end <- 50.935 # Purple line y end + text y + point y
+light_purple_line_y_end <- 50.950 # Light purple line y end + text y + point y
+gray_line_y_end <- 50.965
+yellow_line_y_end <- 50.980 # Yellow line line y end + text y + point y
 
-dot_size <- 20 # Lollipop dot size
-dot_stroke <- 5
+dot_size <- 25 # Lollipop dot size
+dot_stroke <- 2
+dot_stroke_color <- "black"
 
 text_color <- "black" # Text color
 text_family <- "atkinson" # Typography
-text_size <- 9
-text_h_just <- 1.2 # 0 left, 0.5 center, 1 right
+text_size <- 10
+text_h_just <- 1 # 0 left, 0.5 center, 1 right
+text_dot_space <- 0.0125 # Space between the text and the dots
 
 
 # Plot the legend:
@@ -1441,24 +1314,24 @@ white_main_legend <- white +
     x = lines_x_end, 
     y = 50.9970,
     label = paste("What's the fastest way to get to",
-                  "Calgary Tower        on a weekday morning?",
+                  "Calgary Tower     on a weekday morning?",
                   sep="\n"),
     hjust = 0.95,
     family = text_family,
-    size = 9.5,
+    size = 10,
     color = text_color,
-    lineheight = 1
+    lineheight = 1.15
   ) +
   
 #### The blue point in the legend ####
    annotate(  
     "point",
-    x = -114.257, 
-    y = 50.9941,  
+    x = -114.255, 
+    y = 50.9935,  
     shape = 21, # Has to be one between 21 and 25 (according to documentation)
-    size = 8.25,
+    size = 7, # Make it a bit smaller than the point in the map
     color = "#000000",
-    stroke = 4.75,
+    stroke = 4.03,
     fill = "#69eafe"
   ) +
   
@@ -1477,7 +1350,7 @@ white_main_legend <- white +
 ##### Annotation for yellow streets: ####
   annotate( # Yellow area line
     "segment",
-    x = -114.100, 
+    x = -114.105, 
     xend = lines_x_end, 
     y = 51.03,
     yend = yellow_line_y_end,
@@ -1490,13 +1363,13 @@ white_main_legend <- white +
     size = dot_size,
     shape = 21,        
     fill = "#f8ad58",  
-    color = "white", # Border
+    color = dot_stroke_color, # Border
     stroke = dot_stroke # Border stroke width
   ) +
   annotate( # Yellow area text
     "text",
     label = "10-30' faster by bike",
-    x = lines_x_end,
+    x = lines_x_end - text_dot_space,
     y = yellow_line_y_end,
     hjust = text_h_just,
     color = text_color,
@@ -1520,13 +1393,13 @@ white_main_legend <- white +
     size = dot_size,
     shape = 21,        
     fill = "#e3cdd5",  
-    color = "white", # Border
+    color = dot_stroke_color, # Border
     stroke = dot_stroke # Border stroke width
   ) +
   annotate( # Gray area text
     "text",
     label = "similar travel time", # Standard label for gray
-    x = lines_x_end,
+    x = lines_x_end - text_dot_space,
     y = gray_line_y_end,
     hjust = text_h_just,
     color = text_color,
@@ -1550,13 +1423,13 @@ white_main_legend <- white +
     size = dot_size,
     shape = 21,        
     fill = "#ca8aba",  
-    color = "white", # Border
+    color = dot_stroke_color, # Border
     stroke = dot_stroke # Border stroke width  
   ) +
   annotate( # Light purple area text
     "text",
     label = "10-30' faster by transit",
-    x = lines_x_end,
+    x = lines_x_end - text_dot_space,
     y = light_purple_line_y_end,
     hjust = text_h_just,
     color = text_color,
@@ -1580,13 +1453,13 @@ white_main_legend <- white +
     size = dot_size,  
     shape = 21,        
     fill = "#8359a6",  
-    color = "white", # Border
+    color = dot_stroke_color, # Border
     stroke = dot_stroke # Border stroke width     
   ) +
   annotate( # Purple area text
     "text",
     label = "+30' faster by transit",
-    x = lines_x_end,
+    x = lines_x_end - text_dot_space,
     y = purple_line_y_end,
     hjust = text_h_just,
     color = text_color,
@@ -1739,8 +1612,6 @@ white_iso_legend
 
 ```
 
-## Finishing
-
 ### Adding example point
 
 ```{r}
@@ -1781,6 +1652,9 @@ white_example_legend <- white_iso_legend +
 
 white_example_legend
 ```
+
+
+## Finishing
 
 ### Adding arrow
 
