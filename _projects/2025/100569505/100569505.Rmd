@@ -1062,7 +1062,7 @@ text_dot_space <- 0.0125 # Space between the text and the dots
 # The blue point in the legend
    annotate(  
     "point",
-    x = -114.2535,
+    x = -114.2585,
     y = 50.9935,  
     shape = 21, 
     size = 4,
@@ -1146,8 +1146,8 @@ text_dot_space <- 0.0125 # Space between the text and the dots
     size = text_size
   ) +
 
-#### Annotation for light purple streets: ####
-  annotate( # Light purple area line
+# Light purple streets
+  annotate( # Light purple  line
     "segment",
     x = -114.130,
     xend = lines_x_end,
@@ -1163,10 +1163,10 @@ text_dot_space <- 0.0125 # Space between the text and the dots
     size = dot_size,
     shape = 21,
     fill = "#ca8aba",
-    color = dot_stroke_color, # Border
-    stroke = dot_stroke # Border stroke width
+    color = dot_stroke_color, 
+    stroke = dot_stroke
   ) +
-  annotate( # Light purple area text
+  annotate( # Light purple text
     "text",
     label = "10-30' faster by transit",
     x = lines_x_end - text_dot_space,
@@ -1177,8 +1177,8 @@ text_dot_space <- 0.0125 # Space between the text and the dots
     size = text_size
   ) +
 
-#### Annotation for purple streets: ####
-  annotate( # Purple area line
+# Purple streets
+  annotate( # Purple line
     "segment",
     x = -114.110,
     xend = lines_x_end,
@@ -1197,7 +1197,7 @@ text_dot_space <- 0.0125 # Space between the text and the dots
     color = dot_stroke_color, # Border
     stroke = dot_stroke # Border stroke width
   ) +
-  annotate( # Purple area text
+  annotate( # Purple text
     "text",
     label = "+30' faster by transit",
     x = lines_x_end - text_dot_space,
@@ -1221,8 +1221,6 @@ v_rectangle_height <- 0.0141
 v_rectangle_space <- 0.001
 v_rectangle_radius <- 0.3
 v_rectangle_fill <- c("#c88c47", "#b7a6ac", "#a36f96", "#6a4886")
-v_rectangle_line_color <- "white"
-v_rectangle_line_width <- 0.5
 
 
   
@@ -1246,22 +1244,155 @@ v_rectangles <- tibble(
 
 # We plot the rectangles:
 #========================
-# black_fastest <-
-  black_fastest +
+black_fastest <- black_fastest +
   geom_rounded_rect(
     data = v_rectangles,
     aes(xmin = xmin, xmax = xmax,
         ymin = ymin, ymax = ymax, 
         fill = fill),
     radius = v_rectangle_radius,
-    linewidth = v_rectangle_line_width,
-    color = v_rectangle_line_color,
     show.legend = FALSE
   ) +
   scale_fill_identity()
 ```
 
-Once we have the rectangles, we can plot the legend text relative to them:
+**A little extra: some arrows made out of streets**. First step: creating the "arrow" that we will plot next to the squares.
+
+```{r}
+# I used this to find an adequate area:
+# OPTION A) 
+# black_fastest + annotate(
+#     "polygon",
+#     x = c(c(-114.082, -114.082, -114.0633, -114.0633) # The sums allow me to
+#           + (-0.150)),                              # move fast around the
+#     y = c(c(51.044, 51.0465, 51.047, 51.0375)         # map looking for an
+#           + (-0.0259)),                             # area that i like.
+#     color = "green",
+#     fill = NA,
+#     linewidth = 2)
+
+# OPTION B)
+# black_fastest + annotate(
+#     "polygon",
+#     x = c(c(-114.077, -114.077, -114.0633, -114.0633) # The sums allow me to
+#           + (-0.054)),                              # move fast around the
+#     y = c(c(51.044, 51.046, 51.050, 51.040)         # map looking for an
+#           + (-0.0835)),                             # area that i like.
+#     color = "green",
+#     fill = NA,
+#     linewidth = 2)
+
+# We now have the coordinates for the area I will use as arrow.
+# We save them as a matrix because that's the object required by
+# st_polygon:
+selected_coordinates <- as.matrix(
+  tibble(
+   "x" = c(c(-114.077, -114.077, -114.0633, -114.0633) + (-0.054)),
+   "y" = c(c(51.044, 51.046, 51.050, 51.040) + (-0.0835))
+   ) |> 
+  slice(1:4, 1)) # We need to repeat the first row in fifth place to close the
+                 # polygon
+
+ 
+# We create a polygon with those coordinates:
+selected_polygon <- st_polygon(x = list(selected_coordinates))
+
+# Then select the corresponding area from hexagons by intersection. But before
+# we need to specify that our object uses the same coordinate reference system,
+# otherwise st_intersection doesn't work.
+selected_polygon <- st_sfc(
+  selected_polygon,
+  crs = st_crs(all_roads_dissolved))
+
+
+# We can now get the intersection:
+selected_street <- st_intersection(all_roads_dissolved, selected_polygon)
+
+# We will create an object with this sf object, but substracting from its
+# coordinates the coordinates of its centroid. That way, it will be easier to 
+# move (plot) repeatedly (we can put it wherever we want by summing the
+# coordinates that we want to make the centroid).
+centroid <- st_centroid(st_union(selected_street))
+street_arrow <- st_geometry(selected_street) - centroid
+```
+
+We now have our "street arrow", we just need to plot it next to the squares:
+
+```{r}
+# Settings
+#=========
+street_arrow_mid_x <- -0.0055 # From v_rectangle_mid_x
+street_arrow_yellow_y <- 0 # From 1/2 height of the vertical rectangles
+
+street_arrow_width <- 0.6
+
+# We calculate the coordinates
+#=============================
+
+# Yellow street arrow:
+street_arrow_yellow <- street_arrow + c(
+  v_rectangle_mid_x + street_arrow_mid_x,
+  v_rectangle_top_y - (0.5*v_rectangle_height) + street_arrow_yellow_y)
+
+# Gray street arrow:
+street_arrow_gray <- street_arrow + c(
+  v_rectangle_mid_x + street_arrow_mid_x,
+  v_rectangle_top_y - ((1.5*v_rectangle_height) + v_rectangle_space) + street_arrow_yellow_y)
+
+# Light purple street arrow:
+street_arrow_light_purple <- street_arrow + c(
+  v_rectangle_mid_x + street_arrow_mid_x,
+  v_rectangle_top_y - ((2.5*v_rectangle_height) + (2*v_rectangle_space)) + street_arrow_yellow_y)
+
+# Purple street arrow:
+street_arrow_purple <- street_arrow + c(
+  v_rectangle_mid_x + street_arrow_mid_x,
+  v_rectangle_top_y - ((3.5*v_rectangle_height) + (3*v_rectangle_space)) + street_arrow_yellow_y)
+
+# Assign crs to every arrow again:
+street_arrow_yellow <- st_sfc(street_arrow_yellow,
+                              crs = st_crs(all_roads_dissolved))
+
+street_arrow_gray <- st_sfc(street_arrow_gray,
+                            crs = st_crs(all_roads_dissolved))
+
+street_arrow_light_purple <- st_sfc(street_arrow_light_purple,
+                                    crs = st_crs(all_roads_dissolved))
+
+street_arrow_purple <- st_sfc(street_arrow_purple,
+                              crs = st_crs(all_roads_dissolved))
+
+# We plot the street arrows:
+#===========================
+
+black_fastest <- 
+black_fastest +
+  geom_sf( 
+    data = street_arrow_yellow,
+    color = "#c88c47",
+    linewidth = street_arrow_width
+  ) +
+  geom_sf(
+    data = street_arrow_gray,
+    color = "#b7a6ac",
+    linewidth = street_arrow_width
+  ) +
+  geom_sf(
+    data = street_arrow_light_purple,
+    color = "#a36f96",
+    linewidth = street_arrow_width
+  ) +
+  # 4. Purple Arrow
+  geom_sf(
+    data = street_arrow_purple,
+    color = "#6a4886",
+    linewidth = street_arrow_width
+  )
+```
+
+
+
+We then plot the legend for the squares:
 
 ```{r}
 # Settings:
@@ -1271,7 +1402,7 @@ v_rect_text_size <- 8
 v_rect_text_family <- "atkinson"
 
 v_rect_h_just <- 1 # Right
-v_rect_text_h_space <- 0.005
+v_rect_text_h_space <- 0.018
 v_rect_text_text <- c("10-30' faster by bike",
                       "similar travel time",
                       "10-30' faster by transit",
@@ -1288,7 +1419,8 @@ v_rect_text <- tibble(
 
 # We plot the text:
 #==================
-black_fastest <- black_fastest + 
+black_fastest <-
+  black_fastest + 
   geom_text(
     data = v_rect_text,
     aes(x = x, y = y, hjust = hjust, label = label),
@@ -1370,6 +1502,7 @@ black_fastest <- black_fastest +
     color = blue_point_color,
     stroke = blue_point_stroke
   )
+black_fastest
 ```
 
 
