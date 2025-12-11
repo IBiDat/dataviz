@@ -10,20 +10,20 @@ output:
     self_contained: false
 ---
 
-I'm setting the chunk size to 34.375 because that will allow me to create a file the same height (3300px) as the original one (given default dpi for rmd in html is 96 [3300/96=34.375])
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(out.width = "100%", fig.align = "center",
-  fig.showtext = TRUE, fig.width = 26.56057, fig.height = 34.375)
+  fig.showtext = TRUE, fig.width = 26.5625, fig.height = 34.375)
+# We've set the dimensions to match the size of the original plot.
 ```
 
-```{r set_options}
+```{r set_options, include =}
 # Increase the amount of memory available to Java (this is necessary for large
 # r5r queries).
 options(java.parameters = "-Xmx2G") # I can change "2G" to other value if needed
 
-# Increase timeout to be able to download larg files (necessary to download
-# large file with osmextract)
+# Increase timeout to be able to download large files (necessary to download
+# large file with osmextract).
 options(timeout = 600) # Timeout 600 seconds (10 minutes)
 
 ```
@@ -51,33 +51,46 @@ library(shadowtext) # To add shadows in the isochrone legend
 
 ## Replica
 
-### Loading data
+### Loading the data
+
+We reached Willem Klumpenhouwer, the author of the plot that we are replicating, and he kindly shared the data with which he built the original plot. This data consists of three .geojson files: 
+
+- **`hexagons`** includes for variables: `geometry` (which contains polygons that form a hexagon grid of the map), `id` (an identification number for each hexagon), `b_travel_time` (travel time by bike from the centroid of each hexagon to Calgary Tower, in minutes), and `travel_time` (travel time by transit from the centroid of each hexagon to Calgary Tower, in minutes).
+
+- **`all_roads_dissolved`**  with a multilinestring that represents all roads in Calgary.
+
+-- **`water`** which contains mulitpolygons with the geometry of the water bodies in Calgary.
 
 ```{r load_data}
-# Loading travel times
 hexagons <- geojson_sf("original_data/hexagons.geojson")
-
-# Loading roads
 all_roads_dissolved <- geojson_sf("original_data/all_roads_dissolved.geojson")
-
-# Loading water
 water <- geojson_sf("original_data/water.geojson")
 ```
 
+### Data transformation
 
-**EXPLAIN THIS BETTER IN THE FINAL VERSION** The id range in `hexagons`, `bike_times`, and `transit_times` are the same. Since the `hexagons` dataset includes `bike_times` and `transit_times`, it is most likely an object created by: 1) dividing the map area in hexagons, 2) getting the travel times for those Hexagons, 3) joining those two databases using the id column. I might be able **I REMOVED THE EXPLANATION OF WHY I WAS TRYING TO CONVERT MULTILINESTRING INTO POLYGON** When searching how to convert a multilinestring into a polygon, I came across [this post](https://stackoverflow.com/questions/69224441/find-intersection-between-multilinestring-and-polygons-sf-r), which mentions the funcion `st_intersection()`. This made me think i can maybe get an object that is the intersection between `hexagons` and `all_roads_dissolved`. Maybe I can plot this directly (not a full hexagon layer underneath). But if that doesn't work, the background hexagons idea can still work. In the documentation for st_intersection() there are other functions that may be helpful.
+Given the structure of the provided data, we only need to do small transformations in order to be able able to plot the original map.
 
-```{r prepare_data}
-# This took several minutes to run, so I'll save the object and
-# avoid running the line again.
+We start by creating a simple feature collection that combines the ids and travel time data from `hexagons` with the geometry of the roads that correspond with each hexagon. To do so, we calculate the intersection of `hexagons` and `all_roads_dissolved`.
+
+```{r create_hexagons_roads_intersection}
 # hexroads_intersection <- st_intersection(all_roads_dissolved, hexagons)
-# SHOULD I LEAVE IT WITHOUT SAVE/LOAD IN THE FINAL VERSION? PROBABLY
-# save(hexroads_intersection, file = "hexroads_intersection.RData")
-load("hexroads_intersection.RData")
 
-# NOTE: I'm computing time_difference as time by bike minus time by transit. That means that:
-# - Negative numbers = faster by bike
-# - Positive numbers = faster by transit
+# This line takes minutes to run, so we save the object to avoid running it
+# again. From now on, we can just load it.
+
+# save(hexroads_intersection, file = "hexroads_intersection.RData")
+
+load("hexroads_intersection.RData")
+```
+
+Then we add a new variable containing the difference in travel time by bike and by transit from each point. We also add a second variable with the differences binned in the ranges used in the original map.
+
+```{r add_travel_time_difference}
+# We are computing time_difference as time by bike minus time by transit. That means that:
+# - negative numbers = faster by bike
+# - positive numbers = faster by transit
+
 hexroads_intersection <- hexroads_intersection |> 
   mutate(
     "time_difference" = b_travel_time - travel_time,
@@ -87,62 +100,67 @@ hexroads_intersection <- hexroads_intersection |>
       time_difference < 10 ~ "0", # Between -10 and 10 (both not included)
       time_difference < 30 ~ "1", # Transit 10 or more minutes faster (<30)
       time_difference >= 30 ~ "2"), # Transit 30 or more minutes faster 
-    "time_color" = fct( # We make it factor 
+    "time_color" = fct( 
                    time_color, levels = c("-2", "-1", "0", "1", "2"))
     )
 ```
 
-### Plotting map
+With our data ready, we can start plotting.
 
-```{r plot_legendless_map}
-# Just the map, without legend
-calgary_legendless <- ggplot() +
-  geom_sf( # We plot the roads:
+### Plotting
+
+#### Roads and water
+
+We start by plotting the map with roads adequately colored according to travel time differences. Notice that in the original map the water is plotted on top of the roads (we see there are no bridges over the rivers), we will do the same in our replica.
+
+```{r plot_roads_water}
+calgary_replica <- ggplot() +
+  
+  # Roads
+  geom_sf( 
     data = hexroads_intersection,
     aes(color = time_color),
-    linewidth = 1.1,  # To make roads thicker
+    linewidth = 1.1,
     show.legend = FALSE
   ) +
   scale_color_manual(
     values = c(
-      "-2" = "#aa5312",   # bike >30 min faster
-      "-1" = "#c88c47",   # bike 10–30 min faster
-      "0"  = "#b7a6ac",   # similar travel time
-      "1"  = "#a36f96",   # transit 10–30 min faster
-      "2"  = "#6a4886"    # transit >30 min faster
+      "-2" = "#aa5312", # bike >30 min faster
+      "-1" = "#c88c47", # bike 10–30 min faster
+      "0"  = "#b7a6ac", # similar travel time
+      "1"  = "#a36f96", # transit 10–30 min faster
+      "2"  = "#6a4886"  # transit >30 min faster
     )
   ) +
-  geom_sf( # We plot the water:
+  
+  # Water:
+  geom_sf( 
     data = water,
     fill = "#a6b0b9",
     color = "#a6b0b9",
-    linewidth =1.1 # To make water thicker
+    linewidth =1.1 
     ) +
   theme_void()
 
-calgary_legendless # To see it
+calgary_replica # To see it
 ```
 
-### Plotting first legend
+After some time manually adjusting the values and comparing to the original plot, we have managed to plot roads and water with the same size as the original map.
 
-In order to change line spacing see [here](https://stackoverflow.com/questions/39721772/line-height-spacing-for-text-in-ggplot)
+#### Paragraph 
 
-In order to see the options for the point annotation see [this](https://ggplot2.tidyverse.org/articles/ggplot2-specs.html)
+We will now add the paragraph that explains what the map represents, and identifies the blue point in the middle of the map as Calgary Tower.
 
-I got the coordinates for calgary tower from [OSM](https://www.openstreetmap.org/way/25719793), and finetuned manually.
-
-
-```{r plot_legend1}
-# We add the font:
+```{r plot_paragraph}
+# We add the font used in the original plot:
 sysfonts::font_add_google("Atkinson Hyperlegible", family = "atkinson")
 showtext::showtext_auto()
 
-# We see what the bbox coordinates are and be able to adjust the annotation:
-st_bbox(hexroads_intersection) # REMOVE FOR FINAL VERSION?
-
-# And then annotate accordingly
-calgary_legend1 <- calgary_legendless + 
-  annotate( # The main text
+# And then plot the paragraph:
+calgary_replica <- calgary_replica + 
+  
+  # The text:
+  annotate(
     "text",
     x = -114.3100, 
     y = 50.9790,
@@ -151,63 +169,51 @@ calgary_legend1 <- calgary_legendless +
                   "Calgary Tower     by bike and by",
                   "transit on a weekday morning.",
                   sep="\n"),
-    hjust = 0, # Align left
+    hjust = 0,
     family = "atkinson",
     size = 12.9,
-    lineheight = 1.05, # Line spacing
+    lineheight = 1.05,
     color = "#000000"
   ) + 
-   annotate(  # The blue point in the legend
+  
+  # The blue point in the legend
+   annotate(
     "point",
-    x = -114.2420, ##################### LAST: 00
+    x = -114.2450,
     y = 50.97495,  
-    shape = 21, # Has to be one between 21 and 25 (according to documentation)
+    shape = 21,
     size = 8.25,
     color = "#000000",
     stroke = 4.75,
     fill = "#69eafe"
   ) +
-  annotate(  # The blue point in the map (Calgary Tower)
+  
+  # The blue point in the map (Calgary Tower)
+  annotate(  
     "point",
-    x = -114.0631, 
+    x = -114.0631,
     y = 51.04465,
-    shape = 21, # Has to be one between 21 and 25 (according to documentation)
+    shape = 21,
     size = 8.25,
     color = "#000000",
     stroke = 4.75,
     fill = "#69eafe"
   )
   
-calgary_legend1 # To seeit
-  
-ggsave(
-  "calgary_02.png",
-  width = 34.375,
-  height = 34.375,
-  dpi = 96,
-  bg = "white"
-)
+calgary_replica # To see it
 ```
 
+#### Color legend
 
+Now that we have the paragraph, we will plot the color legend underneath it. It is a non-standard legend which isn't part of ggplot's defaults. So we need to create the geometries and text manually.
 
+Since there is a lot of elements here, and we need to manually adjust everything to fit the original plot, we will write the code in a way that will make it more convenient to use in this process of trial and error, by dividing it in three parts: a) *settings* where we will define the needed values, b) *calculations* of coordinate values according to the values defined in settings (this will allows us to avoid manually defining every single value needed), and c) the *plotting* according to the previous calculations.
 
-Almost perfect fit. Comparing with gimp changing opacity, it is really really close. I'm not sure I can get closer without using the same font as the original plot (which I cant). Maybe i could make the blue dot in the legend a little bit smaller, just to make it visually more similar.
+**Note for Iñaki.** When I did this, I had doubts on whether it is an adequate approach. It was REALLY helpful to do it like this while plotting because this way I didn't have to navigate through the code to find the values i needed to slightly change, everything is together and clearly named at the top.
 
-### Plotting second legend
-
-**CONTINUE FROM HERE**
-
-Found about how to create rounded corners [here](https://albert-rapp.de/posts/ggplot2-tips/11_rounded_rectangles/11_rounded_rectangles.html) package `ggchiklet`. Seems like it is not available for the current version of R.
-
-Another possibility for rounded corners is package `funkyheatmap` see [this](https://search.r-project.org/CRAN/refmans/funkyheatmap/html/geom_rounded_rect.html)
-
-
-```{r plot_legend2}
-
-######### Legend 2 settings #########
-# To make it easier to manually adjust, i will set the settings for the
-# rectangle sizes like this, and the plot calling this objects:
+```{r plot_color_legend}
+# Settings:
+# =========
 
 # Rectangles:
 rectangle_left <- -114.3080
@@ -215,91 +221,81 @@ rectangle_top <- 50.9490
 rectangle_width <- 0.0250
 rectangle_height <- 0.0050
 rectangle_space <- 0.0005
-rectangle_color <- c("#d26716", "#f8ad58", "#e3cdd5", "#ca8aba", "#8359a6")
+rectangle_fill <- c("#d26716", "#f8ad58", "#e3cdd5", "#ca8aba", "#8359a6")
+# THE COLORS ARE TOO DARK, PICK DIRECTLY FROM ORIGINAL LEGEND (NOT SAME TONE
+# AS THE ROADS)
 
 # Minutes:
 minute_separation <- 1.66 # Relative to rectangle_height
-minute_size <- 9 # In points, not relativ to the map
+minute_size <- 9 # For geom_text(size =
 minute_color <- "#000000"
 minute_font <- "atkinson"
 
 # Faster by:
 faster_separation <- 0.7 # Relative to rectangle_height
-faster_size <- 11 # In points, not relative to the map
+faster_size <- 11 # For geom_text(size = 
 faster_color <- "#000000"
 faster_font <- "atkinson"
-  
-# THE COLORS ARE TOO DARK, PICK DIRECTLY FROM ORIGINAL LEGEND (NOT SAME TONE
-# AS THE ROADS)
 
-# Create a data frame for legend rectangles according to settings:
+
+# Calculations:
+#=============
+
+# Tibble for legend rectangles:
 legend_rectangles <- tibble(
-  xmin = c(
-    rectangle_left,
-    rectangle_left + (rectangle_width + rectangle_space),
-    rectangle_left + 2*(rectangle_width + rectangle_space),
-    rectangle_left + 3*(rectangle_width + rectangle_space),
-    rectangle_left + 4*(rectangle_width + rectangle_space)),
-  xmax = c(
-    rectangle_left + rectangle_width,
-    rectangle_left + rectangle_width + (rectangle_width + rectangle_space),
-    rectangle_left + rectangle_width + (2*(rectangle_width + rectangle_space)),
-    rectangle_left + rectangle_width + (3*(rectangle_width + rectangle_space)),
-    rectangle_left + rectangle_width + (4*(rectangle_width + rectangle_space))),
-  ymin = rectangle_top - rectangle_height,
-  ymax = rectangle_top,
-  fill_color = rectangle_color)
+  "xmin" = rectangle_left + (0:4) * (rectangle_width + rectangle_space),
+  "xmax" = xmin + rectangle_width,
+  "ymin" = rectangle_top - rectangle_height,
+  "ymax" = rectangle_top
+)
 
-legend_rectangles # To see tibble, REMOVE IN FINAL VERSION!!!!!!!!!!!
-
-# Create the dataframe for the minutes relative to previous:
+# Tibble for minutes (relative to rectangles):
 legend_minutes <- tibble(
-  label = c("30", "10", "10", "30", "   minutes"), # Like this is relative
-  x = c(                                           # with nudge is absolute EXPLAIN BETTER IN FINAL VERSION WHY I DECIDED THIS
-    rectangle_left + rectangle_width + (0.5*rectangle_space),
-    rectangle_left + (2*rectangle_width) + (1.5*rectangle_space),
-    rectangle_left + (3*rectangle_width) + (2.5*rectangle_space),
-    rectangle_left + (4*rectangle_width) + (3.5*rectangle_space),
-    rectangle_left + (4*rectangle_width) + (3.5*rectangle_space)), 
-  y = rectangle_top - rectangle_height * minute_separation,
-  hjust = c(0.5, 0.5, 0.5, 0.5, 0) # All justified center, "minutes" left
-  )
+  "label" = c("30", "10", "10", "30", "   minutes"),
+  "x" = c(
+    rectangle_left + ((1:4)*rectangle_width) + ((0.5:3.5) * rectangle_space),
+    rectangle_left + (4*rectangle_width) + (3.5*rectangle_space)
+  ),
+  "y" = rectangle_top - rectangle_height * minute_separation,
+  "hjust" = c(0.5, 0.5, 0.5, 0.5, 0) # All justified center, "minutes" left
+)
 
-legend_minutes # To see the tibble QUITALO EN LA VERSIÓN FINAL!!!!!!!!!!
-
-# Create the tibble for the faster by relative to previous:
+# Tibble for "faster by" (relative to rectangles):
 legend_faster <- tibble(
-  label = c("faster by bike", "|", "faster by transit"),
-  x = c(
+  "label" = c("faster by bike", "|", "faster by transit"),
+  "x" = c(
     rectangle_left + (2*rectangle_width) + rectangle_space,
     rectangle_left + (2.5*rectangle_width) + (2.5*rectangle_space),
     rectangle_left + (3*rectangle_width) + (3*rectangle_space)),
-  y = rectangle_top + rectangle_height * faster_separation,
-  hjust = c(1, 0.5, 0) # Justified: right, center, left
+  "y" = rectangle_top + rectangle_height * faster_separation,
+  "hjust" = c(1, 0.5, 0) # Justified: right, center, left
 )
 
-########## Plot legend according to above settings ##########
-# Plot rounded rectangles for legend:
-calgary_legend2 <- calgary_legend1 +
-  geom_rounded_rect(
+
+# Plotting color legend:
+# ======================
+calgary_replica <- calgary_replica +
+
+  # Rounded rectangles:
+  geom_rounded_rect( # From package: funkyheatmap
     data = legend_rectangles,
     aes(xmin = xmin, xmax = xmax,
         ymin = ymin, ymax = ymax, 
-        fill = rectangle_color,
         radius = 0.3),
+    fill = rectangle_fill,
     color = NA,  # No border
     show.legend = FALSE
   ) +
-  scale_fill_identity() + # So that the fill with rectangle_color
-                        # isn't treated as characters, but as the colors
-                        # EXPLAIN BETTER WITH DOCUMENTATION FOR FINAL VERSION
-    # Now plot the minute numbers:
+
+  # Minutes:
   geom_text(
     data = legend_minutes,
     aes(x = x, y = y, hjust = hjust, label = label),
     size = minute_size,
     color = minute_color, 
     family = minute_font) +
+  
+  # Faster by:
   geom_text(
     data = legend_faster,
     aes(x = x, y = y, hjust = hjust, label = label),
@@ -308,47 +304,44 @@ calgary_legend2 <- calgary_legend1 +
     family = faster_font
   )
 
-calgary_legend2
-
-ggsave(
-  "calgary_03.png",
-  width = 34.375,
-  height = 34.375,
-  dpi = 96,
-  bg = "white"
-)
+calgary_replica
 ```
-We now have the first two legends, they fit almost perfectly when comparing in Gimp. Now i need to add the arrow pointing north with scale underneath.
 
-### Plotting third legend (north arrow)
 
-Searching in duckduckgo "how to add north arrow ggplot" i find [here](https://stackoverflow.com/questions/61809382/how-can-i-put-a-scalebar-and-a-north-arrow-on-the-map-ggplot) package `ggspacial`. I read more about [here](https://cran.r-universe.dev/ggspatial/doc/manual.html). But ggspatial defaults don't work. I don't find other packages that could be useful, I'll have to do it manually. Actually, it shouldn't be too hard adding a triangle and a rounded rectangle with a box around them. Searching "add arrow ggplot" i find [here](https://www.statology.org/ggplot-arrows/) and [here](https://teunbrand.github.io/ggarrow/) there's function `arrow` already within ggplot, it can be used with geom_segment. I'll try using that one. It doesn't really work, can only make rounded arrows with this size (I think it is because of the stroke.)
+#### North arrow
 
-There's a weird behaviour with geom_rounded_rectangle(), when linewidth increases it breack the shape. Since I can't match the linewdith that way, I will plot two rounded_rectangles, a white one on top of a bigger black one, to get the desired effect.
+Our map is only missing the spatial reference elements. We will start by plotting the arrow pointing North.
 
-```{r plot_legend3}
-######## Settings to make it easier to manually adjust ###########
-######## I also think the code is more readable this way, but maybe
-######## I shouldn't do settings -> tibble -> ggplot
-######## and should do settings -> ggplot, or ggpplot directly, but gets messy
-######## ASK IÑAKI!
+Once again, it is a non standard element. This means that default arrows do not work if we want a perfect replica. For example, the function `arrow()` inside `geom_segment(arrow = )` does not allow us to create an arrow that is at the same time as big as needed and as sharp (not rounded) as needed. There are packages like `ggspatial` that include functions to plot cardinal directions, but again, those don't fit our needs. So we will need to create a custom arrow. An easy solution that will allow us to plot a big arrow with a sharp head and a rounded shaft is plotting a triangular polygon with a rounded rectangle on top.
 
-# Arrow:
+Another thing that we should not is that there is a weird behaviour in geom_rounded_rectangle(): when line width increases, it plots undesired lines that don't follow the rounded rectangle shape. Which means that we cannot use a single `geom_rounded_rectangle()` without fill but with a contour line to to plot the box around the arrow. To overcome this, we will plot a black `geom_rounded_rectangle()` with a smaller white one on top to get the desired effect.
+
+
+Since, once again, there are lots of elements we need to build manually, and we will need lots of trial and error comparing to the original map until we get the exact replica, we will code using the same settings -> calculations -> plotting structure that we used before, which makes the trial-and error process much more comfortable. And we will often use relative values (relative to already existing shapes), which are easier to understand, read, and modify than absolute coordinate values with many decimals.
+
+
+```{r plot_north_arrow}
+# Settings:
+# =========
+
 arrow_color <- "#e3cdd5"
-# Arrow triangle 
-triangle_tip_x <- -114.2680 ######## LAST +5
-triangle_half_width <- 0.0076 ####### Last: +1
-triangle_bottom_y <- 50.9067 ######## last +1
-triangle_height <- 0.0048 ### last:-1
+
+# Arrow triangle:
+triangle_mid_x <- -114.2680 # This will be the reference for the rest of xs
+triangle_bottom_y <- 50.9067 # This will be the reference for the rest of ys
+
+triangle_half_width <- 0.0076
+triangle_height <- 0.0048
+
 # Arrow rectangle:
-arrow_rectangle_width <- 0.455 # Relative to triangle width
+arrow_rectangle_width <- 0.435 # Relative to triangle width
 arrow_rectangle_height <- 1.495 # Relative to triangle height
-arrow_rectangle_radius <- 0.24 #
+arrow_rectangle_radius <- 0.24
 
 # North text:
-space <- 0.55 # Relative to triangle height
+north_space <- 0.55 # Relative to triangle height, space 0 = arrow tip
 north_size <- 9
-north_color <- "#000000"
+north_color <- "black"
 
 # Outer box:
 box_width <- 2.22 # Relative to triangle width
@@ -357,72 +350,75 @@ box_radius <- 0.20
 box_y_position <- 0.255 # Relative to triangle tip (measured in triangle height)
 box_color <- "#575757"
 
-# Border thickness (i will use this to change size of inner box):
-border_thickness <- 0.03 # Range 0-1 (no border, full black box).
+# Border thickness (changes the size of the inner box, altering border size):
+border_thickness <- 0.03 # Range 0-1 (0 = no border, 1 = full black box)
 inner_box_color <- "white"
 
 
 
+# Calculations:
+# =============
 
-
-######### Create tibble according to settins ##########################
-# Create triangle tibble according to settings:
+# Tibble for arrow triangle (head):
 triangle_polygon <- tibble(
   x = c(
-    triangle_tip_x, # Tip x
-    triangle_tip_x - triangle_half_width, # Left corner x
-    triangle_tip_x + triangle_half_width # Right corner x
+    triangle_mid_x, # Tip x
+    triangle_mid_x - triangle_half_width, # Left corner x
+    triangle_mid_x + triangle_half_width # Right corner x
   ),
   y = c(
     triangle_bottom_y + triangle_height, # Tip y 
     triangle_bottom_y, # Left corner y
     triangle_bottom_y)) # Right corner y
   
-# Create rectangle tibble according to settings:
+# Tibble for arrow rectangle (shaft):
 arrow_rectangle <- tibble(
-  xmin = triangle_tip_x - (triangle_half_width*arrow_rectangle_width), # Left
-  xmax = triangle_tip_x + (triangle_half_width*arrow_rectangle_width), # Right
+  xmin = triangle_mid_x - (triangle_half_width*arrow_rectangle_width), # Left
+  xmax = triangle_mid_x + (triangle_half_width*arrow_rectangle_width), # Right
   ymin = triangle_bottom_y - (triangle_height*arrow_rectangle_height), # Bottom
-  ymax = triangle_bottom_y + (0.25*triangle_height)) # Top, i add 0.25 of the
-                                                     # the triangle height to
-                                                     # hide curve on top
-  
-# Create the tibble for "north" text relative to previous:
+  ymax = triangle_bottom_y + (0.25*triangle_height)) # Top.   
+                                                     # We add 0.25 of the
+                                                     # triangle height to
+                                                     # hide rounded edge on
+                                                     # the rectangle top.
+
+# Tibble for "north":
 north <- tibble(
   label = "North",
-  x = triangle_tip_x,
-  y = triangle_bottom_y + triangle_height + space*triangle_height
+  x = triangle_mid_x,
+  y = triangle_bottom_y + triangle_height + north_space*triangle_height
 )
 
-# Create the tibble for the box around the arrow (outer box):
+# Tibble for outer box:
 arrow_box <- tibble(
-  xmin = triangle_tip_x - (triangle_half_width*box_width), # Left
-  xmax = triangle_tip_x + (triangle_half_width*box_width), # Right
-  ymin = triangle_bottom_y - (triangle_height*box_height) +
+  "xmin" = triangle_mid_x - (triangle_half_width*box_width), # Left
+  "xmax" = triangle_mid_x + (triangle_half_width*box_width), # Right
+  "ymin" = triangle_bottom_y - (triangle_height*box_height) +
     (triangle_height*box_y_position), # Bottom
-  ymax = triangle_bottom_y + (triangle_height*box_height) +
+  "ymax" = triangle_bottom_y + (triangle_height*box_height) +
     (triangle_height*box_y_position)) # Top
 
-# Create the tibble for the inner box:
-# First we create an auxiliary object which we will add/substract to outer box:
+# Tibble for inner box:
+# We  first create an auxiliary object which we will add/substract to outer box:
 box_vertical_border <- ((arrow_box$xmax - arrow_box$xmin)*border_thickness)/2 
 box_horizontal_border <- ((arrow_box$ymax - arrow_box$ymin)*border_thickness)/2
 # And then the tibble:
 inner_box <- tibble(
-  xmin = arrow_box$xmin + box_vertical_border,
-  xmax = arrow_box$xmax - box_vertical_border,
-  ymin = arrow_box$ymin + box_horizontal_border,
-  ymax = arrow_box$ymax - box_horizontal_border
+  "xmin" = arrow_box$xmin + box_vertical_border,
+  "xmax" = arrow_box$xmax - box_vertical_border,
+  "ymin" = arrow_box$ymin + box_horizontal_border,
+  "ymax" = arrow_box$ymax - box_horizontal_border
 )
 
 
 
+# Plotting north arrow:
+# =====================
 
-
-
-##### PLOTTING NORTH ARROW #####
-calgary_legend3 <- calgary_legend2 +
-  geom_rounded_rect( #### Plot outer box (for border) ####
+calgary_replica <- calgary_replica +
+  
+  # Outer box:
+  geom_rounded_rect(
     data = arrow_box,
     aes(xmin = xmin, xmax = xmax,
         ymin = ymin, ymax = ymax),
@@ -430,7 +426,9 @@ calgary_legend3 <- calgary_legend2 +
     fill = box_color,
     color = NA
     ) +
-  geom_rounded_rect( ####Plot inner box (for border)
+  
+  # Inner box:
+  geom_rounded_rect(
     data = inner_box,
     aes(xmin = xmin, xmax = xmax,
         ymin = ymin, ymax = ymax),
@@ -438,21 +436,27 @@ calgary_legend3 <- calgary_legend2 +
     fill = inner_box_color,
     color = NA
     )+
-  geom_polygon( #### Plot the arrow triangle ####
+  
+  # Arrow head (triangle):
+  geom_polygon( 
     data = triangle_polygon,
     aes(x = x, y = y),
     fill = arrow_color,
-    color = NA # No border
+    color = NA
     ) + 
-  geom_rounded_rect( #### Plot the arrow "body" ####
+  
+  # Arrow shaft (rectangle):
+  geom_rounded_rect( 
     data = arrow_rectangle,
     aes(xmin = xmin, xmax = xmax,
         ymin = ymin, ymax = ymax),
     radius = arrow_rectangle_radius,
     fill = arrow_color,
-    color= NA # No border
+    color= NA
     ) + 
-  geom_text( #### Plot "North" text ####
+  
+  # "North" text:
+  geom_text(
     data = north,
     aes(x = x, y = y, label = label),
     size = north_size,
@@ -461,298 +465,162 @@ calgary_legend3 <- calgary_legend2 +
     family = "atkinson"
     )
 
-calgary_legend3 # To see it
-
-ggsave(
-  "calgary_04.png",
-  width = 34.375,
-  height = 34.375,
-  dpi = 96,
-  bg = "white"
-)
+calgary_replica # To see it
 ```
 
-### Plot forth legend (scale [better than original])
+#### Scale  
 
-It'll be faster to plot it relative to the box, so I wil use the same settings -> tibble -> plot approach as above.
+As was the case with the north-pointing arrow, the scale is non standard element, even packages like `ggspatial` do no include scales like the one we need. Once again, we will build it manually by trying different values until we get the exact replica as we did before. 
 
-**I've been thinking the wrong way about how to plot the line for the scale, i was trying to just imitate the position comparing the pictures, but i need to calculate what a km (and 3km) are in my map in order to properly plot the scale!** 
+The only difference now is that there is one value which we do not have to find by trial and error: the scale must represent 3 kilometers. To make sure we get the proper length, we will use `destPoint()` from package `geosphere`, which, as it documentation states: "given a start point, initial bearing (direction), and distance, this function computes the destination point travelling along a the shortest path on an ellipsoid (the geodesic)".
 
-I need to keep investigating, but it is too late already, so I will keep on reviewin this tomorrow:
+Note that, even though it is an unusual choice, in the original map the ticks in the scale are plotted over the horizontal line. We will maintain that in our replica.
 
-- https://stackoverflow.com/questions/54453236/compute-distance-and-add-lines-ggplot
+```{r plot_scale}
+# Settings:
+# =========
 
-- https://gis.stackexchange.com/questions/353798/what-is-the-proper-way-to-calculate-distance-in-km-from-degrees
-
-- https://stackoverflow.com/questions/32363998/function-to-calculate-geospatial-distance-between-two-points-lat-long-using-r 
-
-**THIS LAST ONE MIGHT BE IT** Let's read about `library(geosphere)` 
-
-- https://cran.r-project.org/web/packages/geosphere/index.html
-
-- https://cran.r-project.org/web/packages/geosphere/geosphere.pdf
-
-It seems like `destPoint()` could be it.
-
-
-```{r plot_legend_4}
-########## SETTINGS #############
 # Horizontal line:
-scale_length <- 3000 # In meters
-scale_space <- 0.13 # Space between line and box, proportion of box width
-scale_color <- "#000000"
-scale_thickness <- 2 # For argument linedwidth = in segment
+scale_length <- 3100 # In meters (we set it a bit longer so that the ends
+                     # extend over the ticks as in the original)
+scale_space <- 0.13 # Space between scale and box, proportion of box height
+scale_thickness <- 2 # For geom_segment(linewidth = )
+scale_color <- "#676767"
   
 # Ticks:
+tick_distance <- 3000 # In meters, distance between the ticks at each end 
 tick_length <- 0.08 # Proportion of the box height
+tick_thickness <- 1.1 # For geom_segment(linewidth = )
 tick_color <- "#000000"
-tick_thickness <- 1.1 # For argument linewidth =
 
 # Kilometers:
 km_space <- 0.275 # Space between km and scale, proportion of box height
-km_size <- 9 # In points, not relativ to the map
-km_color <- "#000000"
+km_size <- 9 # For geom_text(size = )
 km_font <- "atkinson"
-
-#################################
-######### TIBBLES ###############
-################################
+km_color <- "#000000"
 
 
-### Tibble for scale horizontal line
-####################################
+# Calculations:
+# =============
 
-# I first create an object with the actual outer box width, height, and x mid
-# point, it will make code easier later:
+# Auxiliary objects:
 box_actual_width <- arrow_box$xmax - arrow_box$xmin
 box_actual_height <- arrow_box$ymax - arrow_box$ymin
 box_mid_x <- arrow_box$xmin + (box_actual_width/2)
 
+# Calculate right end of the horizontal line:
+scale_left <- as_tibble(destPoint(
+  p = c( 
+    box_mid_x, # Starting x
+    arrow_box$ymin - box_actual_height*scale_space), # Starting y
+  b = 90, # b = bearing in degrees
+  d = -scale_length/2)) # d = distance in meters 
 
-# Then we compute what the end points of the scale should be with destPoint:
-scale_left <- as_tibble(destPoint( # I use as_tibble because it is more readable later
-  p = c(box_mid_x,  # Start x coordinate (the middle of the box)
-        arrow_box$ymin - box_actual_height*scale_space), # Start y (box bottom)
-  b = 90, # Bearing (direction) in degrees
-  d = -scale_length/2)) # Distance in meters 
-
+# Calculate left end of the horizontal line:
 scale_right <- as_tibble(destPoint(
-  p = c(box_mid_x,  # Start x coordinate (middle of the box)
-        arrow_box$ymin - box_actual_height*scale_space), # Start y (box bottom)
-  b = 90, # Bearing (direction) in degress 
-  d = scale_length/2)) # Distance in meters 
+  p = c(box_mid_x, arrow_box$ymin - box_actual_height*scale_space), 
+  b = 90,
+  d = scale_length/2))
 
-# Then the tibble for the scale horizontal_line (could omit, but to make
-# everything coherent (homogeneous) when plotting):
+# Tibble for horizontal line:
 scale_horizontal <- tibble(
-  x = scale_left$lon,
-  xend = scale_right$lon,
-  y = scale_left$lat,
-  yend = scale_left$lat)
+  "x" = scale_left$lon, "xend" = scale_right$lon,
+  "y" = scale_left$lat, "yend" = scale_left$lat)
 
-### Tibble for ticks
-####################################
+# Calculate left tick:
+tick_left <- as_tibble(destPoint(
+  p = c(box_mid_x, arrow_box$ymin - box_actual_height*scale_space), 
+  b = 90,
+  d = -tick_distance/2))
+
+# Calculate right tick:
+tick_right <- as_tibble(destPoint(
+  p = c(box_mid_x, arrow_box$ymin - box_actual_height*scale_space), 
+  b = 90,
+  d = tick_distance/2))
+
+# Tibble for ticks:
 tick <- tibble(
-  x = c(
-    scale_left$lon,
-    box_mid_x,
-    scale_right$lon),
-  xend = c(
-    scale_left$lon,
-    box_mid_x,
-    scale_right$lon),
-  y = scale_left$lat - ((box_actual_height/2)*tick_length), 
-  yend = scale_left$lat + ((box_actual_height/2)*tick_length))
+  "x" = c(tick_left$lon, box_mid_x, tick_right$lon),
+  "xend" = c(tick_left$lon, box_mid_x, tick_right$lon),
+  "y" = tick_left$lat - ((box_actual_height/2)*tick_length), 
+  "yend" = tick_left$lat + ((box_actual_height/2)*tick_length))
 
-### Tibble for kms
-####################################
+# Tibble for kilometers:
 km <- tibble(
-  label = c("0", "1.5", "3", "  km"),
-  x = c(
-    scale_left$lon,
-    box_mid_x,
-    scale_right$lon,
-    scale_right$lon
-  ),
-  y = scale_left$lat - ((box_actual_height/2)*km_space),
-  hjust = c(0.5, 0.5, 0.5, 0)) # All justified center, "kilometers" left
+  "label" = c("0", "1.5", "3", "  km"),
+  "x" = c(scale_left$lon, box_mid_x, scale_right$lon, scale_right$lon),
+  "y" = scale_left$lat - ((box_actual_height/2)*km_space),
+  "hjust" = c(0.5, 0.5, 0.5, 0)) # All justified center, "kilometers" left
 
-##############################
-####### PLOTTING #############
-##############################
 
-calgary_legend4 <- calgary_legend3 +
-  geom_segment( ### Plotting the horizontal line
+
+# Plotting:
+# =========
+
+calgary_replica <- calgary_replica +
+  
+  # Ticks:
+  geom_segment( 
+    data = tick,
+    aes(x = x, xend = xend, 
+        y = y, yend = yend),
+    linewidth = tick_thickness,
+    color = tick_color
+    ) +
+  
+  # Horizontal line:  
+  geom_segment(
     data = scale_horizontal,
     aes(x = x, xend = xend, 
         y = y, yend = yend),
     linewidth = scale_thickness,
     color = scale_color
     ) +
-  geom_segment( ### Plotting the ticks
-    data = tick,
-    aes(x = x, xend = xend, 
-        y = y, yend = yend),
-    linewidth = tick_thickness,
-    color = tick_color
-    ) +
+  
+  # Kilometers:
   geom_text(
     data = km,
     aes(x = x, y = y, hjust = hjust, label = label),
     size = km_size,
     color = km_color, 
-    family = km_font)
-
-calgary_legend4
-
-ggsave(
-  "calgary_05.png",
-  width = 34.375,
-  height = 34.375,
-  dpi = 96,
-  bg = "white"
-)
+    family = km_font
+    )
 
 
-###############
-#   Done :)   #
-###############
-```
-And I pretty much have it. It fits basically perfectly comparing in GIMP. I believe the main difference is that the horizontal line in the scale exceeds the ticks in the original plot. I could make that worse to fit the original.
-
-### Plot forth legend (worsened scale to fit original)
-
-We have al the other objects in the chunk above, we just need a longer horizontal line so that it surpasses the ticks on the extremes, plot it on top of the ticks, and make it grey.
-
-```{r plot_legend4_ugly}
-
-#### Wrong horizontal line settings
-
-# Horizontal line:
-ugly_scale_length <- 3100 # In meters
-scale_space <- 0.13 # Space between line and box, proportion of box width
-ugly_scale_color <- "#676767"
-scale_thickness <- 2 # For argument linedwidth = in segment
-
-
-# Then we compute what the end points of the scale should be with destPoint:
-ugly_scale_left <- as_tibble(destPoint( # I use as_tibble because it is more readable later
-  p = c(box_mid_x,  # Start x coordinate (the middle of the box)
-        arrow_box$ymin - box_actual_height*scale_space), # Start y (box bottom)
-  b = 90, # Bearing (direction) in degrees
-  d = -ugly_scale_length/2)) # Distance in meters 
-
-ugly_scale_right <- as_tibble(destPoint(
-  p = c(box_mid_x,  # Start x coordinate (middle of the box)
-        arrow_box$ymin - box_actual_height*scale_space), # Start y (box bottom)
-  b = 90, # Bearing (direction) in degress 
-  d = ugly_scale_length/2)) # Distance in meters 
-
-# Then the tibble for the scale horizontal_line (could omit, but to make
-# everything coherent (homogeneous) when plotting):
-ugly_scale_horizontal <- tibble(
-  x = ugly_scale_left$lon,
-  xend = ugly_scale_right$lon,
-  y = ugly_scale_left$lat,
-  yend = ugly_scale_left$lat)
-
-
-##############################
-####### PLOTTING #############
-##############################
-
-calgary_legend_ugly <- calgary_legend3 +
-  geom_segment( ### Plotting the ticks
-    data = tick,
-    aes(x = x, xend = xend, 
-        y = y, yend = yend),
-    linewidth = tick_thickness,
-    color = tick_color
-    ) +
- geom_segment( ### Plotting the ugly horizontal line
-    data = ugly_scale_horizontal,
-    aes(x = x, xend = xend, 
-        y = y, yend = yend),
-    linewidth = scale_thickness,
-    color = ugly_scale_color
-    ) +
-  geom_text(
-    data = km,
-    aes(x = x, y = y, hjust = hjust, label = label),
-    size = km_size,
-    color = km_color, 
-    family = km_font)
-
-calgary_legend_ugly
-
-ggsave(
-  "calgary_06.png",
-  width = 34.375,
-  height = 34.375,
-  dpi = 96,
-  bg = "white"
-)
-```
-
-## Alternatives and enhancements
-
-### Fix scale (minor enhancement)
-
-```{r}
-# Here I put the code with the correct scale
-```
-
-
-### Add missing water (just aesthetic)
-
-```{r}
-# Not sure this is an actual improvement worth working on
+calgary_replica # To see it
 ```
 
 
 
-
-#### Less than 30 minutes by bike
-
-```{r}
-# Under xx minutes by: 
-under <- 30 # Minutes to get to Calgary Tower
-
-# Under xx by bike:
-under_mm_bike <- ggplot() +
-  geom_sf( # We plot the roads:
-    data = hexroads_intersection,
-    aes(color = b_travel_time < under),
-    linewidth = 1.1,  # To make roads thicker
-    show.legend = FALSE
-  ) 
-
-under_mm_bike
-
-# Under xx by transit:
-under_mm_transit <- ggplot() +
-  geom_sf( # We plot the roads:
-    data = hexroads_intersection,
-    aes(color = travel_time < under),
-    linewidth = 1.1,  # To make roads thicker
-    show.legend = FALSE
-  ) 
-
-under_mm_transit
+## Alternative version
 
 
-# Under xx by car:
-# under_mm_car <- ggplot() +
-#   geom_sf( # We plot the roads:
-#     data = hexroads_intersection2,
-#     aes(color = car_tt < under),
-#     linewidth = 1.1,  # To make roads thicker
-#     show.legend = FALSE
-#   ) 
-# 
-# under_mm_car
 
-```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### From where is it faster by car
 
@@ -1788,9 +1656,9 @@ black_fastest
 # Arrow:
 arrow_color <- "white"
 # Arrow triangle 
-triangle_tip_x <- -113.8825 
+triangle_mid_x <- -113.8825 
 triangle_half_width <- 0.003325
-triangle_bottom_y <- 50.8450 ######## last -100 #MASTEEEERRRRRRR
+triangle_bottom_y <- 50.8600 ######## #MASTEEEERRRRRRR +25
 triangle_height <- 0.0021 ### last:-1
 # Arrow rectangle:
 arrow_rectangle_width <- 0.455 # Relative to triangle width
@@ -1798,7 +1666,7 @@ arrow_rectangle_height <- 1.495 # Relative to triangle height
 arrow_rectangle_radius <- 0.24 #
 
 # North text:
-space <- 0.75 # Relative to triangle height
+north_space <- 0.75 # Relative to triangle height
 north_size <- 6
 north_color <- "white"
 
@@ -1820,9 +1688,9 @@ inner_box_color <- "black"
 # Create triangle tibble according to settings:
 triangle_polygon <- tibble(
   x = c(
-    triangle_tip_x, # Tip x
-    triangle_tip_x - triangle_half_width, # Left corner x
-    triangle_tip_x + triangle_half_width # Right corner x
+    triangle_mid_x, # Tip x
+    triangle_mid_x - triangle_half_width, # Left corner x
+    triangle_mid_x + triangle_half_width # Right corner x
   ),
   y = c(
     triangle_bottom_y + triangle_height, # Tip y 
@@ -1831,8 +1699,8 @@ triangle_polygon <- tibble(
   
 # Create rectangle tibble according to settings:
 arrow_rectangle <- tibble(
-  xmin = triangle_tip_x - (triangle_half_width*arrow_rectangle_width), # Left
-  xmax = triangle_tip_x + (triangle_half_width*arrow_rectangle_width), # Right
+  xmin = triangle_mid_x - (triangle_half_width*arrow_rectangle_width), # Left
+  xmax = triangle_mid_x + (triangle_half_width*arrow_rectangle_width), # Right
   ymin = triangle_bottom_y - (triangle_height*arrow_rectangle_height), # Bottom
   ymax = triangle_bottom_y + (0.25*triangle_height)) # Top, i add 0.25 of the
                                                      # the triangle height to
@@ -1841,14 +1709,14 @@ arrow_rectangle <- tibble(
 # Create the tibble for "north" text relative to previous:
 north <- tibble(
   label = "N",
-  x = triangle_tip_x,
-  y = triangle_bottom_y + triangle_height + space*triangle_height
+  x = triangle_mid_x,
+  y = triangle_bottom_y + triangle_height + north_space*triangle_height
 )
 
 # Create the tibble for the box around the arrow (outer box):
 arrow_box <- tibble(
-  xmin = triangle_tip_x - (triangle_half_width*box_width), # Left
-  xmax = triangle_tip_x + (triangle_half_width*box_width), # Right
+  xmin = triangle_mid_x - (triangle_half_width*box_width), # Left
+  xmax = triangle_mid_x + (triangle_half_width*box_width), # Right
   ymin = triangle_bottom_y - (triangle_height*box_height) +
     (triangle_height*box_y_position), # Bottom
   ymax = triangle_bottom_y + (triangle_height*box_height) +
@@ -1909,6 +1777,8 @@ black_fastest <- black_fastest +
     family = "atkinson",
     fontface = "bold"
     )
+
+black_fastest
 ```
 
 ##### Adding scale
@@ -1999,7 +1869,7 @@ km <- tibble(
 ####### PLOTTING #############
 ##############################
 
-black_fastest <-  black_fastest +
+black_fastest <- black_fastest+
   geom_segment( ### Plotting the horizontal line
     data = scale_horizontal,
     aes(x = x, xend = xend, 
@@ -2022,6 +1892,14 @@ black_fastest <-  black_fastest +
     family = km_font)
 
 black_fastest
+
+# ggsave(
+#   "black_fastest.png",
+#   width = 26.56057,
+#   height = 34.375,
+#   dpi = 96,
+#   bg = "white"
+# )
 ```
 
 ### A.2 - White fastest 
@@ -2551,7 +2429,7 @@ white_fastest <- white_fastest +
 # Arrow:
 arrow_color <- "#e3cdd5"
 # Arrow triangle 
-triangle_tip_x <- -114.2680 ######## LAST +5
+triangle_mid_x <- -114.2680 ######## LAST +5
 triangle_half_width <- 0.0076 ####### Last: +1
 triangle_bottom_y <- 50.8650 ######## last +50 #MASTEEEERRRRRRR
 triangle_height <- 0.0048 ### last:-1
@@ -2561,7 +2439,7 @@ arrow_rectangle_height <- 1.495 # Relative to triangle height
 arrow_rectangle_radius <- 0.24 #
 
 # North text:
-space <- 0.55 # Relative to triangle height
+north_space <- 0.55 # Relative to triangle height
 north_size <- 9
 north_color <- "#000000"
 
@@ -2584,9 +2462,9 @@ inner_box_color <- "white"
 # Create triangle tibble according to settings:
 triangle_polygon <- tibble(
   x = c(
-    triangle_tip_x, # Tip x
-    triangle_tip_x - triangle_half_width, # Left corner x
-    triangle_tip_x + triangle_half_width # Right corner x
+    triangle_mid_x, # Tip x
+    triangle_mid_x - triangle_half_width, # Left corner x
+    triangle_mid_x + triangle_half_width # Right corner x
   ),
   y = c(
     triangle_bottom_y + triangle_height, # Tip y 
@@ -2595,8 +2473,8 @@ triangle_polygon <- tibble(
   
 # Create rectangle tibble according to settings:
 arrow_rectangle <- tibble(
-  xmin = triangle_tip_x - (triangle_half_width*arrow_rectangle_width), # Left
-  xmax = triangle_tip_x + (triangle_half_width*arrow_rectangle_width), # Right
+  xmin = triangle_mid_x - (triangle_half_width*arrow_rectangle_width), # Left
+  xmax = triangle_mid_x + (triangle_half_width*arrow_rectangle_width), # Right
   ymin = triangle_bottom_y - (triangle_height*arrow_rectangle_height), # Bottom
   ymax = triangle_bottom_y + (0.25*triangle_height)) # Top, i add 0.25 of the
                                                      # the triangle height to
@@ -2605,14 +2483,14 @@ arrow_rectangle <- tibble(
 # Create the tibble for "north" text relative to previous:
 north <- tibble(
   label = "North",
-  x = triangle_tip_x,
-  y = triangle_bottom_y + triangle_height + space*triangle_height
+  x = triangle_mid_x,
+  y = triangle_bottom_y + triangle_height + north_space*triangle_height
 )
 
 # Create the tibble for the box around the arrow (outer box):
 arrow_box <- tibble(
-  xmin = triangle_tip_x - (triangle_half_width*box_width), # Left
-  xmax = triangle_tip_x + (triangle_half_width*box_width), # Right
+  xmin = triangle_mid_x - (triangle_half_width*box_width), # Left
+  xmax = triangle_mid_x + (triangle_half_width*box_width), # Right
   ymin = triangle_bottom_y - (triangle_height*box_height) +
     (triangle_height*box_y_position), # Bottom
   ymax = triangle_bottom_y + (triangle_height*box_height) +
@@ -3415,7 +3293,7 @@ white_example_legend
 # Arrow:
 arrow_color <- "#e3cdd5"
 # Arrow triangle 
-triangle_tip_x <- -114.2680 ######## LAST +5
+triangle_mid_x <- -114.2680 ######## LAST +5
 triangle_half_width <- 0.0076 ####### Last: +1
 triangle_bottom_y <- 50.8650 ######## last +50 #MASTEEEERRRRRRR
 triangle_height <- 0.0048 ### last:-1
@@ -3425,7 +3303,7 @@ arrow_rectangle_height <- 1.495 # Relative to triangle height
 arrow_rectangle_radius <- 0.24 #
 
 # North text:
-space <- 0.55 # Relative to triangle height
+north_space <- 0.55 # Relative to triangle height
 north_size <- 9
 north_color <- "#000000"
 
@@ -3448,9 +3326,9 @@ inner_box_color <- "white"
 # Create triangle tibble according to settings:
 triangle_polygon <- tibble(
   x = c(
-    triangle_tip_x, # Tip x
-    triangle_tip_x - triangle_half_width, # Left corner x
-    triangle_tip_x + triangle_half_width # Right corner x
+    triangle_mid_x, # Tip x
+    triangle_mid_x - triangle_half_width, # Left corner x
+    triangle_mid_x + triangle_half_width # Right corner x
   ),
   y = c(
     triangle_bottom_y + triangle_height, # Tip y 
@@ -3459,8 +3337,8 @@ triangle_polygon <- tibble(
   
 # Create rectangle tibble according to settings:
 arrow_rectangle <- tibble(
-  xmin = triangle_tip_x - (triangle_half_width*arrow_rectangle_width), # Left
-  xmax = triangle_tip_x + (triangle_half_width*arrow_rectangle_width), # Right
+  xmin = triangle_mid_x - (triangle_half_width*arrow_rectangle_width), # Left
+  xmax = triangle_mid_x + (triangle_half_width*arrow_rectangle_width), # Right
   ymin = triangle_bottom_y - (triangle_height*arrow_rectangle_height), # Bottom
   ymax = triangle_bottom_y + (0.25*triangle_height)) # Top, i add 0.25 of the
                                                      # the triangle height to
@@ -3469,14 +3347,14 @@ arrow_rectangle <- tibble(
 # Create the tibble for "north" text relative to previous:
 north <- tibble(
   label = "North",
-  x = triangle_tip_x,
-  y = triangle_bottom_y + triangle_height + space*triangle_height
+  x = triangle_mid_x,
+  y = triangle_bottom_y + triangle_height + north_space*triangle_height
 )
 
 # Create the tibble for the box around the arrow (outer box):
 arrow_box <- tibble(
-  xmin = triangle_tip_x - (triangle_half_width*box_width), # Left
-  xmax = triangle_tip_x + (triangle_half_width*box_width), # Right
+  xmin = triangle_mid_x - (triangle_half_width*box_width), # Left
+  xmax = triangle_mid_x + (triangle_half_width*box_width), # Right
   ymin = triangle_bottom_y - (triangle_height*box_height) +
     (triangle_height*box_y_position), # Bottom
   ymax = triangle_bottom_y + (triangle_height*box_height) +
