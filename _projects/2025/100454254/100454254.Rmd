@@ -147,6 +147,8 @@ gedr_data_ <- gedr_data_ |>
 
 ```
 
+
+## Original Graph Replication
 Now we are ready to start plotting our graph and try to replicate the original 
 WSJ graph.
 
@@ -429,5 +431,157 @@ final_graph <- p + p_gedr +
   )
 
 print(final_graph)
+```
+
+
+## Edited graph.
+
+Having done the previous, this graph can be redone in a cleaner, fancier and 
+more understandable way. Firstly, the original graph have some perhaps minor 
+areas of improvement, such as color differences. By plotting different 
+variants of blue and gold, not only blocks but also countries are able to be
+differentiated. In what is more, the GDP type of graph correctly shows the 
+overall evolution through almost two decades, but makes it difficult to see
+annual differences. Because of this, a new graph, with stacked bars plotted
+in form of pyramid, is built for the GDP data. In what is more, and for reader 
+ease, the R&D data is displayed horizontally, to make it more alike to the GDP
+data. Once done this, both are merged with the same labels as the original one. 
+
+Said this, the first chunk prepares gdp_data_ to plot the edited version of this
+graph. Note that, as long now we have a mirrored graph, it is needed to build 
+a negative (mirrored) variable for the EAST block, which is going to be in the 
+left side of the graph. It can be done in only one line of code, but is preferred
+to do it separately for reader´s ease.
+
+```{r data preparation for GDP edited graph}
+pyramid_gdp_data <- gdp_data_ |>
+  group_by(year, region, group) |>
+  summarise(gdp = sum(gdp, na.rm = TRUE), .groups = "drop")
+# Create a mirrored data for EAST (build negative values on the left)
+pyramid_gdp_data <- pyramid_gdp_data |>
+  mutate(
+    gdp_display = ifelse(region == "EAST", -gdp, gdp))
+```
+
+Once done this, and in order to assure order is mantained, we need to order the 
+column group in this new dataset pyramid_gdp_data. Moreover, since as said 
+different tones of blue and gold would make the graph easier to read, the
+fill_cols variable needs to be redone, in order to save time at plotting colors. 
+After different steps of trial and error, colors chosen are the ones displayed
+in the following chunk, which shows this mentioned process. 
+
+```{r group column ordering and colors reelection}
+pyramid_gdp_data$group <- factor(pyramid_gdp_data$group, 
+                             levels = c("Other", "Japan", "EU", "U.S.", 
+                                        "Russia", "China"))
+# Redefine colors
+fill_cols <- c(
+  "U.S."   = "#94cced",
+  "EU"     = "#6baed6",
+  "Japan"  = "#4292c6",
+  "Other"  = "#2171b5",
+  "China"  = "#e0c461",
+  "Russia" = "#d4a940")
+```
+
+Now, all steps to be able to start plotting have been covered. The following
+chunk shows the inital steps for the pyramid GDP data to be plotted. 
+
+```{r Initial steps for GDP edited graph}
+p_pyramid <- ggplot(pyramid_gdp_data, aes(x = gdp_display, y = as.factor(year), 
+                                      fill = group)) +
+  geom_col(color = "white", linewidth = 0.3, position = "stack")
+print(p_pyramid)
+```
+Now, we can see some initial intuition of the graph that is intended to improve
+the original WSJ one. However, some major changes need to be made,
+clean Y-axis and make the X-axistwo sided positive.
+
+```{r Axis labels cleaning}
+ p_pyramid<- p_pyramid +
+  # X-axis cleansing
+  scale_x_continuous(
+    breaks = seq(-70000, 70000, 10000),
+    labels = c("$70", "60", "50", "40", "30", "20", "10", "0", "10", "20", "30",
+               "40", "50", "60", "$70"),
+    expand = c(0, 0),
+    limits = c(-72000, 72000)
+  ) +
+  
+  # Y-axis cleansing
+  scale_y_discrete(
+    breaks = as.character(seq(1990, 2023, 1)),
+    labels = c("1990", rep("", 4), "'95", rep("", 4), "'00", rep("", 4), "'05", 
+               rep("", 4), "'10", rep("", 4), 
+               "'15", rep("", 4), "'20", "", "", "'23")
+  )
+
+print(p_pyramid)
+```
+
+Moreover, and as said, new colors need to be plotted, axis labels can be 
+eliminated and both region and country labels need to be added within the graph.
+The following chunk shows all this process. Note that, for reader´ease 
+country names have been included in the side of its block.
+
+```{r Colours, Axis labels dropout and region/country labels}
+p_pyramid <- p_pyramid +
+  # Colors
+  scale_fill_manual(values = fill_cols) +
+  
+  # Labels and annotations
+  labs(
+    title = "Gross Domestic Product by Year (1990-2023)",
+    subtitle = "West vs East comparison, in trillions",
+    x = NULL,
+    y = NULL
+  ) +
+  
+  # Add region labels at the bottom (1990 level) in black
+  annotate("text", x = 35000, y = "1990", label = "WEST", 
+           size = 7, color = "black", fontface = "bold") +
+  annotate("text", x = -35000, y = "1990", label = "EAST", 
+           size = 7, color = "black", fontface = "bold") +
+  annotate("text", x = -65000, y = "2010", label = "China", size = 6, 
+           color = "#e0c461", fontface = "bold") +
+  annotate("text", x = -65500, y = "2005", label = "Russia", size = 6, 
+           color = "#d4a940", fontface = "bold") +
+  annotate("text", x = 65000, y = "2010", label = "US", size = 6, 
+           color = "#94cced", fontface = "bold") +
+  annotate("text", x = 65000, y = "2005", label = "EU", size = 6, 
+           color = "#6baed6", fontface = "bold") +
+  annotate("text", x = 65000, y = "2000", label = "Japan", size = 6, 
+           color = "#4292c6", fontface = "bold") +
+  annotate("text", x = 65000, y = "1995", label = "Other", size = 6, 
+           color = "#2171b5", fontface = "bold")
+
+print (p_pyramid)
+```
+Now the graph seems much more WSJ stylish and clean. Lastly, it is time to add
+theme_minimal to make the graph even cleaner, remove group label on the side 
+and finally add a black vertical line at 0 to make graph readability even 
+more straightforward. The following chunk takes into account this lasts steps. 
+
+```{r theme_minimal, group label drop, vertical black line at 0}
+p_pyramid <- p_pyramid +
+  # theme_minimal and group label drop
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_line(color = "gray85"),
+    legend.position = "none", 
+    plot.title = element_text(size = 13, face = "bold"),
+    plot.subtitle = element_text(size = 10),
+    plot.margin = margin(10, 10, 10, 10),
+    axis.text = element_text(size = 9),
+    axis.text.y = element_text(hjust = 1)
+  ) +
+  
+  # Add a vertical line at zero
+  geom_vline(xintercept = 0, color = "black", linewidth = 0.8)
+
+print(p_pyramid)
+
 ```
 
