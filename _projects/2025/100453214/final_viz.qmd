@@ -27,16 +27,19 @@ library(tidyr)
 library(grid)
 library(ggtext)
 ```
+
 ## Charging regression results
+
 ```{r}
 source("results.R")
 ```
 
 ## Remittances levels
+
 ```{r}
 remittance_groups_levels <- c("> 40%", "35-40%", "30-35%", "25-30%", "20-25%", 
                               "15-20%", "10-15%", "< 10%")
-data_graph <- full_results %>%
+data_graph <- full_results |> 
   mutate(
     Remittance_Group = case_when(
       Remittances > 40 ~ "> 40%",
@@ -74,8 +77,9 @@ border_colors <- c(
 ```
 
 ## Adapting points to the graph
+
 ```{r}
-data_manipulated <- data_graph %>%
+data_manipulated <- data_graph |> 
   mutate(
     P_Value = if_else(Country == "São Tomé and Príncipe", 0.0032, P_Value),
     P_Value = if_else(Country == "Lesotho", 0.0017, P_Value), 
@@ -122,8 +126,9 @@ data_manipulated <- data_graph %>%
 ```
 
 ## Type of letter style
+
 ```{r}
-data_manipulated <- data_manipulated %>%
+data_manipulated <- data_manipulated |> 
   mutate(
     text_style = case_when(
       Country %in% c("Urban Nigeria", "Rural Nigeria") ~ "italic", 
@@ -132,6 +137,7 @@ data_manipulated <- data_manipulated %>%
 ```
 
 #Label positions
+
 ```{r}
 geom_text(
     data = data_manipulated,
@@ -139,11 +145,11 @@ geom_text(
         label = Country), 
     size = 2.3)
 
-label_positions <- data_manipulated %>% 
-  select(Country, P_Value, OR, text_style) %>%
+label_positions <- data_manipulated |>  
+  select(Country, P_Value, OR, text_style) |> 
   mutate(
     label_x = P_Value,
-    label_y = OR) %>%
+    label_y = OR) |> 
   mutate(
     label_x = case_when(
       Country == "Nigeria" ~ 0.0123,        
@@ -215,6 +221,7 @@ label_positions$v_align[grepl("Liberia", label_positions$Country)] <- 0.63
 ```
 
 ## Type of letter
+
 ```{r}
 base_path <- "C:\\Users\\marig\\Tor Browser\\Browser\\fonts\\"
 
@@ -235,6 +242,7 @@ showtext::showtext_auto()
 ```
 
 ## creating two datasets
+
 ```{r}
 data_countries_m <- data_manipulated |>
   filter(!Country %in% c("Urban Nigeria", "Rural Nigeria")) |>
@@ -253,12 +261,12 @@ data_subgroups_m <- data_manipulated |>
       Country == "Urban Nigeria" ~ "Urban\nNigeria",
       Country == "Rural Nigeria" ~ "Rural\nNigeria"))
 
-label_positions_countries <- label_positions %>%
+label_positions_countries <- label_positions |> 
   filter(!Country %in% c("Urban Nigeria", "Rural Nigeria", "Urban\nNigeria", "Rural\nNigeria"))
 ```
 
-
 ## Graph settings
+
 ```{r}
 color_vertical <- "#75A3BF"
 color_fondo_sombreado <- "#DDDEDF"
@@ -288,16 +296,16 @@ num_segmentos <- 100
 linea_degradada_data <- data.frame(
   # 'index' se define aquí por primera vez
   index = seq(0, 1, length.out = num_segmentos)
-) %>%
+) |> 
   # Calcular x_start y x_end
   mutate(
     x_start = 10^(log10(x_inicio) + index * (log10(x_fin) - log10(x_inicio))),
     x_end = 10^(log10(x_inicio) + (index + 1/num_segmentos) * (log10(x_fin) - log10(x_inicio)))
-  ) %>%
+  ) |> 
   # Asegurar que el final no se extienda más allá de x_fin
-  mutate(x_end = pmin(x_end, x_fin)) %>% 
+  mutate(x_end = pmin(x_end, x_fin)) |>  
   # Añadir la posición Y constante y filtrar
-  mutate(y_val = y_constante) %>%
+  mutate(y_val = y_constante) |> 
   filter(index < 1) 
 ```
 
@@ -311,22 +319,21 @@ num_segmentos <- 100
 
 eje_y_data <- data.frame(
   index = seq(0, 1, length.out = num_segmentos)
-) %>%
+) |> 
   mutate(
     # Interpolación lineal para las coordenadas Y
     y_start = y_inicio + index * (y_fin - y_inicio),
     y_end = y_inicio + (index + 1/num_segmentos) * (y_fin - y_inicio)
-  ) %>%
+  ) |> 
   # Asegurar que el final no se extienda más allá de y_fin
-  mutate(y_end = pmin(y_end, y_fin)) %>%
+  mutate(y_end = pmin(y_end, y_fin)) |> 
   # Variable para el color: 0.5 en el centro, 0 y 1 en los extremos
   # Usamos una función para que los extremos (0 y 1) tengan el mismo valor
   # y el centro (0.5) tenga el valor opuesto.
-  mutate(mid_point = abs(index - 0.5)) %>% # mid_point va de 0.5 a 0 a 0.5
-  mutate(x_val = x_constante) %>%
+  mutate(mid_point = abs(index - 0.5)) |>  # mid_point va de 0.5 a 0 a 0.5
+  mutate(x_val = x_constante) |> 
   filter(index < 1)
 ```
-
 
 ```{r, fig.width=7, fig.height=9.5, dpi=300, dev='jpeg'}
 p <- ggplot(data_countries_m, aes(x = P_Value, y = OR)) +
@@ -518,7 +525,7 @@ geom_segment(
   lapply(grupos_remesa, function(grupo) {
     
     # 1. Filtrar los datos para el grupo actual
-    data_grupo <- data_countries_m %>%
+    data_grupo <- data_countries_m |> 
       filter(Remittance_Group == grupo)
       
     # 2. Obtener el color de borde HEX estático para este grupo
@@ -604,11 +611,10 @@ theme_minimal() +
     fill = "none",  
     size = "none",
     colour = "none")
-
-p
 ```
 
 ## Texts
+
 ```{r}
 text_1 <- "An odds ratio of 2 means the odds of considering<br>emigrating are twice as high for someone who has<br>experienced hunger as for a person of the same<br>age and gender who has not experienced hunger."
 
@@ -630,7 +636,6 @@ text_9 <- "Just as likely to<br>be a coincidence<br>as to reflect an<br>actual r
 
 text_10 <- "In many countries,<br>hunger appers<br>to make no<br>difference to<br>considerations of<br>emigrating. The<br>slight effects we see<br>might be purely<br>coincidental."
 ```
-
 
 ```{r, fig.width=8.7, fig.height=9.5, dpi=300, dev='jpeg'}
 p_main <- p +
@@ -820,9 +825,285 @@ p_main <- p +
     fill = "none",  
     size = "none", 
     colour = "none"))
+```
 
-p_main
+```{r, fig.width=1.17, fig.height=3.2, dpi=500, dev='png'}
+# 1. DATAFRAME FOR THE LEGEND
+
+remittance_data <- data.frame(
+  percent = remittance_groups_levels,
+  y = length(remittance_groups_levels):1)
+
+remittance_data <- remittance_data |>
+  mutate(
+    fill_color = remittance_colors[percent], 
+    border_color = border_colors[percent])  |> 
+  mutate(
+    fill_color = as.character(fill_color),
+    border_color = as.character(border_color))
+
+## SETTING AESTHETICS OF THE LEGEND
+y_step <- 0.37
+num_items <- length(remittance_groups_levels)
+
+remittance_data <- data.frame(
+  percent_raw = remittance_groups_levels,
+  y = seq(from = num_items * y_step, 
+          to = y_step, 
+          by = -y_step)) |>
+  mutate(
+  percent_label = case_when(
+    percent_raw == "> 40%" ~ "40%",
+    percent_raw == "35-40%" ~ "35%",
+    percent_raw == "30-35%" ~ "30%",
+    percent_raw == "25-30%" ~ "25%",
+    percent_raw == "20-25%" ~ "20%",
+    percent_raw == "15-20%" ~ "15%",
+    percent_raw == "10-15%" ~ "10%",
+    TRUE ~ NA_character_)) |>
+  mutate(
+    fill_color = remittance_colors[percent_raw], 
+    border_color = border_colors[percent_raw]) |>
+  mutate(
+    fill_color = as.character(fill_color),
+    border_color = as.character(border_color))
+
+line_data <- data.frame(
+  y = seq(from = (num_items - 1) * y_step + y_step / 2, 
+          to = y_step * 1.5,                             
+          by = -y_step))
+
+explanatory_text <- "If more people receive\nmoney transfers from\nrelatives or friends\nabroad, it probably\nmeans that emigration\nis more widespread—\nand thereby more\nrelatable as a possible\nway of hardship. If\nemigration is rare, it\nmight be more of\nanelite phenomenon,\nbeyond the imagination\nof those who experience\nhunger."
+
+
+# CREATION GRAPH
+
+p_legend_remittance <- ggplot() +
+  
+  # A. LÍNEAS HORIZONTALES SEPARADORAS (Entre los círculos)
+  geom_segment(data = line_data, aes(x = 0.18, y = y + 0.42, xend = 0.28, yend = y + 0.42),
+               linewidth = 0.15, color = "black", inherit.aes = FALSE) +
+  
+  # B. CÍRCULOS DE REMESAS Y ETIQUETAS
+  geom_point(data = remittance_data, aes(x = 0.25, y = y+0.4, fill = fill_color, color = border_color),
+             shape = 21, size = 3, linewidth = 0.5) + 
+  
+  geom_text(data = remittance_data, aes(x = 0.05, y = y + 0.24, label = percent_label),
+            hjust = 0, size = 9, family = "Barlow") +
+  
+  # C. TÍTULO Y LÍNEA DIVISORIA DE TÍTULO
+  geom_text(aes(x = 0.07, y = 4.1, label = "Share of people\nwho receive\nremittances"), 
+            vjust= 0.7, hjust = 0, lineheight = 0.2, fontface = "bold", size = 11, family = "Barlow") +
+  
+  geom_segment(aes(x = 0.05, y = 3.55, xend = 1.15, yend = 3.55), vjust = 0,
+               linewidth = 0.4, color = "black") + 
+  
+  # D. TEXTO EXPLICATORIO 
+  geom_text(aes(x = 0.4, y = 2.2, label = explanatory_text), 
+            hjust = 0, vjust = 0.6, lineheight = 0.13, fontface= "plain", size = 12, color = "gray50", family = "Caveat") +
+
+  # E. CONFIGURACIÓN FINAL
+  scale_fill_identity() + 
+  scale_color_identity() + 
+  
+  coord_cartesian(
+    xlim = c(0, 1.2), 
+    ylim = c(0, 4.2), 
+    clip = "off") +
+  
+theme_void() + 
+  theme(
+    plot.margin = margin(0.0, 0, 0, 0, unit = "cm"),
+    plot.title = element_text(margin = margin(0, 0, 0, 0, unit = "pt")))
+```
+
+```{r}
+p_combined <- p_main + theme(
+    # Aumentar el margen izquierdo para el título/etiqueta
+    plot.margin = margin(t = 5, r = 5, b = 5, l = 20) # Aumentar 'l' (izquierda)
+)
+```
+
+```{r, fig.width=8.7, fig.height=10, dpi=500, dev='png'}
+library(patchwork)
+
+p_respondents <- ggplot() + 
+  theme_void() + 
+  theme(plot.margin = margin(0, 0, 0, 0, "pt")) 
+
+p_legend_size <- ggplot() + 
+  theme_void() + 
+  theme(plot.margin = margin(0, 0, 0, 0, "pt")) 
+
+p_sources <- ggplot() + 
+  theme_void() + 
+  theme(plot.margin = margin(0, 0, 0, 0, "pt"))
+
+bottom_row_final <- (p_respondents | p_legend_size | p_legend_remittance | p_sources) +
+  plot_layout(widths = c(
+    1.45,
+    1.45,
+    1.4,  
+    4.5     
+  )) +
+  theme(
+    panel.spacing = unit(0, "pt"))
+
+final_plot <- p_combined / bottom_row_final
+
+final_plot <- final_plot +
+  plot_layout(heights = c(5, 2)) +
+  plot_annotation(theme = theme(plot.margin = margin(t = 5, r = 5, b = 5, l = 5)) & 
+  theme(plot.margin = margin(t = 5, r = 5, b = 5, l = 5)))
+
+final_plot
+```
+
+## Alternative graph
+
+```{r, fig.width=5, fig.height=6, dpi=300, dev='png'}
+forest_full_results <- tabla_final_resultados |>
+  left_join(df_remittances, by = "Country") |>
+  left_join(df_answers, by = "Country") |>
+  left_join(df_pop, by = "Country") |>
+  rename(
+    OR = Odds_Ratio,
+    P_Value = P_Value,
+    Remittances = Share,
+    Respondents = people,
+    Population = Population)
+
+
+forest_full_results <- forest_full_results |> 
+  mutate(
+    text_style = case_when(
+      Country %in% c("Urban Nigeria", "Rural Nigeria") ~ "italic", 
+      Respondents > 2200 ~ "bold.italic", 
+      Respondents >= 1500 & Respondents <= 2200 ~ "bold", 
+      Respondents < 1500 ~ "plain", 
+      TRUE ~ "plain"))
+```
+
+```{r}
+forest_datos_ordenados <- forest_full_results |> 
+  mutate(Country = factor(Country) |>  
+           fct_reorder(P_Value, .desc = TRUE)) |> 
+  mutate(y_pos = as.numeric(Country))
 ```
 
 
+```{r, fig.width=5, fig.height=6, dpi=300, dev='png'}
+forest_plot_final <- forest_full_results |> 
+  mutate(Country = factor(Country) |>  
+           fct_reorder(P_Value, .desc = TRUE)) |> 
+  
+  ggplot(aes(x = OR, y = Country)) +
+  geom_rect_pattern(
+    aes(xmin = 0.5, xmax = 2, 
+        ymin = 1, ymax = 8),
+    fill = "#456c73",
+    alpha = 0.03,
+    pattern = 'none',         
+    colour = "transparent", 
+    inherit.aes = FALSE
+) +
+    geom_rect_pattern(
+    aes(xmin = 0.5, xmax = 2, 
+        ymin = 8, ymax = 23),
+    fill = "#6197a0",
+    alpha = 0.02,
+    pattern = 'none',          
+    colour = "transparent", 
+    inherit.aes = FALSE) +
+      geom_rect_pattern(
+    aes(xmin = 0.5, xmax = 2, 
+        ymin = 23, ymax = 28),
+    fill = "#b9e8ef",
+    alpha = 0.03,
+    pattern = 'none',         
+    colour = "transparent", 
+    inherit.aes = FALSE) +
+    geom_rect_pattern(
+    aes(xmin = 0.5, xmax = 2, 
+        ymin = 28, ymax = 32),
+    
+    # Fondo del patrón
+    fill = "#dcf3f7",
+    alpha = 0.11,
+    pattern = 'none',          
+    colour = "transparent", 
+    inherit.aes = FALSE) +
+  
+    geom_rect_pattern(
+    aes(xmin = 0.5, xmax = 2, 
+        ymin = 32, ymax = 36),
+    fill = "#e8f7fa",
+    alpha = 0.15,
+    pattern = 'none',          
+    colour = "transparent", 
+    
+    inherit.aes = FALSE) +
+  
+  geom_point(
+    aes(color = Remittances), 
+    size = 4,
+    shape = 16) +
+  
+  geom_vline(xintercept = 1, linetype = "dashed", color = "red", size = 0.4) +
+  
 
+  geom_text(
+      aes(x = 0.495, label = Country, fontface = text_style), 
+      hjust = 1, 
+      size = 6,
+      color = "black",
+      family = "Barlow") +
+  
+  scale_x_log10(
+    name = "Odds Ratio (OR)",
+    breaks = c(0.5, 1, 1.5, 2, 3), 
+    labels = c("0.5", "1", "1.5", "2", "3")) +
+  
+  scale_color_gradient(
+    low = "#F6D2CB",          
+    high = "#7D6892",       
+    name = "Share of people who\nreceive remiitances") +
+  
+  labs(
+    title = "Does hunger make Africans want to move abroad?",
+    subtitle = "Extensive survey data shows that there is not a simple answer",
+    y = NULL) +
+  
+  coord_cartesian(
+    xlim = c(0.5, 2),
+    clip = "off") +
+  
+theme_minimal() + 
+  theme(
+    plot.title = element_text(
+        face = "bold",          
+        size = 25,            
+        hjust = 0),
+    plot.subtitle = element_text(
+        size = 20,              
+        hjust = 0,
+        margin = margin(b = 10)),
+    legend.title = element_text(size = 14, face = "bold"),
+    legend.text = element_text(size = 12),                 
+    legend.spacing.y = unit(0.01, "cm"),                    
+    legend.spacing.x = unit(0.5, "cm"),
+    legend.title.position = "top",
+    
+    legend.position = "bottom",
+    axis.text.y = element_blank(), 
+    axis.ticks.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.margin = margin(
+        t = 10, 
+        r = 10, 
+        b = 10, 
+        l = 50, 
+        unit = "pt"))
+
+print(forest_plot_final)
+```
