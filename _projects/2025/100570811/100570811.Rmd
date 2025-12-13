@@ -1,5 +1,5 @@
 ---
-title: "The Long and the short of the problem"
+title: "The long and the short of the problem"
 description: |
   Replication and improvement of the Economist's 
   graph on civil wars and internal armed conflicts from 1946 to 2012.
@@ -16,7 +16,588 @@ output:
 knitr::opts_chunk$set(out.width="100%", fig.align="center", fig.showtext=TRUE)
 ```
 
+## Introduction
+
+### Background
+
+The Economist introduced this graph on civil wars in an article on the duration and deadliness of civil wars. The graph visualizes the length of the 100 deadliest civil wars and internal armed conflicts from 1946-2012, as well as the battle death in total each year and for each of the 100 conflicts. It is based on data from the UCDP/PRIO Armed Conflict data set.
+
+Most recently this data was used in another Economist article on the deadliest conflicts of the year in 2023 where the main takeaway was that the most documented conflicts might not always be the deadliest.
+
+### Original graph
+
+The original graph consists of two plots. One plot on the top showing total deaths for all civil wars per year from 1946-2012, with year on the x-axis and death toll on the y-axis. The other plot visualizes the duration and deadliness of the top 100 deadliest civil wars from 1946-2012. the y-axis represents the death toll rank, while the x-axis is the exact same as in the top plot with years. The lines represent each civil war and the lenght of them shows the duration of the conflict. Moreover, the colors represent the region and the numbers on the labels beside the state name is deaths in thousands for that exact conflict.
+
+The graph is trying to convey the deadliness and duration of civil wars from post-war times to modern times. As one can see the overall deadliness has decreased, but that the civil wars are lasting longer, like in Afghanistan and Sudan to mention some.
+
+The main reason for deciding on this graph is because it visualizes data in an informative way, thus supporting the Economist article on the actual deadliest conflicts in the world. The problem with the graph is that it overdone, resulting in too much information which makes interpretation hard. The motivation was therefore to replicate it and then improve it to show that a simplification and reduction of the amount of data visualized, still can be as informative and even more comprehensible.
+
 ![Original chart. Source:"<https://www.economist.com/international/2023/04/17/the-worlds-deadliest-war-last-year-wasnt-in-ukraine>"](original_graph.png){.external width="100%"}
+
+## Data preparation
+
+### Loading libraries
+
+```{r loading_libraries}
+
+
+library(tidyverse)
+library(cowplot) 
+library(patchwork)
+
+
+```
+
+### Getting the data
+
+```{r loading_data}
+
+totaldeaths <- read.csv("deaths-in-state-based-conflicts.csv")
+
+totaldeaths <- totaldeaths |> 
+  filter(between(Year, 1946, 2012), Entity == "World")  
+
+
+# Filter population data for 1946-2012 and calculate total world population per year
+population <- read.csv("population-regions-with-projections.csv")
+
+world_population <- population %>%
+  filter(between(Year, 1946, 2012)) %>%
+  group_by(Year) %>%
+  summarise(
+    Population = sum(Population, na.rm = TRUE),
+    Entity = "World"
+  ) %>%
+  select(Entity, Year, Population)
+
+# Join and calculate deaths per 100,000
+deaths_per_capita <- totaldeaths |> 
+  left_join(world_population, by = "Year") |>
+  mutate(deaths_per_100k = (Deaths.in.ongoing.conflicts..best.estimate....Conflict.type..state.based / Population) * 1000000)
+```
+
+### Creating new data set
+
+```{r creating_data}
+
+# Create the dataset with all civil wars
+civil_wars_data <- data.frame(
+  location = c(
+    # East Asia, South-East Asia & Oceania (21 conflicts)
+    "China", "China (Tibet)", "Vietnam", "South Vietnam", "Cambodia", 
+    "Indonesia", "Indonesia", "Indonesia (East-Timor)", "Indonesia (West-Papua)", 
+    "Indonesia (Aceh)", "Myanmar", "Myanmar (Kachin)", "Myanmar (Karen)", 
+    "Myanmar (Shan)", "Myanmar (Arakan)", "Philippines", "Philippines", 
+    "Philippines (Mindanao)", "Laos", "Malaysia", "Thailand",
+    
+    # South & Central Asia (17 conflicts)
+    "Afghanistan", "Sri Lanka", "Pakistan (East)", "Pakistan", 
+    "Pakistan (Balochistan)", "India (Kashmir)", "India (Punjab/Khalistan)", 
+    "India", "India", "India (Nagaland)", "Nepal", "Tajikistan", 
+    "Azerbaijan", "Iran", "Iran (Kurdistan)", "Hyderabad", "Georgia",
+    
+    # Sub-Saharan Africa (31 conflicts)
+    "Ethiopia (Eritrea)", "Ethiopia", "Ethiopia (Ogaden)", "Ethiopia (Oromia)", 
+    "Cameroon", "Cameroon", "Angola", "Angola", "Uganda", "Mozambique", 
+    "Mozambique", "Sudan", "Sudan (South)", "Nigeria", "Somalia", "Chad", 
+    "Congo", "Congo", "Congo-Brazzaville", "Madagascar", "Zimbabwe", 
+    "Sierra Leone", "Liberia", "Rwanda", "Burundi", "Guinea-Bissau", 
+    "Kenya", "South Africa", "South Africa (Namibia)",
+    
+    # Middle East & North Africa (15 conflicts)
+    "Algeria", "Algeria", "Lebanon", "Iraq", "Iraq (Kurdistan)", 
+    "Yemen (North)", "Yemen (North)", "Yemen (South)", "Yemen", 
+    "Syria", "Syria", "Israel (Palestinian Territories)", 
+    "Morocco (Western Sahara)", "Libya",
+    
+    # Europe (11 conflicts)
+    "Greece", "Turkey (Kurdistan)", "Russia (Chechnya)", 
+    "Russia (Caucasus Emirate)", "Bosnia (Serbia)", "Bosnia (Croatia)", 
+    "Soviet Union (Ukraine)", "Soviet Union (Lithuania)", "Serbia (Croatia)", 
+    "Serbia (Kosovo)", "United Kingdom (Northern Ireland)",
+    
+    # Americas (7 conflicts)
+    "El Salvador", "Guatemala", "Nicaragua", "Colombia", "Peru", 
+    "Argentina", "Paraguay", "Dominican Republic"
+  ),
+  
+  start_year = c(
+    # East Asia, South-East Asia & Oceania
+    1946, 1950, 1946, 1955, 1967,
+    1954, 1946, 1975, 1965, 1990,
+    1948, 1961, 1949, 1959, 1949,
+    1947, 1969, 1970, 1959, 1949, 1974,
+    
+    # South & Central Asia
+    1978, 1984, 1971, 2007,
+    1974, 1989, 1983, 1983, 1990,
+    1948, 1956, 1996, 1993, 1979,
+    1979, 1948, 1992,
+    
+    # Sub-Saharan Africa
+    1964, 1976, 1977, 1978,
+    1960, 1958, 1961, 1975, 1975,
+    1977, 1964, 1971, 1964, 1967,
+   1988, 1967, 1997, 1964, 1993,
+    1948, 1968, 1992, 2000, 1990,
+    1991, 1963, 1953, 1982, 1966,
+    
+    # Middle East & North Africa
+    1954, 1991, 1975, 1982, 1961,
+    1962, 1948, 1986, 2009,
+   2011, 1979, 1948,
+    1975, 2011,
+    
+    # Europe
+    1946, 1984, 1994, 2007,
+    1992, 1993, 1946, 1946,
+    1991, 1998, 1971,
+    
+    # Americas
+    1972, 1965, 1978, 1964,
+    1982, 1974, 1947, 1965
+  ),
+  
+  end_year = c(
+    # East Asia, South-East Asia & Oceania
+    1949, 1958, 1954, 1964, 1998,
+    1961, 1946, 1998, 1978, 2005,
+    1993, 1992, 2011, 2011, 1993,
+    1953, 2012, 2012, 1973, 1957, 1982,
+    
+    # South & Central Asia
+    2012, 2009, 1971, 2012,
+    1977, 2012, 1993, 2012, 1952,
+    1968, 2006, 1998, 1994,
+    2011, 1997, 1949, 1993,
+    
+    # Sub-Saharan Africa
+    1991, 1991, 1984, 2012,
+    1961, 1959, 1974, 2002, 2011,
+    1992, 1974, 2012, 1973, 1970,
+    2012, 2010, 2012, 1967, 2002,
+    1948, 1979, 2002, 2003, 2012,
+   2008, 1974, 1957, 1989, 1988,
+    
+    # Middle East & North Africa
+    1962, 2012, 1990, 2012, 1996,
+    1970, 1948, 1986, 2012,
+    2012, 1982, 2012,
+    1989, 2012,
+    
+    # Europe
+    1949, 2012, 2008, 2012,
+    1995, 1994, 1950, 1948,
+    1991, 1999, 1998,
+    
+    # Americas
+    1991, 1990, 1990, 2012,
+    2010, 1978, 1958, 1965
+  ),
+  
+  deaths_thousands = c(
+    # East Asia, South-East Asia & Oceania
+    600.0, 10.0, 188.6, 82.5, 186.8, 17.1, 1.8, 37.7, 4.8, 2.3, 
+    25.2, 18.0, 17.4, 15.0, 3.4, 19.5, 4.8, 22.1, 14.0, 5.4, 2.5,
+    
+    # South & Central Asia
+    334.4, 62.2, 55.9, 19.2, 4.3, 19.3, 7.6, 4.8, 6.3, 2.2, 
+    9.9, 6.8, 4.6, 3.7, 3.3, 3.2, 2.2,
+    
+    # Sub-Saharan Africa
+    122.7, 48.4, 10.8, 2.8, 77.5, 5.9, 39.5, 71.3, 67.4, 62.9, 
+    11.7, 57.3, 11.7, 37.5, 31.6, 22.3, 15.3, 3.6, 14.2, 4.6, 
+    13.6, 10.6, 2.6, 9.2, 8.6, 7.5, 6.5, 2.2, 6.7,
+    
+    # Middle East & North Africa
+    91.3, 18.3, 66.3, 18.4, 34.6, 15.9, 2.0, 5.7, 3.7, 15.9, 
+    3.8, 9.3, 6.4, 2.3,
+    
+    # Europe
+    77.0, 27.0, 17.6, 2.4, 11.6, 3.6, 8.9, 4.3, 3.9, 2.6, 2.5,
+    
+    # Americas
+    28.7, 21.8, 20.3, 19.3, 11.4, 2.3, 2.0, 2.0
+  ),
+  
+  region = c(
+    # East Asia, South-East Asia & Oceania (21)
+    rep("East Asia, South-East Asia & Oceania", 21),
+    
+    # South & Central Asia (17)
+    rep("South & Central Asia", 17),
+    
+    # Sub-Saharan Africa (29)
+    rep("Sub-Saharan Africa", 29),
+    
+    # Middle East & North Africa (14)
+    rep("Middle East & North Africa", 14),
+    
+    # Europe (11)
+    rep("Europe", 11),
+    
+    # Americas (8)
+    rep("Americas", 8)
+  ),
+  
+  stringsAsFactors = FALSE
+) |> 
+  arrange(desc(deaths_thousands))
+
+```
+
+### Preparing the data
+
+```{r plot_prep}
+
+plot_data <- civil_wars_data |>
+  mutate(
+    rank = row_number(),  
+    label = paste0(location, ", ", deaths_thousands)
+  )
+
+
+```
+
+```{r region_colors}
+
+# Define region colors
+region_colors <- c(
+  "East Asia, South-East Asia & Oceania" = "#cd2f39",
+  "South & Central Asia" = "#19647d",
+  "Middle East & North Africa" = "#833d33",
+  "Sub-Saharan Africa" = "#269963",
+  "Europe" = "#da9c48",
+  "Americas" = "#33a5c1"
+)
+```
+
+```{r grey_lines}
+
+grey_xmin <- c(1950, 1960, 1970, 1980, 1990, 2000, 2010)
+grey_xmax <- c(1955, 1965, 1975, 1985, 1995, 2005, 2012)
+
+
+grey_strips <- data.frame(
+  xmin = grey_xmin,
+  xmax = grey_xmax
+)
+```
+
+## Graph replication
+
+### Death plot
+
+```{r deathplot_cords&axes, fig.width=6, fig.height=2}
+
+deathplot <- ggplot(deaths_per_capita) +
+  aes(x = Year, y = deaths_per_100k) +
+ scale_y_continuous(
+    limits = c(0,250),
+    breaks = seq(0, 250, 50)
+  ) +
+  scale_x_continuous(
+    breaks = 1946:2012,
+    labels = NULL,
+  )  +
+  coord_cartesian(xlim=c(1942,2014), expand=FALSE)
+
+print(deathplot)
+```
+
+```{r deathplot_data, fig.width=6, fig.height=2}
+
+deathplot <- deathplot +
+  geom_rect(data = grey_strips,
+            aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+            fill = "grey90", 
+            alpha = 0.5,
+            inherit.aes = FALSE) +
+  geom_col(fill = "gray40", width = 0.7) +
+  annotate(
+    "text",
+    x = 1950,
+    y = 250,
+    label = "Total deaths*†, '000",
+    hjust = -0.2,
+    vjust = 5.5,
+    size = 3.5,
+    fontface = "bold"
+  )
+
+print(deathplot)
+
+```
+
+```{r deathplot_themes, fig.width=6, fig.height=2}
+
+deathplot <- deathplot +
+   theme_minimal() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    
+    
+    # Text styling
+    axis.text.y = element_text(size = 9),
+    axis.title.y = element_blank(),
+    
+    # Background colors
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background = element_rect(fill = "white", color = NA),
+    
+    # Grid lines (only horizontal major lines)
+    panel.grid.major.y = element_line(color = "grey85", linewidth = 0.3),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    
+    
+    # Add bottom border line
+    axis.line.x = element_line(color = "black", linewidth = 0.5),
+    
+    # Margins
+    plot.margin = margin(t = 5, b = 5)
+  ) 
+
+print(deathplot)
+
+```
+
+### Civil war plot
+
+```{r civilwars_cords&axes, fig.width=8, fig.height=8}
+
+civilwar_plot <- ggplot(plot_data, 
+                        aes(x = start_year, y = rank, colour = region)) +
+  scale_x_continuous(
+    breaks = 1946:2012,
+    labels = c("1946","", "", "", "50", "", "", "", "", "55","","","","", "60", "","","","", "65","","","","", "70","","","","", "75","","","","", "80","","","","", "85",
+               "","","","","90","","","","", "95","","","","", "2000","","","","", "05","","","","", "10", "", "12"),
+    position = "top",  # This moves the axis to the top
+
+  ) +
+  scale_y_reverse(
+    breaks = c(1, 100),
+    labels = NULL
+  ) +
+  coord_cartesian(
+    xlim = c(1942, 2014),
+    ylim = c(0, 100),
+    expand = FALSE,
+    clip = "off"
+  ) +
+  scale_color_manual(values = region_colors, name = NULL) 
+
+print(civilwar_plot)
+```
+
+```{r civilwar_data, fig.width=8, fig.height= 8}
+
+ civilwar_plot <- civilwar_plot +
+   geom_segment(aes(xend = end_year, yend = rank),
+               linewidth = 1,
+               data = filter(plot_data, end_year < 2012)) + 
+  # Segments with arrows for ongoing conflicts
+  geom_segment(aes(xend = end_year, yend = rank),
+               linewidth = 1,
+               data = filter(plot_data, end_year == 2012),
+               arrow = arrow(length = unit(0.15, "cm"),
+                             ends = "last",
+                             type = "closed"),
+               show.legend = FALSE)
+print(civilwar_plot)
+```
+
+```{r civilwar_annotation, fig.width=8, fig.height= 8}
+
+ civilwar_plot <- civilwar_plot +
+   geom_rect(data = grey_strips,
+            aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+            fill = "grey90", 
+            alpha = 0.5,
+            inherit.aes = FALSE) +
+  annotate("rect", xmin=1942, xmax=1944, ymin=0,ymax=100, alpha=0.4, fill="grey90") +
+  annotate(
+    "text",
+    x = 1943,            
+    y = 20,              
+    label = "100 deadliest ranked by number of combatant deaths (*†, '000)",
+    hjust = 1,           
+    angle = 90,          
+    size = 3,
+    color = "darkgrey"
+  ) +
+  annotate(
+    "text",
+    x = 1943,            # left margin near the y-axis
+    y = 90,              
+    label = "Lowest",
+    angle = 90,
+    hjust = 1,           # right-align text
+    size = 3,
+    color = "darkgrey"
+  ) +
+  annotate(
+    "text",
+    x = 1943,            # left margin near the y-axis
+    y = 3,              # midpoint between 1 and 100
+    label = "Highest",
+    angle = 90,
+    hjust = 1,           # right-align text
+    size = 3,
+    color = "darkgrey"
+  ) +
+  annotate("rect", xmin=c(1946, 1955, 1965, 1975, 1985, 1995, 2005)
+           , xmax = c(1950, 1960, 1970, 1980, 1990, 2000, 2010),
+           ymin=c(-6), ymax=c(0),
+           alpha=0.2, fill="darkgrey")+
+  geom_segment(aes(xend = end_year, yend = rank),
+               linewidth = 1,
+               data = filter(plot_data, end_year < 2012)) + 
+  # Segments with arrows for ongoing conflicts
+  geom_segment(aes(xend = end_year, yend = rank),
+               linewidth = 1,
+               data = filter(plot_data, end_year == 2012),
+               arrow = arrow(length = unit(0.15, "cm"),
+                             ends = "last",
+                             type = "closed"),
+               show.legend = FALSE) +
+  # Labels
+  geom_text(
+    aes(x = end_year, label = label),
+    hjust = 1,
+    vjust = -0.5,
+    size = 2,  # Smaller text
+    nudge_x = 0.5,
+    check_overlap = FALSE,
+    show.legend = FALSE
+  )
+ 
+ print(civilwar_plot)
+```
+
+```{r civilwar_themes, fig.width=8, fig.height= 8}
+
+ civilwar_plot <- civilwar_plot +
+   theme_minimal() +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        axis.text.y = element_text(face = "bold", size = 9),  
+        axis.title.y = element_blank(), 
+        axis.ticks.y = element_blank(),
+        axis.title.x.top = element_blank(),
+        axis.ticks.x.top = element_line(color = "black", linewidth = 0.5),
+        axis.line.x.top = element_line(color = "black", linewidth = 0.5),
+        plot.margin = margin(t = 5, r = 5, l = 5),
+        legend.position = "none") 
+ print(civilwar_plot)
+ 
+```
+
+```{r footer}
+
+left_caption <- "Source: PRIO, Uppsala University"
+right_caption <- "* Based on over 250 conflicts, 1946-2012  † Deaths in battle of government troops and troops of\npolitically organised groups: conflicts related within 10 years counted as one"
+
+footer <- ggdraw() + 
+  draw_label(left_caption, x = 0.01, hjust = 0, size = 8, color = "gray30") +
+  draw_label(right_caption, x = 0.99, hjust = 1, size = 8, color = "gray30")
+```
+
+```{r legend}
+
+# Create custom legend with 3 rows
+# Row 1: East Asia alone
+legend_row1 <- get_legend(
+  ggplot(data.frame(x = 1, y = 1, region = "East Asia, South-East Asia & Oceania"), 
+         aes(x, y, color = region)) +
+    geom_line(linewidth = 1.5) +
+    scale_color_manual(values = region_colors, name = NULL) +
+    theme(legend.position = "top",
+          legend.direction = "horizontal",
+          legend.text = element_text(size = 9),
+          legend.key.width = unit(0.8, "cm"),
+          legend.key.height = unit(0.4, "cm"))
+)
+
+# Row 2: South & Central Asia + Middle East & North Africa
+legend_row2 <- get_legend(
+  ggplot(data.frame(x = 1:2, y = 1:2, 
+                    region = c("South & Central Asia", "Middle East & North Africa")), 
+         aes(x, y, color = region)) +
+    geom_line(linewidth = 1.5) +
+    scale_color_manual(values = region_colors, 
+                       limits = c("South & Central Asia", "Middle East & North Africa"),
+                       name = NULL) +
+    theme(legend.position = "top",
+          legend.direction = "horizontal",
+          legend.text = element_text(size = 9),
+          legend.key.width = unit(0.8, "cm"),
+          legend.key.height = unit(0.4, "cm"))
+)
+
+# Row 3: Sub-Saharan Africa + Europe + Americas
+legend_row3 <- get_legend(
+  ggplot(data.frame(x = 1:3, y = 1:3, 
+                    region = c("Sub-Saharan Africa", "Europe", "Americas")), 
+         aes(x, y, color = region)) +
+    geom_line(linewidth = 1.5) +
+    scale_color_manual(values = region_colors,
+                       limits = c("Sub-Saharan Africa", "Europe", "Americas"),
+                       name = NULL) +
+    theme(legend.position = "top",
+          legend.direction = "horizontal",
+          legend.text = element_text(size = 9),
+          legend.key.width = unit(0.8, "cm"),
+          legend.key.height = unit(0.4, "cm"))
+)
+
+# Stack legend rows vertically
+custom_legend <- plot_grid(
+  legend_row1,
+  legend_row2,
+  legend_row3,
+  ncol = 1,
+  align = "v"
+)
+
+
+```
+
+```{r title}
+
+
+# Title
+title_plot <- ggplot() + 
+  labs(title = "The long and the short of the problem",
+       subtitle = "Civil wars and internal armed conflicts, 1946-2012") +
+  theme_void() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14, hjust = 0),
+    plot.subtitle = element_text(size = 10, color = "gray40", hjust = 0),
+    plot.margin = margin(5, 5, 5, 10)
+  )
+   
+```
+
+```{r combined_plot, fig.width=8, fig.height= 10}
+
+# Combine title and legend horizontally, then stack everything
+ finishedplot <- (wrap_elements(title_plot) | wrap_elements(custom_legend)) /
+   deathplot /
+   civilwar_plot /
+   wrap_elements(footer) +
+   plot_layout(
+      heights = c(1, 1.5, 5, 0.05),  
+    widths = c(1.5, 1)
+   )
+ 
+print(finishedplot)
+
+```
+
+## Graph improvement
 
 Distill is a publication format for scientific and technical writing, native to the web.
 
