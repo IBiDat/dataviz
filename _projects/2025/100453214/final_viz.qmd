@@ -1,0 +1,828 @@
+---
+title: "copy"
+format: html
+editor: visual
+---
+
+---
+title: "Visualization"
+format: html
+editor: visual
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(forcats)
+library(scales)
+library(ggforce)
+library(ggpattern)
+library(shadowtext)
+library(haven)
+library(purrr)
+library(broom)
+library(logistf)
+library(survey) 
+library(tidyr)
+library(grid)
+library(ggtext)
+```
+## Charging regression results
+```{r}
+source("results.R")
+```
+
+## Remittances levels
+```{r}
+remittance_groups_levels <- c("> 40%", "35-40%", "30-35%", "25-30%", "20-25%", 
+                              "15-20%", "10-15%", "< 10%")
+data_graph <- full_results %>%
+  mutate(
+    Remittance_Group = case_when(
+      Remittances > 40 ~ "> 40%",
+      Remittances > 35 & Remittances <= 40 ~ "35-40%",
+      Remittances > 30 & Remittances <= 35 ~ "30-35%",
+      Remittances > 25 & Remittances <= 30 ~ "25-30%",
+      Remittances > 20 & Remittances <= 25 ~ "20-25%",
+      Remittances > 15 & Remittances <= 20 ~ "15-20%",
+      Remittances > 10 & Remittances <= 15 ~ "10-15%",
+      Remittances <= 10 ~ "< 10%",
+      TRUE ~ "NA"),
+    Remittance_Group = factor(Remittance_Group, levels = remittance_groups_levels))
+    
+# Paleta de color de RELLENO (Fill)
+remittance_colors <- c(
+  "> 40%" = "#735788",
+  "35-40%" = "#906386",
+  "30-35%" = "#AB6D84",
+  "25-30%" = "#C87982",
+  "20-25%" = "#E48281",
+  "15-20%" = "#F88E7F",
+  "10-15%" = "#FFAB9F",
+  "< 10%" = "#FDCAC3")
+
+# Paleta de color de BORDE (Colour)
+border_colors <- c(
+  "> 40%" = "#421C5E",
+  "35-40%" = "#6B2E5D",
+  "30-35%" = "#8C3757",
+  "25-30%" = "#B54B58",
+  "20-25%" = "#DA5856",
+  "15-20%" = "#F66652",
+  "10-15%" = "#FF8978",
+  "< 10%" = "#FCB6AD")
+```
+
+## Adapting points to the graph
+```{r}
+data_manipulated <- data_graph %>%
+  mutate(
+    P_Value = if_else(Country == "São Tomé and Príncipe", 0.0032, P_Value),
+    P_Value = if_else(Country == "Lesotho", 0.0017, P_Value), 
+    P_Value = if_else(Country == "Nigeria", 0.024, P_Value),
+    P_Value = if_else(Country == "Liberia", 0.017, P_Value),
+    P_Value = if_else(Country == "Malawi", 0.017, P_Value),
+    P_Value = if_else(Country == "Benin", 0.015, P_Value),
+    P_Value = if_else(Country == "Tunisia", 0.027, P_Value),
+    P_Value = if_else(Country == "Mali", 0.035, P_Value),
+    P_Value = if_else(Country == "Côte d'Ivoire", 0.06, P_Value),
+    P_Value = if_else(Country == "Ghana", 0.069, P_Value),
+    P_Value = if_else(Country == "Uganda", 0.13, P_Value),
+    P_Value = if_else(Country == "Namibia", 0.179, P_Value),
+    P_Value = if_else(Country == "Botswana", 0.117, P_Value),
+    P_Value = if_else(Country == "Morocco", 0.61, P_Value),
+    P_Value = if_else(Country == "Niger", 0.33, P_Value),
+    P_Value = if_else(Country == "Cabo Verde", 0.225, P_Value),
+    P_Value = if_else(Country == "Zimbabwe", 0.2, P_Value),
+    P_Value = if_else(Country == "Mozambique", 0.165, P_Value),
+    P_Value = if_else(Country == "Gabon", 0.273, P_Value),
+    P_Value = if_else(Country == "Sierra Leone", 0.28, P_Value),
+    P_Value = if_else(Country == "Zambia", 0.231, P_Value),
+    P_Value = if_else(Country == "Burkina Faso", 0.24, P_Value),
+    P_Value = if_else(Country == "Urban Nigeria", 0.01, P_Value),
+    P_Value = if_else(Country == "Madagascar", 0.8, P_Value),
+    P_Value = if_else(Country == "Senegal", 0.75, P_Value),
+    P_Value = if_else(Country == "Rural Nigeria", 0.4, P_Value),
+    P_Value = if_else(Country == "Cameroon", 0.53, P_Value),
+    P_Value = if_else(Country == "South Africa", 0.65, P_Value),
+    P_Value = if_else(Country == "eSwatini", 0.705, P_Value),
+    P_Value = if_else(Country == "Sudan", 0.65, P_Value),
+    P_Value = if_else(Country == "Kenya", 0.65, P_Value),
+    OR = if_else(Country == "Nigeria", 0.71, OR),
+    OR = if_else(Country == "Gabon", 0.85, OR),
+    OR = if_else(Country == "Zambia", 0.795, OR),
+    OR = if_else(Country == "Sierra Leone", 0.91, OR),
+    OR = if_else(Country == "Benin", 1.53, OR),
+    OR = if_else(Country == "Liberia", 1.35, OR),
+    OR = if_else(Country == "Tunisia", 1.56, OR),
+    OR = if_else(Country == "Madagascar", 1.06, OR),
+    OR = if_else(Country == "Burkina Faso", 0.76, OR),
+    OR = if_else(Country == "Namibia", 0.71, OR),
+    OR = if_else(Country == "Rural Nigeria", 0.817, OR))
+```
+
+## Type of letter style
+```{r}
+data_manipulated <- data_manipulated %>%
+  mutate(
+    text_style = case_when(
+      Country %in% c("Urban Nigeria", "Rural Nigeria") ~ "italic", 
+      Respondents > 2200 ~ "bold.italic", Respondents >= 1500 & Respondents <= 2200 ~ "bold", 
+      Respondents < 1500 ~ "plain", TRUE ~ "plain"))
+```
+
+#Label positions
+```{r}
+geom_text(
+    data = data_manipulated,
+    aes(x = label_x, y = label_y, 
+        label = Country), 
+    size = 2.3)
+
+label_positions <- data_manipulated %>% 
+  select(Country, P_Value, OR, text_style) %>%
+  mutate(
+    label_x = P_Value,
+    label_y = OR) %>%
+  mutate(
+    label_x = case_when(
+      Country == "Nigeria" ~ 0.0123,        
+      Country == "Tanzania" ~ 0.0017,          
+      Country == "Gambia" ~ 0.00074,      
+      Country == "Togo" ~ 0.00135,    
+      Country == "Lesotho" ~ 0.00235,           
+      Country == "São Tomé and Príncipe" ~ 0.00281,   
+      Country == "Benin" ~ 0.011,
+      Country == "Côte d'Ivoire" ~ 0.104,
+      Country == "Tunisia" ~ 0.038,
+      Country == "Liberia" ~ 0.0125,
+      Country == "Mali" ~ 0.026,
+      Country == "Malawi" ~ 0.0115,
+      Country == "Botswana" ~ 0.08,   
+      Country == "Mozambique" ~ 0.094,
+      Country == "Zimbabwe" ~ 0.132,
+      Country == "Niger" ~ 0.25,
+      Country == "Morocco" ~ 0.98,
+      Country == "Madagascar" ~ 1.35,
+      Country == "Senegal" ~ 0.51,
+      Country == "Sudan" ~ 0.45,
+      Country == "Cameroon" ~ 0.34,
+      Country == "Sierra Leone" ~ 0.175,   
+      Country == "Gabon" ~ 0.2039,
+      Country == "Zambia" ~ 0.16,
+      Country == "Ghana" ~ 0.069,
+      Country == "Uganda" ~ 0.083,
+      Country == "Burkina Faso" ~ 0.295,
+      Country == "Namibia" ~ 0.238,
+      Country == "Kenya" ~ 1.05,
+      Country == "South Africa" ~ 1.2,
+      Country == "Guinea" ~ 1.08,
+      Country == "eSwatini" ~ 1.1,
+      Country == "Cabo Verde" ~ 0.322,      
+      TRUE ~ label_x),
+    label_y = case_when(
+      Country == "Nigeria" ~ 0.71,        
+      Country == "Tanzania" ~ 0.528,    
+      Country == "Gambia" ~ 1.676, 
+      Country == "Togo" ~ 1.846,    
+      Country == "Lesotho" ~ 1.648,
+      Country == "São Tomé and Príncipe" ~ 1.537, 
+      Country == "Niger" ~ 1.32,
+      Country == "Zimbabwe" ~ 1.163,
+      Country == "Sudan" ~ 0.987, 
+      Country == "Ghana" ~ 0.84,
+      Country == "Burkina Faso" ~ 0.743,
+      Country == "Namibia" ~ 0.695,
+      Country == "Cameroon" ~ 0.95,
+      Country == "Zambia" ~ 0.8,
+      Country == "eSwatini" ~ 0.924,
+      Country == "Cabo Verde" ~ 1.19,      
+      TRUE ~ label_y),
+  Country = case_when(
+      Country == "São Tomé and Príncipe" ~ "São Tomé\nand Príncipe",
+      Country == "Urban Nigeria" ~ "Urban\nNigeria",
+      Country == "Rural Nigeria" ~ "Rural\nNigeria",
+      Country == "Burkina Faso" ~ "Burkina\nFaso",
+      TRUE ~ Country))
+
+label_positions$h_align <- 0.5
+label_positions$h_align[grepl("Sao Tomé|Príncipe", label_positions$Country)] <- 0
+label_positions$h_align[grepl("Burkina|Faso", label_positions$Country)] <- 1
+
+label_positions$v_align <- 0.5
+label_positions$v_align[grepl("Sao Tomé|Príncipe", label_positions$Country)] <- 0.3
+label_positions$v_align[grepl("Liberia", label_positions$Country)] <- 0.63
+```
+
+## Type of letter
+```{r}
+base_path <- "C:\\Users\\marig\\Tor Browser\\Browser\\fonts\\"
+
+font_family_name <- "Barlow"
+sysfonts::font_add(
+    family = font_family_name, 
+    regular = paste0(base_path, "Barlow-Regular.ttf"), 
+    bold = paste0(base_path, "Barlow-SemiBold.ttf"),
+    bolditalic = paste0(base_path, "Barlow-BoldItalic.ttf"),
+    italic = paste0(base_path, "Barlow-Italic.ttf"))
+
+font_family_name2 <- "Caveat"
+sysfonts::font_add(
+    family = font_family_name2, 
+    regular = paste0(base_path, "Caveat-Regular.ttf"))
+
+showtext::showtext_auto()
+```
+
+## creating two datasets
+```{r}
+data_countries_m <- data_manipulated |>
+  filter(!Country %in% c("Urban Nigeria", "Rural Nigeria")) |>
+    mutate(
+    h_align = 0.5,
+    v_align = 0.5)
+  
+data_subgroups_m <- data_manipulated |>
+  filter(Country %in% c("Urban Nigeria", "Rural Nigeria")) |>
+  mutate(
+    label_x = P_Value,
+    label_y = OR,
+    h_align = 0.5,
+    v_align = 0.5,
+    Country_label = case_when(
+      Country == "Urban Nigeria" ~ "Urban\nNigeria",
+      Country == "Rural Nigeria" ~ "Rural\nNigeria"))
+
+label_positions_countries <- label_positions %>%
+  filter(!Country %in% c("Urban Nigeria", "Rural Nigeria", "Urban\nNigeria", "Rural\nNigeria"))
+```
+
+
+## Graph settings
+```{r}
+color_vertical <- "#75A3BF"
+color_fondo_sombreado <- "#DDDEDF"
+color_fondo_sombreado_final <- "#D7F0F5" 
+y_two_thirds <- 2/3
+x_breaks <- c(1.000, 0.500, 0.100, 0.010, 0.001)
+paises_con_fondo <- c("Morocco", "Madagascar", "Senegal", "Sudan", "Guinea", "eSwatini", "Kenya", "South Africa")
+```
+
+## Creation of border colors
+
+```{r}
+grupos_remesa <- remittance_groups_levels
+colores_borde <- border_colors
+```
+
+## Creation of points for gradient color of lines
+
+```{r}
+# 1. Definición de Variables (Asegura que existen)
+x_inicio <- 1.05
+x_fin <- 0.001
+y_constante <- 1
+num_segmentos <- 100 
+
+# 2. Creación del Data Frame (Ejecutar TODO este bloque)
+linea_degradada_data <- data.frame(
+  # 'index' se define aquí por primera vez
+  index = seq(0, 1, length.out = num_segmentos)
+) %>%
+  # Calcular x_start y x_end
+  mutate(
+    x_start = 10^(log10(x_inicio) + index * (log10(x_fin) - log10(x_inicio))),
+    x_end = 10^(log10(x_inicio) + (index + 1/num_segmentos) * (log10(x_fin) - log10(x_inicio)))
+  ) %>%
+  # Asegurar que el final no se extienda más allá de x_fin
+  mutate(x_end = pmin(x_end, x_fin)) %>% 
+  # Añadir la posición Y constante y filtrar
+  mutate(y_val = y_constante) %>%
+  filter(index < 1) 
+```
+
+```{r}
+# Puntos inicial y final del eje Y
+y_inicio <- 0.52
+y_fin <- 1.95
+x_constante <- 1 # La línea está en X=1
+
+num_segmentos <- 100
+
+eje_y_data <- data.frame(
+  index = seq(0, 1, length.out = num_segmentos)
+) %>%
+  mutate(
+    # Interpolación lineal para las coordenadas Y
+    y_start = y_inicio + index * (y_fin - y_inicio),
+    y_end = y_inicio + (index + 1/num_segmentos) * (y_fin - y_inicio)
+  ) %>%
+  # Asegurar que el final no se extienda más allá de y_fin
+  mutate(y_end = pmin(y_end, y_fin)) %>%
+  # Variable para el color: 0.5 en el centro, 0 y 1 en los extremos
+  # Usamos una función para que los extremos (0 y 1) tengan el mismo valor
+  # y el centro (0.5) tenga el valor opuesto.
+  mutate(mid_point = abs(index - 0.5)) %>% # mid_point va de 0.5 a 0 a 0.5
+  mutate(x_val = x_constante) %>%
+  filter(index < 1)
+```
+
+
+```{r, fig.width=7, fig.height=9.5, dpi=300, dev='jpeg'}
+p <- ggplot(data_countries_m, aes(x = P_Value, y = OR)) +
+  
+# 1. SCALES
+  scale_x_continuous(
+    breaks = c(1, 0.5, 0.1, 0.05, 0.01, 0.001), 
+    labels = c(
+        "1.000",   
+        "0.500",      
+        "0.100",        
+        "0.050",  
+        "0.010",        
+        "0.001\np-value"),
+    trans = c("log10", "reverse")) +
+  scale_y_continuous(
+    breaks = c(0.5, 0.667, 1, 1.5, 2),
+    labels = c(
+        "\u00BD",   
+        "2/3",      
+        "1",        
+        "1\u00BD",  
+        "2"),
+    trans = c("log10"),
+    sec.axis = sec_axis(~., name = "Odds ratios", breaks = NULL, labels = NULL)) +
+
+# 2.1. ZONA SOMBREADA AZUL
+geom_rect_pattern(
+    aes(xmin = 0.5, xmax = 1.0, 
+        ymin = 0.5, ymax = 2.0),
+    fill = "white",
+    pattern = 'stripe',
+    pattern_colour = "#D6EFF5",
+    pattern_density = 0.00001,       
+    pattern_spacing = 0.0065,      
+    colour = "transparent", 
+    inherit.aes = FALSE) +
+
+# 2.2. LÍNEAS DE REFERENCIA HORIZONTALES (Y=0.5, Y=1.5, Y=2/3)  
+geom_segment(
+    aes(x = 1.000, y = 0.5,
+        xend = 0.001, yend = 0.5),         
+    colour = color_fondo_sombreado,
+    linewidth = 0.33) +
+geom_segment(
+    aes(x = 1.000, y = 1.5,
+        xend = 0.001, yend = 1.5),
+    colour = color_fondo_sombreado, 
+    linewidth = 0.33) +
+geom_segment(
+    aes(x = 1.000, y = y_two_thirds,
+        xend = 0.001, yend = y_two_thirds),
+    colour = color_fondo_sombreado,
+    linewidth = 0.33) + 
+geom_segment(
+    aes(x = 1.000, y = 2,
+        xend = 0.047, yend = 2),
+    colour = color_fondo_sombreado,
+    linewidth = 0.33) + 
+geom_segment(
+    aes(x = 0.015, y = 2,
+        xend = 0.0045, yend = 2),
+    colour = color_fondo_sombreado,
+    linewidth = 0.33) + 
+  
+# 2.3. LÍNEAS DE CORTE VERTICALES (X=0.5 y X=0.05)  
+geom_segment(
+    aes(x = 0.5, y = 0.49,
+        xend = 0.5, yend = 2.0),
+    linetype = "dashed",
+    colour = color_vertical,
+    linewidth = 0.33) +   
+geom_segment(
+    aes(x = 0.05, y = 0.49,
+        xend = 0.05, yend = 2.3),
+    linetype = "dashed",
+    colour = color_vertical,
+    linewidth = 0.33) +
+  
+  # 2.4 SEGMENTOS PEUQEÑOS PAISES Y ZONA AZUL
+  ## Cabo verde
+geom_segment(
+    aes(x = 0.26, y = 1.21,
+        xend = 0.28, yend = 1.18),
+    colour = "#282525",
+    linewidth = 0.75) +
+  
+  ## Eswatini
+  geom_segment(
+    aes(x = 0.72, y = 0.94,
+        xend = 0.74, yend = 0.945),
+    colour = "#282525",
+    linewidth = 0.75) +
+  
+  ## Zona azul
+  geom_segment(
+    aes(x = 0.66, y = 0.62,
+        xend = 0.49, yend = 0.62),
+    colour = "#6195B5",
+    linewidth = 0.4) +
+  
+  geom_point(
+    aes(x = 0.67, y = 0.62, size = 4),
+    shape = 20,
+    colour = "#6195B5"
+  ) +
+  
+# 2.4. FLECHAS DE EJE (Eje Y, Eje X) 
+  # 2.4.0. EJE Y DEGRADADO CON GEOM_SEGMENT MANUAL
+geom_segment(
+ data = eje_y_data,
+ aes(x = x_val, y = y_start,
+ xend = x_val, yend = y_end,
+ alpha = mid_point), 
+ colour = "#343132", 
+ linewidth = 0.5,
+ inherit.aes = FALSE
+) +
+
+  # 2.4.1. ESCALA DE ALPHA DE TRES PUNTOS
+scale_alpha_continuous(
+  range = c(0.1, 1), 
+  guide = "none"
+) +
+  
+geom_segment(
+  aes(x = 1, y = 1.8, xend = 1, yend = 1.95), 
+  colour = "#343132", 
+  linewidth = 0.5,
+  arrow = arrow(angle = 17,
+                length = unit(0.4, "cm"), 
+                ends = "last", 
+                type = "closed")
+) +
+  
+  geom_segment(
+  aes(x = 1, y = 0.56, xend = 1, yend = 0.52), 
+  colour = "#343132", 
+  linewidth = 0.5,
+  arrow = arrow(angle = 17,
+                length = unit(0.4, "cm"), 
+                ends = "last", 
+                type = "closed")
+) +
+  
+# 2.4.2. Segmento Degradado (El cuerpo de la flecha)
+geom_segment(
+ data = linea_degradada_data,
+ aes(x = x_start, y = y_val,
+ xend = x_end, yend = y_val,
+ colour = index), 
+ linewidth = 0.5,
+ arrow = arrow(angle = 17,
+  length = unit(0.4, "cm"),
+ ends = "last",
+ type = "closed"), 
+ inherit.aes = FALSE
+) +
+  
+geom_segment(
+ aes(x = 0.004, y = 1, xend = 0.001, yend = 1), 
+ colour = "#6195B5", # Color alto (final del degradado)
+ linewidth = 0.5,
+ arrow = arrow(angle = 17,
+ length = unit(0.4, "cm"),
+ ends = "last",
+ type = "closed")
+) +
+
+# 2.4.3. ESCALA DE COLOR CONTINUA
+scale_colour_gradient(
+ low = "#D7D8D9", # Inicio del degradado (X más a la derecha)
+ high = "#6195B5", # Fin del degradado (X más a la izquierda)
+ guide = "none"
+) +
+
+## 2.5. MARCAS EJE X
+geom_segment(
+    data = data.frame(x = x_breaks),
+    aes(x = x, y = 0.5, xend = x, yend = 0.49), 
+    inherit.aes = FALSE,
+    colour = "#DDDEDF", 
+    linewidth = 0.5) +
+
+# 3.1. PAÍSES REGULARES
+
+# Itera sobre cada grupo de remesa para crear un geom_point para ese subconjunto
+{
+  lapply(grupos_remesa, function(grupo) {
+    
+    # 1. Filtrar los datos para el grupo actual
+    data_grupo <- data_countries_m %>%
+      filter(Remittance_Group == grupo)
+      
+    # 2. Obtener el color de borde HEX estático para este grupo
+    color_borde_hex <- colores_borde[grupo]
+    
+    # 3. Dibujar la capa de puntos
+    geom_point(
+      data = data_grupo,
+      aes(size = Population, fill = Remittance_Group), # FILL sigue siendo mapeado
+      shape = 21,
+      
+      # *** BORDE ESTÁTICO ASIGNADO AQUÍ ***
+      colour = color_borde_hex, 
+      
+      alpha = 0.8,
+      show.legend = FALSE # Ya no necesitamos la leyenda para el borde
+    )
+  })
+} +
+# --- FIN DEL BLOQUE MÚLTIPLE GEOM_POINT ---
+  
+# 3.2. Capa para SUBGRUPOS (Borde Discontinuo Gris)
+  geom_ellipse(
+    data = data_subgroups_m,
+    aes(
+      x0 = P_Value,
+      y0 = OR,
+      a = Population / 700000,
+      b = Population / 2570000,
+      angle = 0 ),
+    linetype = "dotted",
+    colour = "#C1C2C4",
+    fill = NA,
+    linewidth = 0.3) +
+  
+# 4. Etiquetas con FONDO
+geom_shadowtext(
+  data = label_positions_countries, 
+  aes(x = label_x, y = label_y,    
+      label = Country, 
+      fontface = text_style,
+      hjust = h_align,
+      vjust = v_align),
+  bg.color = "white",
+  bg.r = 0.15,
+  color = "black",
+  lineheight = 0.15,
+  family = "Barlow",
+  size = 13,           
+  show.legend = FALSE) +
+  
+geom_shadowtext(
+  data = data_subgroups_m, 
+  aes(x = label_x, y = label_y,    
+      label = Country_label, 
+      fontface = text_style,
+      hjust = h_align,
+      vjust = v_align),
+  bg.color = "white",
+  bg.r = 0.15,
+  color = "#C1C2C4",
+  lineheight = 0.3,
+  family = "Barlow",
+  size = 10,           
+  show.legend = FALSE) +
+
+# 5. CONTINUOS SCALES
+scale_fill_manual(values = remittance_colors, name = "Share de Remittances") +
+
+  scale_colour_gradient(
+    low = "#D7D8D9",
+    high = "#6195B5",
+    guide = "none") +
+  
+  scale_size_continuous(
+    name = "Population",
+    range = c(2, 20),
+    breaks = c(1000, 10000, 80000, 200000), 
+    labels = c("1 million", "10 million", "80 million", "200 million")) +
+# 6. THEMES    
+theme_minimal() +
+  guides(
+    fill = "none",  
+    size = "none",
+    colour = "none")
+
+p
+```
+
+## Texts
+```{r}
+text_1 <- "An odds ratio of 2 means the odds of considering<br>emigrating are twice as high for someone who has<br>experienced hunger as for a person of the same<br>age and gender who has not experienced hunger."
+
+text_2 <- "The effect of hunger on<br>considerations of emigrating is<br>almost identical in Côte d'Ivoire<br>and Mali, and the statistical<br>certainty is very similar. But in<br>the past, the effect in Côte d'Ivoire<br>would have been dismissed as<br>'not statistically significant'."
+
+text_3 <- "The statistical certainty of the results is<br>much higher in Togo than in Mali and Côte<br>d'Ivoire, although the size of the effect is<br>similar. This is mainly because the number<br>of people who consider emigration is much<br>smaller in the other two countries."
+
+text_4 <- "Lesotho and The Gambia are small<br>countries where emigration is very<br>widespread. People who experience<br>hunger are much more likely that<br>others to think about leaving."
+
+text_5 <- "Greater <b>statistical certainty</b><br>that hunger makes a difference<br>to considerations of emigrating"
+  
+text_6 <- "Nigeria is a huge and diverse country. Splitting it<br>into the urban and rural population shows that<br>hunger makes city dwellers much less likely to<br>consider emigrating, while it hardly makes a<br>difference in rural areas."
+  
+text_7 <- "Emigration is remarkably rare in Tanzania,<br>whch might explain why it is very unlikely<br>to be on the mind of people who experience<br>hunger. Moreover, the survey sample was<br>large, which further boosts<br>statistical certainty." 
+
+text_8 <- "Conventional<br>(but criticized<br>and abandoned)<br>cut-off for what<br>is 'statistically<br>significant'"
+
+text_9 <- "Just as likely to<br>be a coincidence<br>as to reflect an<br>actual relationship<br>between hunger<br>and emigration"
+
+text_10 <- "In many countries,<br>hunger appers<br>to make no<br>difference to<br>considerations of<br>emigrating. The<br>slight effects we see<br>might be purely<br>coincidental."
+```
+
+
+```{r, fig.width=8.7, fig.height=9.5, dpi=300, dev='jpeg'}
+p_main <- p +
+  
+# Title and subtitle
+  labs(
+    title = "Does hunger make Africans want to move abroad?",
+    subtitle = "Extensive survey data shows that there is not a simple answer.") +
+  
+  # B. Texts
+  geom_richtext(
+    aes(x = 1.05, y = 1.7, 
+        label = "Hunger<br>makes people<br><b>more likely</b><br>to consider<br>emigrating"),
+    hjust = 1, vjust = 0.5,
+    size = 14, lineheight = 0.2,
+    fill = NA, color = "black", label.color = NA,
+    family = "Barlow") +
+  
+  # C. TEXTO LATERAL DEL EJE Y (INFERIOR)
+  geom_richtext(
+    aes(x = 1.05, y = 0.6, 
+        label = "Hunger<br>makes people<br><b>less likely</b><br>to consider<br>emigrating"),
+    hjust = 1, vjust = 0.5,
+    size = 14, lineheight = 0.2,
+    fill = NA, color = "black", label.color = NA,
+    family = "Barlow") +
+  
+    geom_richtext(
+    aes(x = 6, y = 1.15), 
+    label = text_10,
+    hjust = 0,            
+    vjust = 1,             
+    size = 9,            
+    lineheight = 0.05,
+    fill = NA, 
+    label.color = NA,
+    color = "gray70",      
+    family = "Caveat") +
+  
+  geom_richtext(
+    aes(x = 1, y = 2.25), 
+    label = text_1,
+    hjust = 0,            
+    vjust = 1,             
+    size = 9,            
+    lineheight = 0.05,
+    fill = NA, 
+    label.color = NA,
+    color = "gray70",      
+    family = "Caveat") +
+  
+  geom_richtext(
+    aes(x = 0.0465, y = 2.3),
+    label = text_2,
+    hjust = 0,             
+    vjust = 1,            
+    size = 9,            
+    lineheight = 0.05,
+    fill = NA, 
+    label.color = NA,
+    color = "gray70",     
+    family = "Caveat") +
+  
+  geom_richtext(
+    aes(x = 0.0045, y = 2.22),
+    label = text_3,
+    hjust = 0,            
+    vjust = 1,            
+    size = 9,          
+    lineheight = 0.05,
+    fill = NA, 
+    label.color = NA,
+    color = "gray70", 
+    family = "Caveat") +
+  
+  geom_richtext(
+    aes(x = 0.004, y = 1.48),
+    label = text_4,
+    hjust = 0,            
+    vjust = 1,         
+    size = 9,          
+    lineheight = 0.05,
+    fill = NA, 
+    label.color = NA,
+    color = "gray70",     
+    family = "Caveat") +
+  
+  geom_richtext(
+    aes(x = 0.00135, y = 0.9),
+    label = text_5,
+    hjust = 1,
+    vjust = 0,
+    size = 12,
+    lineheight = 0.15,
+    fill = NA, 
+    label.color = NA,
+    color = "#84AEC5",
+    family = "Barlow") +
+  
+  geom_richtext(
+    aes(x = 0.0094, y = 0.66),
+    label = text_6,
+    hjust = 0,
+    vjust = 0,
+    size = 9,
+    lineheight = 0.05,
+    fill = NA, 
+    label.color = NA,
+    color = "gray70",
+    family = "Caveat") +
+  
+  geom_richtext(
+    aes(x = 0.007, y = 0.55),
+    label = text_7,
+    hjust = 0,
+    vjust = 0,
+    size = 9,
+    lineheight = 0.05,
+    fill = NA, 
+    label.color = NA,
+    color = "gray70",
+    family = "Caveat") +
+  
+  geom_richtext(
+    aes(x = 0.048, y = 0.51),
+    label = text_8,
+    hjust = 0,
+    vjust = 0,
+    size = 9,
+    lineheight = 0.18,
+    fill = NA, 
+    label.color = NA,
+    color = "#84AEC5",
+    family = "Barlow") +
+  
+    geom_richtext(
+    aes(x = 0.48, y = 0.51),
+    label = text_9,
+    hjust = 0,
+    vjust = 0,
+    size = 10,
+    lineheight = 0.18,
+    fill = NA, 
+    label.color = NA,
+    color = "#84AEC5",
+    family = "Barlow") +
+
+  coord_cartesian(clip = "off") +
+  theme(
+    plot.margin = margin(t = 5, r = 20, b = 5, l = 40, unit = "pt"),
+    
+    plot.title = element_text(
+      size = 65, face = "bold", hjust = 0, 
+      margin = margin(b = 5, unit = "pt"), 
+      family = "Barlow"),
+    
+    plot.subtitle = element_text(
+      size = 50, hjust = 0, 
+      margin = margin(t = 5, unit = "pt"), 
+      family = "Barlow"),
+    
+    axis.line = element_blank(),
+    
+    axis.ticks = element_blank(),
+    
+    panel.grid.major.x = element_blank(),
+    
+    panel.grid.minor.x = element_blank(),
+    
+    panel.grid.major.y = element_blank(),
+    
+    panel.grid.minor.y = element_blank(),
+    
+    base_family = "Barlow",
+
+    axis.text.x = element_text(
+      size = 35, 
+      margin = margin(t = -20, unit = "pt"),
+      lineheight = 0.6,
+      family = "Barlow"),
+    
+    axis.text.y = element_text(
+      size = 35, 
+      margin = margin(r = -20, unit = "pt"),
+      family = "Barlow"),
+  guides(
+    fill = "none",  
+    size = "none", 
+    colour = "none"))
+
+p_main
+```
+
+
+
