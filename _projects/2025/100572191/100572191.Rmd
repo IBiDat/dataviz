@@ -1,8 +1,8 @@
 ---
-title: "Longevity graph: reproduction and improvement"
+title: "Longevity graph: reproduction"
 description: |
-  I am going to show how I reproduced the graph of choice and the improvement I have envisioned concerning it.
-categories: "2022"
+ An exploration of the factors that extend or shorten human lifespan, ranked by the strength of scientific evidence, recreated and refined from an original Information is Beautiful graphic.
+categories: "2025"
 author: Gaia Leuzzi
 date: "`r Sys.Date()`"
 output:
@@ -11,43 +11,51 @@ output:
     toc: true
 ---
 
-I download the two main libraries I will use for my project and I open my dataset.
+![Original chart. Source: Information is Beautiful (2019),  
+https://informationisbeautiful.net](IIB-LiveLong-2552-Oct19-1.png){.external width=100%}
 
-```{r setup, include=FALSE}
+## Setup and libraries
+
+```{r setup}
 library(ggplot2)
 library(forcats)
 library(dplyr)
 library(showtext)
 library(cowplot)
-font_add_google("Nunito Sans", "nunito", regular.wt = 200)
-showtext_auto(enable = TRUE)
+library(magick)
+library(grid)
 
-my_data <- read.csv("~/Desktop/Data visualization/KIB_longevity data.csv")
+font_add_google("Nunito Sans", "nunito", regular.wt = 200)
+font_add_google("Nunito", "nunito_title", regular.wt = 500)
+font_add_google("Nunito", "nunito_subtitle", regular.wt = 200)
+showtext_auto()
+
+my_data <- read.csv("KIB_longevity data.csv")
 ```
 
-I convert the Years' data from "chr" into "numeric", which will be handful in the later process, and I drop the non-available data for the column "Years" to prevent any error to rise.
+## Data preparation
 
-
-```{r}
+```{r data}
 my_data_filtered <- my_data |>
   mutate(Years = as.numeric(Years)) |>
   add_row(
     Intervention = "Married happy-go-lucky outdoors-loving sex-mad hippy party-girl in senior management with a cat",
-    Years = 21,
+    Years = 23,
     Science_strength = 4
   )
 
 my_data_filtered <- my_data_filtered |>
-  dplyr::mutate(
-    Science_strength = dplyr::case_when(
+  mutate(
+    Science_strength = case_when(
       Intervention == "Be polygamous, maybe" ~ 1.2,
       Intervention == "Go to church regularly" ~ 1.4,
       Intervention == "Sit down" ~ 1.6,
-      Intervention == "More Pets"  ~ 1.8, 
+      Intervention == "More Pets" ~ 1.8,
       Intervention == "Eat red meat" ~ 1.9,
-      Intervention == "Be rich" ~ 2.1,
-      Intervention == "Suffer severe mental illness" ~ 2.4,
-      Intervention == "Become obese" ~ 2.5,
+      Intervention == "Be rich" ~ 2.25,
+      Intervention == "Be a woman" ~ 2.4,
+      Intervention == "Suffer severe mental illness" ~ 2.5,
+      Intervention == "Become obese" ~ 2.6,
       Intervention == "Keep smoking" ~ 2.7,
       Intervention == "Quit" ~ 2.7,
       TRUE ~ as.numeric(Science_strength)
@@ -62,7 +70,7 @@ levels_vec <- c(
   "Avoid heart disease", "Be alcoholic", "Get health checks ", "Get married!", "Be rich",
   "Be a woman", "Suffer severe mental illness", "Become obese", "Keep smoking", "Quit",
   "Eat healthy", "Live healthily", "Have a long-lived sibling", "Exercise more",
-  "Living at high altitude",
+  "Live at high altitude",
   "Married happy-go-lucky outdoors-loving sex-mad hippy party-girl in senior management with a cat"
 )
 
@@ -78,81 +86,147 @@ my_data_filtered <- my_data_filtered |>
     )
   )
 
+id_quit <- my_data_filtered$id[my_data_filtered$Intervention == "Keep smoking"]
+
+my_data_filtered <- my_data_filtered |>
+  mutate(
+    id_adj = case_when(
+      Intervention == "Married happy-go-lucky outdoors-loving sex-mad hippy party-girl in senior management with a cat" ~ id - 1.5,
+      id >= id_quit ~ id - 1,
+      TRUE ~ id
+    ),
+    bar_offset = id_adj
+  )
+```
+
+## Visual geometry construction
+
+```{r plot, fig.width=7, fig.height=6.5, fig.showtext=TRUE}
 poly_df <- my_data_filtered |>
   rowwise() |>
   mutate(
-    horiz = if_else(
-      Years_Capped > 0, 
-      pmax(0, Years_Capped - 0.15),
-      Years_Capped + 0.15
-    ),
+    horiz = if_else(Years_Capped > 0, pmax(0, Years_Capped - 0.80), Years_Capped + 0.80),
     diag_end = Years_Capped,
     top = bar_offset + 0.45,
     bottom = bar_offset - 0.45,
-    poly = list(
-      data.frame(
-        x = c(0, horiz, diag_end, 0),
-        y = c(top, top, bottom, bottom),
-        id = id,
-        Science_strength = Science_strength,
-        ultimate = Intervention == "Married happy-go-lucky outdoors-loving sex-mad hippy party-girl in senior management with a cat"
-      )
-    )
+    
+    base_fill = if_else(
+      Intervention == "Married happy-go-lucky outdoors-loving sex-mad hippy party-girl in senior management with a cat",
+      "#6b1786",
+      scales::col_numeric(
+        palette = c("#E5BB39", "#ea9038", "#8ECB9A"),
+        domain = range(c(1, 3))
+      )(Science_strength)
+    ),
+
+    poly = list({
+      if (Intervention %in% c("Have a long-lived maternal grandfather", "Have a long-lived sibling")) {
+        n_fade <- 90
+        split_ratio <- 0.35
+        
+        x_split_top <- horiz * split_ratio
+        x_split_bot <- diag_end * split_ratio
+        
+        solid_part <- data.frame(
+          x = c(0, x_split_top, x_split_bot, 0),
+          y = c(top, top, bottom, bottom),
+          poly_id = paste0(id_adj, "_solid"),
+          fill_val = base_fill,
+          alpha_val = 1
+        )
+        
+        seq_steps <- seq(split_ratio, 1, length.out = n_fade + 1)
+        x_top_edge <- seq_steps * horiz
+        x_bot_edge <- seq_steps * diag_end
+        alphas <- seq(1, 0.05, length.out = n_fade)
+        
+        xs <- c()
+        ys <- c()
+        alpha_vec <- c()
+        ids <- c()
+        
+        for (i in 1:n_fade) {
+           xs <- c(xs, x_top_edge[i], x_top_edge[i+1], x_bot_edge[i+1], x_bot_edge[i])
+           ys <- c(ys, top, top, bottom, bottom)
+           alpha_vec <- c(alpha_vec, rep(alphas[i], 4))
+           ids <- c(ids, rep(paste0(id_adj, "_fade_", i), 4))
+        }
+        
+        fade_part <- data.frame(
+          x = xs, y = ys, poly_id = ids, fill_val = base_fill, alpha_val = alpha_vec
+        )
+        
+        bind_rows(solid_part, fade_part)
+        
+      } else {
+        data.frame(
+          x = c(0, horiz, diag_end, 0),
+          y = c(top, top, bottom, bottom),
+          poly_id = as.character(id_adj),
+          fill_val = base_fill,
+          alpha_val = 1
+        )
+      }
+    })
   ) |>
   pull(poly) |>
   bind_rows()
 
-poly_df <- poly_df %>%
-  mutate(
-    fill_color = if_else(
-      ultimate,
-      "#6b1786",
-      scales::col_numeric(
-        palette = c("#E5BB39", "#ea9038", "#8ECB9A"),
-        domain = range(Science_strength[!ultimate], na.rm = TRUE)
-      )(Science_strength)
-    )
-  )
 
 longevity_dt <- ggplot() +
   geom_segment(
-  data = data.frame(x_val = seq(-10, 20, by = 5)),
-  aes(
-    x = x_val, xend = x_val,
-    y = max(poly_df$y) + 0.4,
-    yend = min(poly_df$y) - 0.4
-  ),
-  color = "#FFDDAA",
-  linewidth = 0.3,
-  alpha = 0.6
-) +
+    data = data.frame(x_val = seq(-10, 20, by = 5)),
+    aes(
+      x = x_val, xend = x_val,
+      y = max(poly_df$y) + 1,
+      yend = min(poly_df$y) - 1
+    ),
+    color = "#FFB777",
+    linewidth = 0.2,
+    alpha = 0.8
+  ) +
   geom_polygon(
     data = poly_df,
-    aes(x = x, y = y, group = id, fill = fill_color),
+    aes(x = x, y = y, group = poly_id, fill = fill_val, alpha = alpha_val),
     color = NA
   ) +
+  scale_alpha_identity() +
   geom_segment(
-  data = data.frame(x_val = 0),
-  aes(
-    x = x_val, xend = x_val,
-    y = max(poly_df$y) + 1,
-    yend = min(poly_df$y) - 1
-  ),
-  color = "gray6",
-  linewidth = 0.2
+    data = data.frame(x_val = 0),
+    aes(
+      x = x_val, xend = x_val,
+      y = max(poly_df$y) + 1,
+      yend = min(poly_df$y) - 1
+    ),
+    color = "gray6",
+    linewidth = 0.2
   ) +
   geom_text(
-    data = my_data_filtered,
+    data = my_data_filtered |> 
+      filter(Intervention != "Married happy-go-lucky outdoors-loving sex-mad hippy party-girl in senior management with a cat"),
     aes(
-      x = if_else(Years_Capped < 0, -0.5, 0.5),
+      x = if_else(Years_Capped < 0, -0.2, 0.2),
       y = bar_offset,
       label = Intervention,
-      hjust = if_else(Years_Capped < 0, 1, 0),
-      color = Intervention ==
-        "Married happy-go-lucky outdoors-loving sex-mad hippy party-girl in senior management with a cat"
+      hjust = if_else(Years_Capped < 0, 1, 0)
     ),
     family = "nunito",
-    size = 2.2
+    size = 2.2,
+    color = "black"
+  ) +
+  geom_text(
+    data = my_data_filtered |> 
+      filter(Intervention == "Married happy-go-lucky outdoors-loving sex-mad hippy party-girl in senior management with a cat"),
+    aes(
+      x = 0.2,
+      y = bar_offset,
+      label = Intervention,
+      hjust = 0
+    ),
+    family = "nunito_bold",
+    size = 2.2,
+    color = "white",
+    fontface = "plain"
   ) +
   scale_color_manual(values = c("TRUE" = "white", "FALSE" = "black"), guide = "none") +
   annotate(
@@ -167,11 +241,10 @@ longevity_dt <- ggplot() +
     family = "nunito",
     fontface = "bold",
     hjust = 1,
-    size = 2.2
+    size = 2.6
   ) +
   scale_fill_identity() +
   scale_y_continuous(NULL, breaks = NULL, labels = NULL) +
-  theme_minimal() +
   theme(
     text = element_text(family = "nunito"),
     legend.position = "none"
@@ -180,29 +253,46 @@ longevity_dt <- ggplot() +
 longevity_dt
 ```
 
-I start developing my graph: as dataset I use the last updated version of the data, which is my_data_filtered, and I create a bar plot that has as x-axis the interventions provided (Intervention), and as y-axis the Years (Years). This sets the stage for the geometry layers and scales. ADD GEOM_COL() CCOMENT
+## Axis and scale design
 
-I now add the horizontal reference lines to the background: I ensure that in the background there are the light orange lines (#FFDDAA) indicating the multiples of 5 for visual guidance, and the dark grey line (gray30) signalling the 0 mark as a clear separator between positive and negative values. I make the lines thin and place them before the bars to ensure the bars are drawn on top. Furthermore, I manually draw the small unit dots on the top horizontal axis using geom_point().
-
-I introduce the primary visual element, the bars (geom_col), and then control the numerical axis: I set the axis limits from -10 to 20 and, crucially, I ensure the numeric ticks (breaks) appear at every multiple of 5 to align with the reference lines. I define the horizontal axis: I set the numerical boundaries from -10 to 20 and specify that the major numerical labels should appear every 5 units. I ensure the position of the unit dots is defined using minor breaks every 1 unit, and I replace the number '0' with the word "YEARS" for clarity. Finally, I duplicate the entire axis to display the numbers both above and below the bars.
-
-```{r}
+```{r axis, fig.width=7, fig.height=6.5, fig.showtext=TRUE}
 longevity_dt <- longevity_dt +
   scale_x_continuous(
-    limits = c(-12, 21),
-    breaks = seq(-10, 21, by = 5),
+    limits = c(-25, 23),
+    breaks = seq(-10, 20, by = 5),
     minor_breaks = seq(-12, 21, by = 1),
-    labels = function(x) ifelse(x == 0, "YEARS", as.character(x)),
+    labels = function(x) ifelse(x == 0, expression(bold("YEARS")), as.character(x)),
     sec.axis = dup_axis()
+  ) +
+  geom_point(
+    data = data.frame(x_val = seq(-10, 20, by = 1)) |>
+      dplyr::filter(x_val %% 5 != 0),
+    aes(x = x_val, y = max(poly_df$y) + 1.6),
+    shape = 16,
+    size = 0.1,
+    color = "black",
+    inherit.aes = FALSE
+  ) +
+  coord_cartesian(clip = "off")
+
+tick_data <- data.frame(x_val = seq(-10, 20, by = 5))
+longevity_dt <- longevity_dt +
+  geom_segment(
+    data = tick_data,
+    aes(x = x_val, xend = x_val, 
+        y = max(poly_df$y) +1.45,  
+        yend = max(poly_df$y) + 1.75),
+    color = "black",
+    linewidth = 0.1,
+    inherit.aes = FALSE
   )
-longevity_dt <- longevity_dt + coord_cartesian(clip = "off")
 
 longevity_dt
 ```
 
-I imitate the original theme by setting the plot's background elements in a minimalist form: I set the panel's background to white (FFFFFF) and the plot's background to white (FFFFFF), and I ensure there are no internal grid lines (panel.grid.major/minor) cluttering the visualization. Finally, I remove all remaining default axis titles (axis.title.x.top, axis.title.x.bottom, axis.title.y) to achieve the clean, title-free aesthetic.
+## Theme and typographic styling
 
-```{r}
+```{r theme, fig.width=7, fig.height=6.5, fig.showtext=TRUE}
 longevity_dt <- longevity_dt +
   theme(
     panel.background = element_rect(fill = "#FFFFFF", color = NA),
@@ -212,72 +302,320 @@ longevity_dt <- longevity_dt +
     axis.title.x.top = element_blank(),
     axis.title.x.bottom = element_blank(),
     axis.title.y = element_blank(),
-    plot.margin = unit(c(2, 1, 0.05, 0.05), "cm"),
-    axis.text.y = element_blank()
-  )
-
-longevity_dt
-```
-
-I set the horizontal axis ticks (axis.ticks.x) to be visible and short, while ensuring the bottom axis ticks are removed (element_blank).
-
-```{r}
-longevity_dt <- longevity_dt +
-  theme(
-    axis.ticks.x = element_line(color = "black", linewidth = 0.2),
-    axis.ticks.length.x = unit(0.1, "cm"),
+    plot.margin = unit(c(0.2, 0.5, 0.1, 0.5), "cm"),
+    axis.text.y = element_blank(),
+    axis.ticks.x.top = element_blank(),
     axis.ticks.x.bottom = element_blank(),
-    axis.ticks.y = element_blank(),
-    legend.position = "none"
+    legend.position = "none",
+    axis.text.x = element_text(size = 5, margin = margin(t = -8)),
+    axis.text.x.top = element_text(size = 5, margin = margin(b = -8)) 
   )
 
 longevity_dt
 ```
 
+## Gender-specific icons
 
-```{r}
+```{r icons, fig.width=7, fig.height=6.5, fig.showtext=TRUE}
+male_icon <- image_read("man.png")
+female_icon <- image_read("women.png")
+
+female_icon <- image_scale(female_icon, paste0(image_info(male_icon)$width, "x", image_info(male_icon)$height, "!"))
+
+male_grob <- rasterGrob(male_icon, interpolate = TRUE)
+female_grob <- rasterGrob(female_icon, interpolate = TRUE)
+
+gender_icons <- my_data_filtered |>
+  filter(Intervention %in% c(
+    "Be optimistic", "Get promoted", "Have a long-lived maternal grandfather",
+    "Hang out with women - a lot!", "Have more orgasms",
+    "Be polygamous, maybe", "Be a woman"
+  )) |>
+  mutate(
+    icon_type = case_when(
+      Intervention %in% c("Get promoted", "Have a long-lived maternal grandfather", 
+                          "Hang out with women - a lot!", "Have more orgasms", "Be polygamous, maybe") ~ "male",
+      Intervention %in% c("Be optimistic", "Be a woman") ~ "female",
+      TRUE ~ "male"
+    ),
+    x_pos = -0.5,
+    y_pos = bar_offset
+  )
+```
+
+
+## Custom legend construction
+
+```{r legend, fig.width=7, fig.height=6.5, fig.showtext=TRUE}
 legend_plot <- ggplot() +
-  annotate("rect", xmin = 11, xmax = 14, ymin = 39.5, ymax = 41,
-           fill = "#E5BB39", color = NA) +
-  annotate("text", x = 12.5, y = 40.25, label = "Suggestive",
-           family = "nunito", size = 2, color = "black") +
-  
-  annotate("rect", xmin = 14, xmax = 16, ymin = 39.5, ymax = 41,
-           fill = "#EA9038", color = NA) +
-  annotate("text", x = 15, y = 40.25, label = "Good",
-           family = "nunito", size = 2, color = "black") +
-  
-  annotate("rect", xmin = 16, xmax = 18, ymin = 39.5, ymax = 41,
-           fill = "#8ECB9A", color = NA) +
-  annotate("text", x = 17, y = 40.25, label = "Strong",
-           family = "nunito", size = 2, color = "black") +
-  
-  annotate("polygon",
-           x = c(18, 18.7, 18),
-           y = c(39.5, 39.5, 41),
-           fill = "#8ECB9A", color = NA) +
-  
-  annotate("text", x = 14.5, y = 41.5,
-           label = "STRENGTH OF SCIENCE",
-           family = "nunito", fontface = "bold",
-           size = 2.5, color = "#444444") +
-  
-  annotate("text", x = 8, y = 40.25,
-           label = "male / female specific",
-           family = "nunito", size = 2, color = "#444444") +
-
-  coord_cartesian(xlim = c(5, 20), ylim = c(39, 43)) + 
+  annotate("rect", xmin = 11, xmax = 13.5, ymin = 39.8, ymax = 40.6, fill = "#E5BB39", color = NA) +
+  annotate("rect", xmin = 13.5, xmax = 16, ymin = 39.8, ymax = 40.6, fill = "#EA9038", color = NA) +
+  annotate("polygon", x = c(16, 18.2, 18.5, 16), y = c(40.6, 40.6, 39.8, 39.8), fill = "#8ECB9A", color = NA) +
+  annotate("text", x = 12.25, y = 40.2, label = "Suggestive", family = "nunito", size = 1.8, color = "#333333") +
+  annotate("text", x = 14.75, y = 40.2, label = "Good", family = "nunito", size = 1.8, color = "#333333") +
+  annotate("text", x = 17.2, y = 40.2, label = "Strong", family = "nunito", size = 1.8, color = "#333333") +
+  annotate("text", x = 18.5, y = 40.9, label = "STRENGTH OF SCIENCE", family = "nunito_bold", fontface = "bold", size = 2.5, color = "#333333", hjust = 1) +
+  annotate("text", x = 9.7, y = 40.2, label = "male / female specific", family = "nunito", size = 1.8, color = "#666666", hjust = 1) +
+  coord_cartesian(xlim = c(5, 20), ylim = c(39, 42)) +
   theme_void()
 
+legend_plot <- legend_plot +
+  annotation_custom(
+    grob = female_grob, 
+    xmin = 9.90, xmax = 10.55, 
+    ymin = 39.55, ymax = 40.8
+  ) +
+  annotation_custom(
+    grob = male_grob, 
+    xmin = 10.4, xmax = 11.0, 
+    ymin = 39.6, ymax = 40.8
+  )
+```
+
+## Annotations and explanatory notes
+
+```{r annotations, fig.width=7, fig.height=6.5, fig.showtext=TRUE}
+icon_size <- 0.7
+
+male_positions <- gender_icons |> filter(icon_type == "male")
+female_positions <- gender_icons |> filter(icon_type == "female")
+both_positions <- gender_icons |> filter(icon_type == "both")
+
+longevity_dt <- longevity_dt +
+  {if(nrow(male_positions) > 0) {
+    lapply(1:nrow(male_positions), function(i) {
+      annotation_custom(
+        grob = male_grob,
+        xmin = male_positions$x_pos[i] - icon_size/2,
+        xmax = male_positions$x_pos[i] + icon_size/2,
+        ymin = male_positions$y_pos[i] - icon_size/2,
+        ymax = male_positions$y_pos[i] + icon_size/2
+      )
+    })
+  }} +
+  {if(nrow(female_positions) > 0) {
+    lapply(1:nrow(female_positions), function(i) {
+      annotation_custom(
+        grob = female_grob,
+        xmin = female_positions$x_pos[i] - icon_size/2,
+        xmax = female_positions$x_pos[i] + icon_size/2,
+        ymin = female_positions$y_pos[i] - icon_size/2,
+        ymax = female_positions$y_pos[i] + icon_size/2
+      )
+    })
+  }}
+
+force_left_list <- c(
+  "Hang out with women - a lot!", "Be polygamous, maybe", "Sit down", "Eat healthy",
+  "Have a long-lived sibling", "Keep smoking",
+  "Live at a high altitude", "Be conscientious "
+)
+
+right_exceptions <- c("Get promoted", "Have more orgasms", "Get health checks ", "Exercise more")
+
+notes_df <- my_data_filtered |>
+  dplyr::filter(!is.na(Note) & Note != "" & Intervention != "Suffer severe mental illness") |>
+  dplyr::mutate(
+    Note_Wrapped = stringr::str_wrap(Note, width = 30),
+    x_note_pos = dplyr::case_when(
+      Intervention == "Suffer severe mental illness" ~ -14,
+      Intervention %in% force_left_list ~ -5.5,
+      Intervention %in% right_exceptions ~ 10,
+      TRUE ~ 15
+    ),
+    text_hjust = dplyr::if_else(x_note_pos < 0, 1, 0),
+    x_line_start = dplyr::case_when(
+      Intervention == "Be optimistic" ~ 2.7,
+      Intervention == "Get health checks " ~ 3.5,
+      Intervention == "Exercise more" ~ 2.9,
+      Intervention == "Hang out with women - a lot!" ~ -1.0,
+      Intervention == "Be polygamous, maybe" ~ -1.0,
+      sign(x_note_pos) == sign(Years_Capped) ~ Years_Capped,
+      TRUE ~ 0
+    ),
+    y_pos = bar_offset,
+    note_vjust = dplyr::if_else(
+      Intervention == "Hang out with women - a lot!",
+      0.3,
+      0.8
+    )
+  )
+
+mental_note_df <- my_data_filtered |>
+  dplyr::filter(Intervention == "Suffer severe mental illness") |>
+  dplyr::mutate(
+    y_start = bar_offset,
+    y_end = bar_offset + 1.2,
+    x_pos = -5.5,
+    x_midpoint = -9,
+    Note_Wrapped = "25 years shorter\nlife expectancy"
+  )
+
+longevity_dt <- longevity_dt +
+  geom_segment(
+    data = notes_df,
+    aes(x = x_line_start, xend = x_note_pos, y = y_pos, yend = y_pos),
+    linetype = "19", color = "black", linewidth = 0.1, inherit.aes = FALSE, lineend="round"
+  ) +
+  geom_text(
+    data = notes_df,
+    aes(
+      x = x_note_pos + dplyr::if_else(x_note_pos > 0, 0.2, -0.2),
+      y = y_pos,
+      label = Note_Wrapped,
+      hjust = text_hjust,
+      vjust = note_vjust
+    ),
+    size = 1.3, color = "#666666", family = "sans", lineheight = 0.8, inherit.aes = FALSE
+  ) +
+  geom_segment(
+    data = mental_note_df,
+    aes(x = x_midpoint, xend = x_midpoint, y = y_start, yend = y_end),
+    linetype = "19", color = "black", linewidth = 0.1, inherit.aes = FALSE, lineend="round"
+  ) +
+  geom_segment(
+    data = mental_note_df,
+    aes(x = x_midpoint, xend = -8.7, y = y_end, yend = y_end),
+    linetype = "19", color = "black", linewidth = 0.1, inherit.aes = FALSE, lineend="round"
+  ) +
+  geom_text(
+    data = mental_note_df,
+    aes(x = x_pos - 0.2, y = y_end, label = Note_Wrapped),
+    hjust = 1, vjust = 0.5, size = 1.3, color = "#666666", family = "sans", lineheight = 0.8, inherit.aes = FALSE
+  )
+
+longevity_dt
+```
+
+## Final plot composition
+
+```{r final, fig.width=7, fig.height=6.5, fig.showtext=TRUE}
 final_plot <- ggdraw() +
-  draw_plot(longevity_dt) +
-  draw_plot(legend_plot, x = 0.55, y = 0.90, width = 0.4, height = 0.12)
+  draw_plot(longevity_dt, x = 0, y = 0, width = 1, height = 0.88) +
+  draw_plot(legend_plot, x = 0.58, y = 0.88, width = 0.38, height = 0.11) +
+  draw_label(
+    "Live Long",
+    x = 0.32, y = 0.96,
+    hjust = 0, vjust = 1,
+    fontfamily = "nunito_title",
+    size = 20,
+    color = "#333333"
+) +
+  draw_label(
+    "What really extends lifespan?",
+    x = 0.32, y = 0.91,
+    hjust = 0, vjust = 1,
+    fontfamily = "nunito_subtitle",
+    size = 10,
+    color = "#333333"
+)
 
 final_plot
-
 ```
 
 
+## Data Preparation and Label Positioning
 
+```{r data preparation, fig.width=7.5, fig.height=6.5, fig.showtext=TRUE}
+data_prep <- my_data |>
+  filter(Science_strength %in% c(1, 2, 3)) |>
+  mutate(
+    Intervention = case_when(
+      Intervention == "Quit" ~ "Quit smoking",
+      Intervention == "Have a long-lived maternal grandfather" ~ "Have a long-lived maternal grandad",
+      TRUE ~ Intervention
+    ),
+    Years = as.numeric(Years),
+    Strength_Label = factor(Science_strength,
+                            levels = c(1, 2, 3),
+                            labels = c("Weak scientific evidence", "Moderate scientific evidence", "Strong scientific evidence"))
+  ) |>
+  arrange(Science_strength, Years) |>
+  mutate(
+    Years_Capped = if_else(Intervention == "Suffer severe mental illness", -12, Years),
+    Years_Display = Years_Capped * 5,
+    Intervention = reorder(Intervention, -Years) 
+  )
+```
 
+## Plot Creation Function
 
+```{r improved plot, fig.width=7.5, fig.height=6.5, fig.showtext=TRUE}
+fill_scale <- scale_fill_gradientn(
+  colors = c("#EF9A9A", "#FFCC80", "#FFF59D", "#A5D6A7", "#66BB6A"),
+  limits = c(-75, 75), 
+  values = scales::rescale(c(-75, -15, 0, 15, 75)),
+  name = "YEARS",
+  breaks = c(-75, 0, 75),
+  labels = c("LOST", "0", "GAINED"),
+  guide = guide_colorbar(
+    title.position = "top", 
+    title.hjust = 0.5, 
+    barwidth = unit(5, "cm"), 
+    barheight = unit(0.3, "cm"),
+    frame.colour = NA, 
+    ticks = FALSE 
+  )
+)
+
+main_plot <- ggplot(data_prep, aes(y = Intervention, x = Years_Display)) +
+  geom_vline(xintercept = seq(-50, 100, by = 25), color = "orange", linewidth = 0.3, alpha = 0.8) +
+  geom_vline(xintercept = 0, color = "black", linewidth = 0.5) +
+  geom_col(aes(fill = Years_Display), width = 0.95, color = "white", linewidth = 0.5) +
+  geom_text(
+    aes(
+      x = if_else(Years_Display < 0, -2.5, 2.5),
+      label = Intervention,
+      hjust = if_else(Years_Display < 0, 1, 0)
+    ),
+    family = "nunito_bold", 
+    fontface = "bold", 
+    size = 2, 
+    color = "black"
+  ) +
+  facet_wrap(~ Strength_Label, scales = "free_y", ncol = 3, strip.position = "top") +
+  fill_scale + 
+  scale_x_continuous(
+    limits = c(-80, 110),
+    breaks = seq(-50, 100, by = 25),
+    labels = c("-10", "-5", "YEARS", "5", "10", "15", "20"),
+    sec.axis = dup_axis()
+  ) +
+  scale_y_discrete(expand = c(0, 0)) +
+  coord_cartesian(clip = "off") +
+  labs(
+    title = "Live Long",
+    subtitle = "What really extends lifespan?"
+  ) +
+  theme_void() +
+  theme(
+    text = element_text(family = "nunito_bold", face = "bold"),
+    legend.position = c(0.98, 1.2), 
+    legend.direction = "horizontal",
+    legend.justification = "right",
+    legend.title = element_text(size = 8, family = "nunito_bold", color = "black"),
+    legend.text = element_text(size = 6, family = "nunito_bold", color = "black", margin = margin(t=2)),
+    plot.title = element_text(size = 20, family = "nunito_title", face = "bold", color = "#333333", hjust = 0, margin = margin(b=5, l=18)),
+    plot.subtitle = element_text(size = 11, family = "nunito_subtitle", face = "italic", color = "black", hjust = 0, margin = margin(b=25, l=18)),
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    panel.spacing = unit(0.2, "lines"), 
+    strip.placement = "outside", 
+    strip.text = element_text(size = 9, family = "nunito_bold", color = "#333333", margin = margin(b=5)), 
+    axis.text.x = element_text(size = 4.5, face = "bold", color = "black", margin = margin(t = 2)),
+    axis.text.x.top = element_text(size = 4.5, face = "bold", color = "black", margin = margin(b = 2)),
+    plot.margin = margin(t = 10, r = 5, b = 5, l = 5)
+  )
+
+footer <- ggplot() +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 1)) +
+  geom_segment(aes(x = 0.05, xend = 0.95, y = 0.56, yend = 0.56), color = "#ebdab5", linewidth = 14, lineend = "round") +
+  geom_segment(aes(x = 0.055, xend = 0.95, y = 0.60, yend = 0.60), color = "#FFFDF2", linewidth = 14, lineend = "round") +
+  geom_text(aes(x = 0.5, y = 0.68, label = "THE ULTIMATE LONGEVITY PROFILE"), family = "nunito_bold", fontface = "bold", size = 3.5, color = "black", hjust = 0.5) +
+  geom_text(aes(x = 0.5, y = 0.52, label = "Married happy-go-lucky outdoors-loving sex-mad hippy party-girl in senior management with a cat"), family = "nunito_subtitle", fontface = "italic", size = 2.5, color = "black", hjust = 0.5) +
+  theme_void()
+
+final_combined <- plot_grid(main_plot, footer, ncol = 1, rel_heights = c(1, 0.15))
+
+final_combined
+```
