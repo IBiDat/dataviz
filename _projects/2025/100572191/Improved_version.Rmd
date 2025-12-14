@@ -1,9 +1,14 @@
 ---
-title: "Improved_version"
-output: html_document
-date: "2025-12-03"
+title: "Longevity graph: improved version"
+categories: "2025"
+author: Gaia Leuzzi
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
 ---
-
+##Setup and Data Loading
 ```{r setup}
 library(ggplot2)
 library(forcats)
@@ -22,6 +27,7 @@ showtext_auto()
 my_data <- read.csv("KIB_longevity data.csv")
 ```
 
+##Data Preparation and Label Positioning
 ```{r data}
 data_prep <- my_data |>
   mutate(Years = as.numeric(Years)) |>
@@ -75,6 +81,7 @@ data_prep <- my_data |>
   )
 ```
 
+##Subplot Creation Function
 ```{r plot}
 create_subplot <- function(subset_data, margin_vec) {
   
@@ -161,6 +168,7 @@ create_subplot <- function(subset_data, margin_vec) {
 }
 ```
 
+##Generating Plots by Evidence Strength
 ```{r , fig.width=75, fig.height=65, fig.showtext=TRUE}
 df_suggestive <- data_prep |> filter(Science_strength == 1)
 df_good <- data_prep |> filter(Science_strength == 2)
@@ -179,7 +187,8 @@ plot_2
 plot_3
 ```
 
-```{r legend, fig.width=75, fig.height=65, fig.showtext=TRUE }
+##Legend creation and customization
+```{r legend, fig.width=75, fig.height=65, fig.showtext=TRUE}
 legend_plot <- ggplot() +
   annotate("rect", xmin = 9.5, xmax = 13.4, ymin = 38.7, ymax = 39.5, fill = "#E57373", color = NA) +
   annotate("text", x = 11.5, y = 39.15, label = "Suggestive - weak evidence", family = "nunito_bold", fontface = "bold", size = 13.5, color = "black") +
@@ -191,12 +200,44 @@ legend_plot <- ggplot() +
   coord_cartesian(xlim = c(5, 20), ylim = c(39, 43)) +
   theme(
     plot.background = element_rect(fill = "white", color = NA),
-    text = element_text(family = "nunito_bold", face = "bold"),
+    text = element_text(family = "nunito_bold"),
     panel.background = element_rect(fill = "white")
   )
 ```
 
-```{r composition, fig.width=75, fig.height=65, fig.showtext=TRUE}
+##Suggestion creation
+```{r, fig.width=75, fig.height=65, fig.showtext=TRUE}
+lamp_img <- image_read("lamp.png")
+
+rounded_box <- roundrectGrob(
+  gp = gpar(fill = "#8c4aa8", col = NA), 
+  r = unit(12, "mm") 
+)
+
+combo_plot <- ggplot() +
+  annotation_custom(rounded_box, xmin = 0.5, xmax = 42, ymin = 3, ymax = 9) +
+  annotation_raster(lamp_img, xmin = 0.5, xmax = 4.8, ymin = 0, ymax = 12.5, interpolate = TRUE) +
+  annotate("text", x = 4.7, y = 7.2, label = "THE ULTIMATE LONGEVITY PROFILE", 
+           family = "nunito_bold", fontface = "bold", size = 35, color = "#FFFFFF", hjust = 0) +
+  annotate("text", x = 4.7, y = 4.75, 
+           label = "Married happy-go-lucky outdoors-loving sex-mad hippy party-girl in senior management with a cat", 
+           family = "nunito_title", fontface = "italic", size = 30, color = "#FFFFFF", hjust = 0) +
+  coord_cartesian(xlim = c(0, 42), ylim = c(0, 9)) +
+  theme(
+    axis.line = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank(),
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background = element_rect(fill = "white", color = NA),
+    plot.margin = margin(0, 0, 0, 0)
+  )
+```
+
+
+##Final plot composition
+```{r, fig.width=75, fig.height=65, fig.showtext=TRUE}
 plots_combined <- plot_grid(
   plot_1, plot_2, plot_3,
   ncol = 3, nrow = 1,
@@ -208,11 +249,9 @@ plots_combined <- plot_grid(
 
 final_plot <- ggdraw() +
   draw_grob(rectGrob(gp = gpar(fill = "white", col = NA))) +
-  
-  draw_plot(plots_combined, x = 0, y = 0.05, width = 1, height = 0.85) + 
-  
+  draw_plot(plots_combined, x = 0, y = 0.13, width = 1, height = 0.77) + 
   draw_plot(legend_plot, x = 0.55, y = 0.915, width = 0.45, height = 0.14) + 
-  
+  draw_plot(combo_plot, x = 0.05, y = 0.02, width = 0.9, height = 0.1) +
   draw_label(
     "Live Long - What really extends lifespan?",
     x = 0.05, 
@@ -223,7 +262,6 @@ final_plot <- ggdraw() +
     size = 160, 
     color = "#333333"
   ) +
-  
   draw_label(
     "Ranked by Evidence Strength",
     x = 0.05, y = 0.94,
