@@ -1,0 +1,239 @@
+---
+title: "Improved_version"
+output: html_document
+date: "2025-12-03"
+---
+
+```{r setup}
+library(ggplot2)
+library(forcats)
+library(dplyr)
+library(showtext)
+library(cowplot)
+library(magick)
+library(grid)
+
+font_add_google("Nunito Sans", "nunito", regular.wt = 200)
+font_add_google("Nunito", "nunito_title", regular.wt = 500)
+font_add_google("Nunito", "nunito_subtitle", regular.wt = 200)
+font_add_google("Nunito", "nunito_bold", regular.wt = 900)
+showtext_auto()
+
+my_data <- read.csv("KIB_longevity data.csv")
+```
+
+```{r data}
+data_prep <- my_data |>
+  mutate(Years = as.numeric(Years)) |>
+  arrange(Science_strength, Years) |>
+  mutate(
+    Years_Capped = if_else(Intervention == "Suffer severe mental illness", -12, Years),
+    fill_color = case_when(
+      Science_strength == 1 ~ "#E57373",
+      Science_strength == 2 ~ "#FFB74D",
+      Science_strength == 3 ~ "#81C784",
+      TRUE ~ "#FFB74D"
+    ),
+    value_text = paste0(
+      ifelse(Years > 0, "+", ""),
+      ifelse(Years %% 1 == 0, as.character(Years), as.character(round(Years, 1))),
+      " years"
+    ),
+    txt_clean = as.character(Intervention),
+    n_total = nchar(txt_clean),
+    n_wide = nchar(gsub("[^mwMOGWQ@]", "", txt_clean)),
+    text_width = (n_total * 0.85) + (n_wide * 0.3),
+    label_x_pos = case_when(
+      Intervention == "Suffer severe mental illness" ~ -26.5, 
+      Intervention == "Have a long-lived maternal grandfather" ~ 27.6, 
+      Intervention == "Hang out with women - a lot!" ~ 23, 
+      Intervention == "Be polygamous, maybe" ~ 21,
+      Intervention == "Live at high altitude" ~ 20,
+      Intervention == "Eat red meat" ~ -14,
+      Intervention == "Keep smoking" ~ -14.5,
+      Intervention == "Live in a city" ~ -13,
+      Intervention == "Be alcoholic" ~ -13, 
+      Intervention == "Sleep too much" ~ -15, 
+      Intervention == "Sit down" ~ -11, 
+      Intervention == "Get promoted" ~ 13.5, 
+      Intervention == "Have more orgasms" ~ 18, 
+      Intervention == "Be a woman" ~ 14,
+      Intervention == "Be rich" ~ 13, 
+      Intervention == "Quit" ~ 8,
+      Intervention == "Be rich" ~ 14,
+      Intervention == "Become obese" ~ -15,
+      Intervention == "Avoid cancer" ~ 16.5, 
+      Intervention == "Avoid heart disease" ~ 20,
+      Intervention == "Live healthily" ~ 16, 
+      Intervention == "More Pets" ~ 15,
+      Intervention == "Exercise more" ~ 15, 
+      Intervention == "Eat healthy" ~ 15,
+      Intervention == "Get married!" ~ 15,
+      Years_Capped < 0 ~ -text_width - 1.5,
+      TRUE ~ text_width + 1.5
+    )
+  )
+```
+
+```{r plot}
+create_subplot <- function(subset_data, margin_vec) {
+  
+  subset_data <- subset_data |>
+    mutate(
+      Intervention = fct_rev(fct_inorder(Intervention)),
+      id = as.integer(Intervention),
+      bar_offset = as.numeric(id)
+    )
+
+  min_grid <- min(subset_data$bar_offset) - 0.8
+  max_grid <- max(subset_data$bar_offset) + 0.8
+  
+  axis_labels <- data.frame(
+    x_val = seq(-10, 20, by = 10),
+    label = c("-10", "YEARS", "10", "20")
+  )
+
+  p <- ggplot(subset_data) +
+    geom_segment(
+      data = data.frame(x_val = seq(-10, 20, by = 5)),
+      aes(x = x_val, xend = x_val, y = min_grid, yend = max_grid),
+      color = "orange", linewidth = 0.9, alpha = 0.6
+    ) +
+    geom_col(
+      aes(x = Years_Capped, y = bar_offset, fill = fill_color),
+      orientation = "y",
+      width = 0.85
+    ) +
+    annotate(
+      "segment",
+      x = 0, xend = 0, y = min_grid, yend = max_grid,
+      color = "gray6", linewidth = 0.6
+    ) +
+    geom_text(
+      aes(
+        x = if_else(Years_Capped < 0, -0.2, 0.2),
+        y = bar_offset,
+        label = Intervention,
+        hjust = if_else(Years_Capped < 0, 1, 0)
+      ),
+      family = "nunito_bold", fontface = "bold", size = 16, color = "black" 
+    ) +
+    geom_text(
+      aes(
+        x = label_x_pos,
+        y = bar_offset,
+        label = value_text,
+        hjust = if_else(Years_Capped < 0, 1, 0) 
+      ),
+      family = "nunito_title", fontface = "italic", size = 12, color = "black" 
+    ) +
+    geom_text(
+      data = axis_labels,
+      aes(x = x_val, y = max_grid + 0.6, label = label),
+      family = "nunito_bold", fontface = "bold", size = 22, color = "#444444"
+    ) +
+    geom_text(
+      data = axis_labels,
+      aes(x = x_val, y = min_grid - 0.6, label = label),
+      family = "nunito_bold", fontface = "bold", size = 22, color = "#444444"
+    ) +
+    scale_fill_identity() +
+    scale_y_continuous(NULL, breaks = NULL, labels = NULL, expand = c(0, 1)) +
+    coord_cartesian(clip = "off") + 
+    scale_x_continuous(
+      limits = c(-32, 30), 
+      breaks = NULL
+    ) +
+    theme_void() +
+    theme(
+      text = element_text(family = "nunito_bold", face = "bold"),
+      plot.background = element_rect(fill = "white", color = NA),
+      panel.background = element_rect(fill = "white", color = NA),
+      axis.text.x = element_blank(),
+      axis.text.x.top = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      legend.position = "none",
+      plot.margin = margin_vec 
+    )
+  
+  return(p)
+}
+```
+
+```{r , fig.width=75, fig.height=65, fig.showtext=TRUE}
+df_suggestive <- data_prep |> filter(Science_strength == 1)
+df_good <- data_prep |> filter(Science_strength == 2)
+df_strong <- data_prep |> filter(Science_strength >= 3) 
+
+margin_1 <- margin(0, 0, 0, -50)
+margin_2 <- margin(0, 0, 0, -20)
+margin_3 <- margin(0, 0, 0, -30)
+
+plot_1 <- create_subplot(df_suggestive, margin_1)
+plot_2 <- create_subplot(df_good, margin_2)
+plot_3 <- create_subplot(df_strong, margin_3)
+
+plot_1
+plot_2
+plot_3
+```
+
+```{r legend, fig.width=75, fig.height=65, fig.showtext=TRUE }
+legend_plot <- ggplot() +
+  annotate("rect", xmin = 9.5, xmax = 13.4, ymin = 38.7, ymax = 39.5, fill = "#E57373", color = NA) +
+  annotate("text", x = 11.5, y = 39.15, label = "Suggestive - weak evidence", family = "nunito_bold", fontface = "bold", size = 13.5, color = "black") +
+  annotate("rect", xmin = 13.4, xmax = 16.95, ymin = 38.7, ymax = 39.5, fill = "#FFB74D", color = NA) +
+  annotate("text", x = 15.17, y = 39.15, label = "Good - moderate evidence", family = "nunito_bold", fontface = "bold", size = 13.5, color = "black") +
+  annotate("rect", xmin = 16.95, xmax = 20.3, ymin = 38.7, ymax = 39.5, fill = "#81C784", color = NA) +
+  annotate("text", x = 18.6, y = 39.15, label = "Strong - robust evidence", family = "nunito_bold", fontface = "bold", size = 13.5, color = "black") +
+  annotate("text", x = 14.5, y = 40, label = "STRENGTH OF SCIENCE", family = "nunito_bold", fontface = "bold", size = 30, color = "#444444") +
+  coord_cartesian(xlim = c(5, 20), ylim = c(39, 43)) +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    text = element_text(family = "nunito_bold", face = "bold"),
+    panel.background = element_rect(fill = "white")
+  )
+```
+
+```{r composition, fig.width=75, fig.height=65, fig.showtext=TRUE}
+plots_combined <- plot_grid(
+  plot_1, plot_2, plot_3,
+  ncol = 3, nrow = 1,
+  rel_widths = c(1.3, 0.95, 0.95),
+  axis = "tb",
+  labels = NULL,
+  label_size = 0
+)
+
+final_plot <- ggdraw() +
+  draw_grob(rectGrob(gp = gpar(fill = "white", col = NA))) +
+  
+  draw_plot(plots_combined, x = 0, y = 0.05, width = 1, height = 0.85) + 
+  
+  draw_plot(legend_plot, x = 0.55, y = 0.915, width = 0.45, height = 0.14) + 
+  
+  draw_label(
+    "Live Long - What really extends lifespan?",
+    x = 0.05, 
+    y = 0.98, 
+    hjust = 0, vjust = 1,
+    fontfamily = "nunito_title",
+    fontface = "bold",
+    size = 160, 
+    color = "#333333"
+  ) +
+  
+  draw_label(
+    "Ranked by Evidence Strength",
+    x = 0.05, y = 0.94,
+    hjust = 0, vjust = 1,
+    fontfamily = "nunito_subtitle",
+    fontface = "bold",
+    size = 120, 
+    color = "#666666"
+  )
+
+final_plot
+```
+
