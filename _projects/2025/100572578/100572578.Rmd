@@ -1,7 +1,7 @@
 ---
-title: "Data Vis - Graph"
+title: "CAT: Australia Country Profile"
 description: |
-  A short description of the post.
+  This article details the process of replicating a graph of the Australian Country Profile created by Climate Action Tracker (CAT) in 2025.
 categories: "2025"
 author: Samantha Riordan
 date: "`r Sys.Date()`"
@@ -15,11 +15,9 @@ output:
 knitr::opts_chunk$set(out.width="100%", fig.align="center", fig.showtext=TRUE)
 ```
 
-# CAT: Australia Country Profile
-
-This article details the process of replicating a graph of the Australian Country Profile created by Climate Action Tracker (CAT) in 2025.
 
 Add contents list here
+FIX PRINT VIEW FOR ALL INTERMEDIATE GRAPHS 
 
 ## Introduction
 
@@ -54,9 +52,161 @@ showtext_auto()
 
 
 
+## Replicating the Graph 
+
+### Main Graph (left side)
+
+```{r}
+#First plot - base
+p1 <- ggplot() +
+  scale_x_continuous(
+    limits = c(1990, 2031),
+    breaks = seq(1990, 2030, by = 10)) +
+  scale_y_continuous(
+    limits = c(-100, 600),
+    breaks = seq(-100, 600, by = 100)) +
+  theme(
+    text = element_text(family = "Ubuntu"),
+    axis.title = element_blank(),
+    panel.background =  element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.major.y = element_line(colour = "#D5D5D5", 
+                                      linewidth = 0.3),
+    axis.text.y = element_text(size = 32,
+                   margin = margin(0,.4,0,0, "cm"), 
+                   colour = "black"), 
+    axis.text.x = element_text(size = 36, 
+                              face = "bold",
+                              margin = margin(0.3,0,0,0, "cm"),
+                              colour = "black"),
+    axis.ticks = element_blank(),
+    plot.margin = margin(0,0,0,0.07, "inches")) +
+  coord_cartesian(
+    xlim = c(1990,2030),
+    clip = "off", 
+    expand = FALSE) +
+  # Add a horizontal line at zero for reference
+  geom_hline(yintercept = 0, 
+             linetype = "solid", 
+             color = "black", 
+             linewidth = 1) 
+```
+
+### Add the rating bands and Historical emissions lines and annotations 
 
 
 
+```{r}
+# Create plot with rating bands
+p2 <- p1 +
+  # Rating bands (drawn first so they're in background)
+  # Critically insufficient (top)
+  geom_ribbon(data = country,
+              aes(x = year, 
+                  ymin = `Highly insufficient`, 
+                  ymax = pmin(`Upper limit`, 600)),
+              fill = "#606060", alpha = 0.4) +
+  # Highly insufficient
+  geom_ribbon(data = country,
+              aes(x = year, 
+                  ymin = Insufficient, 
+                  ymax = `Highly insufficient`),
+              fill = "#EF694A", 
+              alpha = 0.4) +
+  # Insufficient
+  geom_ribbon(data = country,
+              aes(x = year, 
+                  ymin = `Almost sufficient`, 
+                  ymax = Insufficient),
+              fill = "#F2AC48", alpha = 0.4) +
+  # Almost sufficient
+  geom_ribbon(data = country,
+              aes(x = year, 
+                  ymin = `1.5°C compatible`, 
+                  ymax = `Almost sufficient`),
+              fill = "#F2E464", alpha = 0.4) +
+  # 1.5C compatible (bottom)
+  geom_ribbon(data = country,
+              aes(x = year, 
+                  ymin = `Lower limit`, 
+                  ymax = `1.5°C compatible`),
+              fill = "#B0CB67", 
+              alpha = 0.4)
+# Add lines to rating category bands 
+p3 <- p2 + 
+  geom_line(data = country,
+            aes(x = year, 
+                y = `Highly insufficient`),
+            color = "#EF694A",
+            linewidth = 1) +
+    geom_line(data = country,
+            aes(x = year, 
+                y = `Insufficient`),
+            color = "#F2AC48",
+            linewidth = 1) +
+    geom_line(data = country,
+            aes(x = year, 
+                y = `Almost sufficient`),
+            color = "#F2E464",
+            linewidth = 1) +
+    geom_line(data = country,
+            aes(x = year, 
+                y = `1.5°C compatible`),
+            color = "#B0CB67",
+            linewidth = 1)
+# History line 
+p4 <- p3 + 
+  geom_line(data = historical_exc, 
+            aes(x = year, 
+                y = emissions),
+            linewidth = 1, 
+            color = "black") + 
+    # Add labels for the series
+    annotate("text", 
+             x = 1990, 
+             y = 420, 
+             label = "Historical", 
+             hjust = 0, size = 10, 
+             family = "Ubuntu")
+# LULUCF line 
+p5 <- p4 + 
+  geom_line(data = lulucf, 
+            aes(x = year, y = emissions),
+            linewidth = 1, color = "#65A653") +
+  # Add labels for the series
+  annotate("text", 
+           x = 1997, 
+           y = 15, 
+           label = "Land use & forests", 
+           size = 10, 
+           color = "#65A653", 
+           hjust = 0, 
+           vjust = 0,
+           family = "Ubuntu") 
+# Announced policies annotation
+p6 <- p5 +
+  annotate("text", 
+           x = 2021, 
+           y = 385, 
+           label = "Announced policies", 
+           hjust = 1, 
+           vjust = 1, 
+           size = 10, 
+           color = "#4F8EB5",
+           family = "Ubuntu")
+# Connecting lines from points to labels
+p7 <- p6 +
+  geom_path(
+    data = line1p, 
+    aes(x = year, y = emissions), 
+    color = "black", linewidth = 0.3) +
+  geom_path(
+    data = line2p, 
+    aes(x = year, y = emissions), 
+    color = "black", linewidth = 0.3)
+p7
+
+```
 
 
 
