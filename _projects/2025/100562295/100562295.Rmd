@@ -1,0 +1,518 @@
+---
+title: "Final Graph: Storm Warnings"
+description: |
+  A short description of the post.
+author: Paloma Navarro
+date: 2025-12-15
+output:
+  distill::distill_article:
+    self_contained: false
+---
+
+## Final Graph: Storm Warnings
+
+![](images/clipboard-2156084656.png)
+
+## Loading libraries
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(ggplot2)
+library(showtext)
+library(patchwork)
+library(ggstream)
+```
+
+## Adding fonts
+
+```{r}
+font_add_google("Barlow", "barlow")
+font_add_google("Barlow Condensed", "Barlow Condensed")  
+showtext_auto()
+```
+
+## Loading data
+
+```{r}
+data_raw <- read_csv("events-US-1980-2024.csv", skip = 2, show_col_types = FALSE) |> 
+  clean_names()
+```
+
+Loading the data, skipping the two non-data header rows. Use the janitor package clean names function to standardize the name of the columns (lowercase)
+
+## Recoding and tidying data
+
+```{r}
+data_aggregated <- data_raw |> 
+  mutate(year = str_sub(as.character(begin_date), 1, 4) |> as.numeric()) |> 
+  filter(year >= 1980, year <= 2017) |> 
+  mutate(
+    disaster_type = case_when(
+      disaster == "Tropical Cyclone" ~ "HURRICANE",
+      disaster == "Drought" ~ "DROUGHT",
+      disaster == "Severe Storm" ~ "SEVERE STORM",
+      disaster == "Flooding" ~ "FLOODING",
+      disaster == "Freeze" ~ "FREEZE",
+      disaster == "Wildfire" ~ "WILDFIRE",
+      disaster == "Winter Storm" ~ "WINTER STORM",
+      .default = disaster 
+    )
+  ) |> 
+  group_by(year, disaster_type) |> 
+  summarise(n_events = n(), .groups = "drop") |> 
+  complete(year = 1980:2017, disaster_type, fill = list(n_events = 0)) |> 
+  mutate(
+    disaster_type = factor(disaster_type, levels = c(
+      "SEVERE STORM", "HURRICANE", "FLOODING", "WILDFIRE",
+      "FREEZE", "DROUGHT", "WINTER STORM"
+    ))
+  )
+```
+
+## Manual coordination
+
+```{r}
+WIDTH_FACTOR <- 2 #Width of each year
+MAX_WIDTH <- 10 * WIDTH_FACTOR #width of each segment
+
+#dividing data for each segment
+seg1 <- data_aggregated |> filter(year <= 1990) |> mutate(segment = 1)
+seg2 <- data_aggregated |> filter(year >= 1990, year <= 2000) |> mutate(segment = 2)
+seg3 <- data_aggregated |> filter(year >= 2000, year <= 2010) |> mutate(segment = 3)
+seg4 <- data_aggregated |> filter(year >= 2010) |> mutate(segment = 4)
+
+path_data_base <- bind_rows(seg1, seg2, seg3, seg4)
+
+#Ordering Y axis position
+path_data <- path_data_base |>
+  arrange(segment, year, desc(disaster_type)) |> #correct order
+  group_by(segment, year) |> #working on each year per segment 
+  mutate(
+    SCALE_FACTOR = 1.5, 
+    total_height = sum(n_events) * SCALE_FACTOR, #total height of the                                                           disasters in a specific year
+    center_offset = -total_height / 2,
+    ymax_cumulative = cumsum(n_events * SCALE_FACTOR), #accumulated sum of                                                            events
+    ymin_cumulative = ymax_cumulative - (n_events * SCALE_FACTOR),
+    y_centered_min = ymin_cumulative + center_offset,
+    y_centered_max = ymax_cumulative + center_offset
+  ) |> 
+  ungroup() |> 
+  mutate(
+    x_new = case_when( #defining the segments of each year and its order
+      segment == 1 ~ (1990 - year) * WIDTH_FACTOR,
+      segment == 2 ~ (year - 1990) * WIDTH_FACTOR,
+      segment == 3 ~ (2010 - year) * WIDTH_FACTOR,
+      segment == 4 ~ (year - 2010) * WIDTH_FACTOR
+    ),
+    y_offset = case_when( #positioning each segment in the grid
+      segment == 1 ~ 0,
+      segment == 2 ~ -22,
+      segment == 3 ~ -44,
+      segment == 4 ~ -74
+    ),
+    y_final_min = y_centered_min + y_offset,
+    y_final_max = y_centered_max + y_offset
+  )
+
+```
+
+## Creating curves for stacked area chart
+
+```{r}
+
+smooth_segment <- function(df) { 
+  if(nrow(df) < 2) return(data.frame()) #two necessary points to                                          create a curve -> creating a union 
+  df_augmented <- df |> arrange(x_new)#ordered by the established data
+  x_seq <- seq(min(df$x_new), max(df$x_new), length.out = 400) 
+  smooth_min <- spline(df_augmented$x_new, df_augmented$y_final_min, xout = x_seq, method = "natural")
+  smooth_max <- spline(df_augmented$x_new, df_augmented$y_final_max, xout = x_seq, method = "natural") #smoothing and creating the curve
+  data.frame(x_new = x_seq, y_final_min = smooth_min$y, y_final_max = smooth_max$y)
+}
+
+path_data_smooth <- path_data |> 
+  group_by(segment, disaster_type) |> 
+  group_modify(~ smooth_segment(.x)) |> 
+  ungroup() #apply to all segments 
+
+```
+
+## Creating connectors of the different segments
+
+```{r}
+connectors_left <- data.frame(
+  x = 0, xend = 0,
+  y = c(0, -44),      
+  yend = c(-22, -74)  
+)
+
+connectors_right <- data.frame(
+  x = MAX_WIDTH, xend = MAX_WIDTH,
+  y = -22,
+  yend = -44
+)
+
+```
+
+## Defining colors
+
+```{r}
+chart_colors <- c(
+  "SEVERE STORM" = "#6fcfe4", "HURRICANE" = "#b0bfe0", "FLOODING" = "#fdd870",
+  "WILDFIRE" = "#b8dda8", "FREEZE" = "#c7d6da", "DROUGHT" = "#f291b8",
+  "WINTER STORM" = "#d9b3d0"
+)
+```
+
+## Creating diagram "Number of events"
+
+```{r}
+POS_2017 <- 7 * WIDTH_FACTOR #base position of plot
+
+scale_data <- data.frame(
+  x = seq(0, 8, length.out = 200)
+) %>%
+  mutate(
+    base_thickness = x * 0.12, #progressive thickness
+    wave1 = sin(x * 2) * 0.05,
+    wave2 = sin(x * 3.5) * 0.03, #creating curves
+    thickness = base_thickness + wave1 + wave2, #combining line                                                       thickness + wave 
+    x_scaled = POS_2017 + 5.5 + x * 0.5,
+    y_top = -81 + thickness * 3,
+    y_bottom = -81 - thickness * 3
+  )
+
+```
+
+## Main graph
+
+```{r}
+main_graph <- ggplot() +
+  geom_vline(xintercept = seq(0, MAX_WIDTH, by = WIDTH_FACTOR), 
+             color = "#e5e3d8", linewidth = 0.3, linetype = "dotted") +
+  
+  geom_curve(data = connectors_left, aes(x=x, xend=xend, y=y, yend=yend),
+             curvature = 0.6, angle = 90, ncp = 15,
+             color = "#d5d3c8", linewidth = 6, lineend = "round", alpha = 0.5) +  
+  
+  geom_curve(data = connectors_right, aes(x=x, xend=xend, y=y, yend=yend),
+             curvature = -0.6, angle = 90, ncp = 15,
+             color = "#d5d3c8", linewidth = 6, lineend = "round", alpha = 0.5) + #creating the curves that connect segments 
+  
+  geom_ribbon(
+    data = path_data_smooth,
+    aes(x = x_new, ymin = y_final_min, ymax = y_final_max, fill = disaster_type,
+        group = interaction(segment, disaster_type)), 
+    color = "white", linewidth = 0.15, alpha = 0.9
+  ) + #representing each disaster 
+  
+  scale_fill_manual(values = chart_colors) +
+  
+  # Vertical lines
+  annotate("segment", x = seq(0, 10, by = 1) * WIDTH_FACTOR, y = -8, yend = 8,
+           color = "grey40", linewidth = 0.4, alpha = 0.6) +
+  annotate("segment", x = seq(0, 10, by = 1) * WIDTH_FACTOR, y = -30, yend = -14,
+           color = "grey40", linewidth = 0.4, alpha = 0.6) +
+  annotate("segment", x = seq(0, 10, by = 1) * WIDTH_FACTOR, y = -54, yend = -34,
+           color = "grey40", linewidth = 0.4, alpha = 0.6) +
+  annotate("segment", x = seq(0, 7, by = 1) * WIDTH_FACTOR, y = -90, yend = -59,
+           color = "grey40", linewidth = 0.4, alpha = 0.6) +
+  
+  # Up title
+  annotate("text", x = MAX_WIDTH + 0.8, y = 6.5, 
+           label = "NUMBER OF\nBILLION-\nDOLLAR\nWEATHER AND\nCLIMATE\nDISASTERS IN\nTHE U.S.",
+           size = 3, color = "grey20", hjust = 0, vjust = 1, 
+           lineheight = 0.9, fontface = "bold", family = "barlow") +
+  
+  # Years annotation- segment 1
+  annotate("text", x = 10 * WIDTH_FACTOR, y = -9.5, label = "1980", size = 3, color = "grey22", fontface = "bold", family = "barlow") +
+  annotate("text", x = 9 * WIDTH_FACTOR, y = -9.5, label = "'81", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 8 * WIDTH_FACTOR, y = -9.5, label = "'82", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 7 * WIDTH_FACTOR, y = -9.5, label = "'83", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 6 * WIDTH_FACTOR, y = -9.5, label = "'84", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 5 * WIDTH_FACTOR, y = -9.5, label = "1985", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 4 * WIDTH_FACTOR, y = -9.5, label = "'86", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 3 * WIDTH_FACTOR, y = -9.5, label = "'87", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 2 * WIDTH_FACTOR, y = -9.5, label = "'88", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 1 * WIDTH_FACTOR, y = -9.5, label = "'89", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 0 * WIDTH_FACTOR, y = -9.5, label = "1990", size = 3, color = "grey22", fontface = "bold", family = "barlow") +  
+  
+  # Years annotation- segment 2
+  annotate("text", x = 1 * WIDTH_FACTOR, y = -31.5, label = "'91", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 2 * WIDTH_FACTOR, y = -31.5, label = "'92", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 3 * WIDTH_FACTOR, y = -31.5, label = "'93", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 4 * WIDTH_FACTOR, y = -31.5, label = "'94", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 5 * WIDTH_FACTOR, y = -31.5, label = "1995", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 6 * WIDTH_FACTOR, y = -31.5, label = "'96", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 7 * WIDTH_FACTOR, y = -31.5, label = "'97", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 8 * WIDTH_FACTOR, y = -31.5, label = "'98", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 9 * WIDTH_FACTOR, y = -31.5, label = "'99", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 10 * WIDTH_FACTOR, y = -31.5, label = "2000", size = 3, color = "grey22", fontface = "bold", family = "barlow") +
+  
+  # Years annotation- segment 3
+  annotate("text", x = 9 * WIDTH_FACTOR, y = -55.5, label = "'01", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 8 * WIDTH_FACTOR, y = -55.5, label = "'02", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 7 * WIDTH_FACTOR, y = -55.5, label = "'03", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 6 * WIDTH_FACTOR, y = -55.5, label = "'04", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 5 * WIDTH_FACTOR, y = -55.5, label = "2005", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 4 * WIDTH_FACTOR, y = -55.5, label = "'06", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 3 * WIDTH_FACTOR, y = -55.5, label = "'07", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 2 * WIDTH_FACTOR, y = -55.5, label = "'08", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 1 * WIDTH_FACTOR, y = -55.5, label = "'09", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 0 * WIDTH_FACTOR, y = -55.5, label = "2010", size = 3, color = "grey22", fontface = "bold", family = "barlow") +
+  
+  # Years annotation- segment  4
+  annotate("text", x = 1 * WIDTH_FACTOR, y = -91.5, label = "'11", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 2 * WIDTH_FACTOR, y = -91.5, label = "'12", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 3 * WIDTH_FACTOR, y = -91.5, label = "'13", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 4 * WIDTH_FACTOR, y = -91.5, label = "'14", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 5 * WIDTH_FACTOR, y = -91.5, label = "2015", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = 6 * WIDTH_FACTOR, y = -91.5, label = "'16", size = 3, color = "grey30", family = "barlow") +
+  annotate("text", x = POS_2017, y = -91.5, label = "2017", size = 3, color = "grey22", fontface = "bold", family = "barlow") +
+  
+  # 2017
+  annotate("segment", x = POS_2017, y = -90, xend = POS_2017, yend = -59,
+           color = "grey10", linewidth = 1) +
+  annotate("point", x = POS_2017, y = c(-67, -78, -82), 
+           color = "grey10", size = 3, shape = 19) +
+  
+  # Annotations 2017
+  annotate("text", x = POS_2017 + 0.5, y = -60, 
+           label = "IN 2017, THE MOST\nFREQUENT\nDISASTERS WERE:", 
+           size = 3.5, color = "grey30", hjust = 0, vjust = 1, lineheight = 0.8, family = "barlow") +
+  annotate("text", x = POS_2017 + 0.5, y = -68, 
+           label = "SEVERE STORMS\n[8 EVENTS] ...", 
+           size = 3.2, color = "grey20", hjust = 0, vjust = 0.5, 
+           lineheight = 0.8, fontface = "bold", family = "barlow") +
+  annotate("text", x = POS_2017 + 0.5, y = -79, 
+           label = "... HURRICANES\n[3 EVENTS] ...", 
+           size = 3.2, color = "grey20", hjust = 0, vjust = 0.5, 
+           lineheight = 0.8, fontface = "bold", family = "barlow") +
+  annotate("text", x = POS_2017 + 0.5, y = -83, 
+           label = "... AND FLOODING\n[2 EVENTS].", 
+           size = 3.2, color = "grey20", hjust = 0, vjust = 0.5, 
+           lineheight = 0.8, fontface = "bold", family = "barlow") +
+  
+  # Type of event
+  annotate("text", x = POS_2017 + 5.5, y = -60, 
+           label = "TYPE OF EVENT", 
+           fontface = "bold", size = 3.5, color = "grey35", hjust = 0, family = "barlow") +
+  annotate("rect", xmin = POS_2017 + 5.5, xmax = POS_2017 + 6.5,
+           ymin = -62.5 + c(0, -1.8, -3.6, -5.4, -7.2, -9.0, -10.8) * 0.8,
+           ymax = -62.5 + c(1.0, -0.8, -2.6, -4.4, -6.2, -8.0, -9.8) * 0.8,
+           fill = chart_colors, color = "white", linewidth = 0.2) +
+  annotate("text", x = POS_2017 + 6.7,
+           y = -62.5 + c(0.5, -1.3, -3.1, -4.9, -6.7, -8.5, -10.3) * 0.8,
+           label = c("SEVERE STORM", "HURRICANE", "FLOODING", "WILDFIRE", 
+                     "FREEZE", "DROUGHT", "WINTER STORM"),
+           hjust = 0, size = 2.6, color = "grey40", family = "barlow") +
+  
+  # Number of events diagram
+  geom_ribbon(data = scale_data, aes(x = x_scaled, ymin = y_bottom, ymax = y_top),
+              fill = "grey70", color = NA) +
+  annotate("text", x = POS_2017 + 5.5 + 0, y = -85 + 1.75 * 3, label = "0", 
+           size = 2.8, color = "grey20", fontface = "bold", family = "barlow") +
+  annotate("text", x = POS_2017 + 5.5 + 1.0, y = -85 + 1.95 * 3, label = "2", 
+           size = 2.8, color = "grey20", fontface = "bold", family = "barlow") +
+  annotate("text", x = POS_2017 + 5.5 + 2.0, y = -85 + 2.20 * 3, label = "4", 
+           size = 2.8, color = "grey20", fontface = "bold", family = "barlow") +
+  annotate("text", x = POS_2017 + 5.5 + 3.0, y = -85 + 2.45 * 3, label = "6", 
+           size = 2.8, color = "grey20", fontface = "bold", family = "barlow") +
+  annotate("text", x = POS_2017 + 5.5 + 3.88, y = -85 + 2.7 * 3, label = "8", 
+           size = 2.8, color = "grey20", fontface = "bold", family = "barlow") +
+  annotate("segment", x = POS_2017 + 9.3, y = -85 + 0.8 * 3, 
+           xend = POS_2017 + 9.3, yend = -85 + 2.2 * 3,
+           arrow = arrow(length = unit(0.08, "cm"), type = "closed", ends = "both"),
+           color = "grey10", linewidth = 0.5) +
+  annotate("text", x = POS_2017 + 9.15, y = -85 + 1.5 * 3,
+           label = "NUMBER\nOF\nEVENTS",
+           size = 2.1, color = "grey10", fontface = "bold",
+           hjust = 1, vjust = 0.5, lineheight = 0.8, family = "barlow") +
+  
+  coord_fixed(ratio = 0.3, xlim = c(-5, POS_2017 + 13), ylim = c(-95, 10), expand = FALSE) +
+  
+  theme_void() +
+  theme(
+    plot.background = element_rect(fill = "#f4f1e4", color = NA),
+    plot.margin = margin(10, 30, 5, 30),
+    legend.position = "none",
+    text = element_text(family = "barlow")
+  )
+
+```
+
+## Title and descrption paragrah
+
+```{r}
+text_panel <- ggplot() +
+  ## STORM WARNINGS a la izquierda
+  annotate("text", x = 4, y = 0.5, 
+           label = "STORM\nWARNINGS",
+           size = 17, color = "grey10", hjust = 0, vjust = 0.5, 
+           lineheight = 0.85, fontface = "bold", family = "Barlow Condensed") + 
+  
+  # Texto descriptivo justo a la derecha de STORM WARNINGS
+  annotate("text", x = 9, y = 0.5, 
+           label ="EXTREME WEATHER ISbecoming more common, and the economic impact is soaring. Last year\n there were 16 weather events in the U.S. that caused at least $1 billion each in damage,\n according to the National Oceanic and Atmospheric Administration. The cumulative cost was\n $306 billion—easily surpassing the previous one-year record of $215 billion set in 2005. In\n September areport from the nonprofit Universal Ecological Fund, \"The Economics Case for\n Climate Action in the United States,\" estimated that total climate-related economic losses\n and health costs in the U.S. averaged $240 billion a year over the past decade. The authors\n project the annual cost will rise to $360 billion over the next 10 years.—BRIAN O'KEEFE",
+           size = 3, color = "grey20", hjust = 0, vjust = 0.5, 
+           lineheight = 1.2, family = "barlow") +
+  
+  xlim(-5, POS_2017 + 13) +
+  ylim(0, 1) +
+  theme_void() +
+  theme(
+    plot.background = element_rect(fill = "#f4f1e4", color = NA),
+    plot.margin = margin(5, 30, 20, 30)
+  )
+```
+
+## Patchwork to create final project
+
+```{r}
+final_plot <- main_graph / text_panel + 
+  plot_layout(heights = c(10, 2))
+
+print(final_plot)
+```
+
+# Improvement
+
+## Streamplot
+
+```{r}
+
+streamplot_improvement <- data_aggregated |>
+  ggplot(aes(x = year, y = n_events, fill = disaster_type)) +
+  
+  geom_stream(type = "ridge", bw = 0.75) +
+  
+  scale_fill_manual(
+    values = chart_colors,
+    name = "TYPE OF EVENT",
+    labels = c("SEVERE STORM", "HURRICANE", "FLOODING", "WILDFIRE",
+               "FREEZE", "DROUGHT", "WINTER STORM")
+  ) +
+  
+  scale_x_continuous(breaks = seq(1980, 2017, by = 5), expand = c(0.02, 0)) +
+  
+  
+  scale_y_continuous(
+    breaks = seq(0, 15, by = 5),
+    expand = expansion(mult = c(0.05, 0.1))
+  ) +
+  
+  
+  geom_vline(xintercept = c(1980, 2017), 
+             linetype = "dashed", color = "grey40", linewidth = 0.5, alpha = 0.7) +
+  
+  labs(
+    title = "STORM WARNINGS: Billion-Dollar Disasters",
+    subtitle = "From 28 events in the 1980s to 92 events in the 2010s — a dramatic increase in extreme weather",
+    x = "Year",
+    y = "Number of Events",
+    caption = "Source: National Oceanic and Atmospheric Administration (NOAA)"
+  ) +
+  
+  theme_minimal(base_size = 11, base_family = "barlow") +
+  theme(
+    plot.background = element_rect(fill = "#f4f1e4", color = NA),
+    panel.background = element_rect(fill = "#f4f1e4", color = NA),
+    panel.grid.major.x = element_line(color = "#e5e3d8", linewidth = 0.3),
+    panel.grid.major.y = element_line(color = "#e5e3d8", linewidth = 0.3),
+    panel.grid.minor = element_blank(),
+    
+    axis.text.x = element_text(size = 10, color = "grey30"),
+    axis.text.y = element_text(size = 10, color = "grey30"),  
+    axis.title.x = element_text(size = 10, face = "bold", margin = margin(t = 10)),
+    axis.title.y = element_text(size = 10, face = "bold", margin = margin(r = 10)), 
+    
+    plot.title = element_text(
+      face = "bold", 
+      size = 14, 
+      margin = margin(b = 5),
+      family = "Barlow Condensed"
+    ),
+    plot.title.position = "plot",
+    plot.subtitle = element_text(size = 10, color = "grey40", margin = margin(b = 12)),
+    plot.caption = element_text(size = 8, color = "grey50", hjust = 0, margin = margin(t = 10)),
+    plot.caption.position = "plot",
+    
+    legend.position = "right",
+    legend.title = element_text(face = "bold", size = 9),
+    legend.text = element_text(size = 8),
+    legend.key.height = unit(0.7, "cm"),
+    legend.background = element_rect(fill = "#faf9f9", color = "grey80", linewidth = 0.3)
+  )
+
+streamplot_improvement 
+```
+
+## Same improvement, different colors and visualization
+
+```{r}
+realistic_colors <- c(
+  "SEVERE STORM" = "#34495e",     
+  "HURRICANE" = "#16a085",        
+  "FLOODING" = "#3498db",         
+  "WILDFIRE" = "#e74c3c",         
+  "FREEZE" = "#c7d6da",           
+  "DROUGHT" = "#e67e22",          
+  "WINTER STORM" = "#95a5a6"      
+)
+
+
+
+bar_plot <- data_aggregated |>
+  ggplot(aes(x = year, y = n_events, fill = disaster_type)) +
+  
+  geom_col(color = "white", linewidth = 0.2) +
+  
+  scale_fill_manual(
+    values = realistic_colors,
+    name = "Disaster Type"
+  ) +
+  
+  scale_x_continuous(
+    breaks = seq(1980, 2017, by = 5),
+    expand = c(0.01, 0)
+  ) +
+  
+  scale_y_continuous(
+    breaks = seq(0, 20, by = 5),
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  
+  labs(
+    title = "Billion-Dollar Disasters Are Increasing Over Time (1980-2017)",
+    subtitle = "Annual events show clear upward trend, particularly in Severe Storms and Flooding",
+    x = "Year",
+    y = "Number of Events",
+    caption = "Source: National Oceanic and Atmospheric Administration (NOAA)"
+  ) +
+  
+  theme_minimal(base_size = 11, base_family = "barlow") +
+  theme(
+    panel.background = element_rect(fill = "white", color = NA),
+    panel.grid.major.y = element_line(color = "grey90", linewidth = 0.3),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    
+    axis.title = element_text(size = 10, face = "bold"),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+    axis.text = element_text(size = 9, color = "grey30"),
+    
+    plot.title = element_text(face = "bold", size = 13, margin = margin(b = 5)),
+    plot.title.position = "plot",
+    plot.subtitle = element_text(size = 10, color = "grey40", margin = margin(b = 12)),
+    plot.caption = element_text(size = 8, color = "grey50", hjust = 0, margin = margin(t = 10)),
+    plot.caption.position = "plot",
+    
+    legend.position = "right",
+    legend.title = element_text(face = "bold", size = 9),
+    legend.text = element_text(size = 8),
+    legend.key.height = unit(0.7, "cm")
+  )
+
+bar_plot
+```
