@@ -513,7 +513,8 @@ clean Y-axis and make the X-axistwo sided positive.
     breaks = as.character(seq(1990, 2023, 1)),
     labels = c("1990", rep("", 4), "'95", rep("", 4), "'00", rep("", 4), "'05", 
                rep("", 4), "'10", rep("", 4), 
-               "'15", rep("", 4), "'20", "", "", "'23")
+               "'15", rep("", 4), "'20", "", "", "'23"),
+    position = "right"
   )
 
 print(p_pyramid)
@@ -531,8 +532,7 @@ p_pyramid <- p_pyramid +
   
   # Labels and annotations
   labs(
-    title = "Gross Domestic Product by Year (1990-2023)",
-    subtitle = "West vs East comparison, in trillions",
+    title = "Gross Domestic Product by Year (1990-2023), in billions",
     x = NULL,
     y = NULL
   ) +
@@ -583,5 +583,108 @@ p_pyramid <- p_pyramid +
 
 print(p_pyramid)
 
+```
+Regarding the R&D graph, little changes aside from color changes are thought 
+to be needed. However, and to make readability more useful, the EAST gold part 
+is now mirrored, with one black horizontal line built as a threshold between 
+both blocks. The following chunk exposes the neccessary changes to mirror
+R&D graph for the EAST part, and the whole construction of the new R&D graph. As
+in the original p_gedr, the graph is divided in two parts (WEST and EAST), and 
+then merged with patchwork. 
+
+```{r R&D graph modification}
+gedr_grouped <- gedr_data_ |> 
+  group_by(region, group) |> 
+  summarise(gerd = sum(OBS_VALUE), .groups = "drop") #Perhaps already done, but
+                                                     # to ensure it
+
+gedr_grouped$group <- factor(
+  gedr_grouped$group, levels = c("Other", "Japan", "EU", "U.S.", "Russia", 
+                                 "China"))
+west_data <- filter(gedr_grouped, region == "WEST") %>%
+  arrange(desc(group)) %>%
+  mutate(
+    cumsum_gerd = cumsum(gerd),
+    label_pos = cumsum_gerd - gerd/2
+  )
+
+p_west <- ggplot(west_data, aes(x = 1, y = gerd, fill = group)) +
+  geom_bar(color = "white", width = 0.8, stat = "identity") +
+  geom_text(aes(y = label_pos, label = group), 
+            color = "black", size = 3) +
+  scale_fill_manual(values = fill_cols) +
+  scale_y_continuous(
+    breaks = c(0, 10, 30, 50),
+    labels = c("", "10", "30", "50"),
+    position = "right", 
+    expand = c(0, 0)) +
+  scale_x_continuous(limits = c(0.5, 1.5)) +
+  labs(
+    title = "Gross domestic expenditure\non research and development\nin 2019, trillions"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = "none",
+    plot.title = element_text(size = 11, face = "bold", lineheight = 1.1),
+    plot.margin = margin(5, 5, 0, 10)  # Changed bottom margin to 0
+  )
+
+# --- EAST PANEL ---
+east_data <- filter(gedr_grouped, region == "EAST") %>%
+  arrange(desc(group)) %>%
+  mutate(
+    cumsum_gerd = cumsum(gerd),
+    label_pos = cumsum_gerd - gerd/2,
+    gerd_neg = -gerd,
+    cumsum_neg = -cumsum_gerd,
+    label_pos_neg = -label_pos
+  )
+
+p_east <- ggplot(east_data, aes(x = 1, y = gerd_neg, fill = group)) +
+  geom_bar(color = "white", width = 0.8, stat = "identity") +
+  geom_segment(aes(x = 0.6, xend = 1.4, y = 0, yend = 0), 
+               color = "black", linewidth = 1) +
+  geom_text(aes(y = label_pos_neg, label = group), 
+            color = "black", size = 3) +
+  scale_y_continuous(
+    breaks = c(-3, -1, 0),
+    labels = c("$3", "1", ""),
+    position = "right",
+    expand = c(0, 0)) +
+  scale_x_continuous(limits = c(0.5, 1.5)) +
+  scale_fill_manual(values = fill_cols) +
+  theme_minimal(base_size = 11) +
+  theme(
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = "none",
+    plot.margin = margin(0, 5, 5, 10)  
+  )
+
+# --- COMBINE WEST AND EAST---
+p_gedr <- p_west / p_east + plot_layout(heights = c(.77, .33))
+print(p_gedr)
+```
+
+Finally, both the R&D and the GDP (p_pyramid) parts are merged with patchwork, 
+including titles and captions as in the original. The following chunk does this 
+process and ends the modification of the graph
+
+```{r p_pyramid and p_gedr merge}
+edited_graph <- p_pyramid + p_gedr +
+  plot_layout(widths = c(3, 1)) +
+  plot_annotation(
+    title = "The U.S. and its democratic, market-based allies in Europe and Asia together generate far more economic\noutput and spend much more on research and development than China, Russia and countries aligned with\nthem.",
+    caption = "Note: GDP is converted from local currency to dollars at market exchange rates. Research and development spending is for\n2019, converted from local currency to dollars at purchasing power parity.\nSources: IMF (GDP); OECD (expenditure on R&D)",
+    theme = theme(
+      plot.title = element_text(size = 11, margin = margin(b = 10)),
+      plot.caption = element_text(size = 8, hjust = 0, color = "gray40", 
+                                  margin = margin(t = 10)))
+  )
+print(edited_graph)
 ```
 
