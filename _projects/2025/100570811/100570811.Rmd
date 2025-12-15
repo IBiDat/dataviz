@@ -22,58 +22,75 @@ knitr::opts_chunk$set(out.width="100%", fig.align="center", fig.showtext=TRUE)
 
 The Economist introduced this graph on civil wars in an article on the duration and deadliness of civil wars. The graph visualizes the length of the 100 deadliest civil wars and internal armed conflicts from 1946-2012, as well as the battle death in total each year and for each of the 100 conflicts. It is based on data from the UCDP/PRIO Armed Conflict data set.
 
-Most recently this data was used in another Economist article on the deadliest conflicts of the year in 2023 where the main takeaway was that the most documented conflicts might not always be the deadliest.
+Most recently this data was used in another Economist article on the deadliest conflicts of the year in 2023, where the main takeaway was that the most documented conflicts might not always be the deadliest.
 
 ### Original graph
 
-The original graph consists of two plots. One plot on the top showing total deaths for all civil wars per year from 1946-2012, with year on the x-axis and death toll on the y-axis. The other plot visualizes the duration and deadliness of the top 100 deadliest civil wars from 1946-2012. the y-axis represents the death toll rank, while the x-axis is the exact same as in the top plot with years. The lines represent each civil war and the lenght of them shows the duration of the conflict. Moreover, the colors represent the region and the numbers on the labels beside the state name is deaths in thousands for that exact conflict.
+The original graph consists of two plots. One plot on the top showing total deaths for all civil wars per year from 1946-2012, with year on the x-axis and death toll on the y-axis. The other plot visualizes the duration and deadliness of the top 100 deadliest civil wars from 1946-2012. the y-axis represents the death toll rank, while the x-axis is the exact same as in the top plot with years. The lines represent each civil war and the length of them shows the duration of the conflict. Moreover, the colors represent the region and the numbers on the labels beside the state name is deaths in thousands for that exact conflict.
 
-The graph is trying to convey the deadliness and duration of civil wars from post-war times to modern times. As one can see the overall deadliness has decreased, but that the civil wars are lasting longer, like in Afghanistan and Sudan to mention some.
+The graph is trying to convey the deadliness and duration of civil wars from post-war times to modern times. By combining information on total deaths over time with details about individual conflicts, it allows the reader to see both broad trends and specific examples. In this way, the graph tries to connect changes in global conflict over time with the severity and duration of individual civil wars.
 
-The main reason for deciding on this graph is because it visualizes data in an informative way, thus supporting the Economist article on the actual deadliest conflicts in the world. The problem with the graph is that it overdone, resulting in too much information which makes interpretation hard. The motivation was therefore to replicate it and then improve it to show that a simplification and reduction of the amount of data visualized, still can be as informative and even more comprehensible.
+The main reason for deciding on this graph is because it tries to show a lot of interesting information in a visual way. However, the original version includes so much data that it becomes cluttered and hard to interpret. The goal of this project was therefore to recreate the graph and then improve it, to show that one can still communicate the main information by reducing and simplifying, and in fact make the visualization easier to read.
 
 ![Original chart. Source:"<https://www.economist.com/international/2023/04/17/the-worlds-deadliest-war-last-year-wasnt-in-ukraine>"](original_graph.png){.external width="100%"}
 
 ## Data preparation
 
-### Loading libraries
+### Loading packages
 
-```{r loading_libraries, warning: false, message: false}
+To start of I began with loading the necessary packages for data processing and visualization.
+
+The tidyverse package provides the foundations for essential packages like dplyr and ggplot2. I used dplyr to clean, filter, and manipulate my data. For creating my visualizations i used ggplot2.
+
+The cowplot package was used to help with the composition of the different parts of the plot. Two key function were used, get_legend() extracted individual legend components to create a custom three-row legend, and ggdraw() combined with draw_label() constructed the footer containing citations and explanatory notes.
+
+The readxl package enabled loading of Excel-formatted data from the PRIO Battle Deaths Data set. While, the ggrepel helped with positioning the lables so they would not overlap in the improvement of the plot.
+
+Finally, the patchwork package was used to complete the final graph by combining the five separate part, the title, legend, death plot, civil war plot, and footer together.
+
+```{r loading_libraries, warning = FALSE, message = FALSE}
 
 
 library(tidyverse)
 library(cowplot) 
 library(patchwork)
+library(readxl)
+library(ggrepel)
 
 
 ```
 
 ### Getting the data
 
+To replicate the original visualization's battle death statistics from 1946-2012, I integrated two data sets, the PRIO Battle Deaths Dataset covering 1946-1988 and the Uppsala Conflict Data Program (UCDP) data set extending through 2012. I loaded both datasets using read.csv() and read_excel() respectively, then filtered each to include only civil wars, which was coded as type 3 and 4. For Uppsala data, I grouped by year and summed best death estimates across all conflicts, converting to thousands. The PRIO data required additional preprocessing to handle potential duplicate conflict-year entries, so I first grouped by conflict ID and year to extract maximum death estimates, then aggregated by year. I merged both datasets using full_join() and arranged chronologically to create a complete data set with PRIO data providing historical coverage from 1946-1988 and Uppsala data covering recent decades through 2012.
+
+It has to be noted that my calculations of battle deaths differ from the original graph, with some years by about 150,000 deaths. The differences likely come from how the original authors grouped related conflicts within a 10-year period, how overlapping or long-lasting conflicts were combined to avoid double-counting, and possible use of different data versions or additional sources. They may also have used their own methods to handle uncertainty in death estimates.
+
 ```{r loading_data}
 
-totaldeaths <- read.csv("deaths-in-state-based-conflicts.csv")
+battledeaths <- read.csv("BattleDeaths_v25_1_conf.csv")
+battledeaths_b <- read_excel("PRIO Battle Deaths Dataset 3.0.xls")
 
-totaldeaths <- totaldeaths |> 
-  filter(between(Year, 1946, 2012), Entity == "World")  
+uppsaladeaths <- battledeaths |> 
+  filter(type_of_conflict %in% c(3, 4), year <= 2012) |> 
+  group_by(year) |> 
+  summarise(totaldeaths = sum(bd_best, na.rm = TRUE) /1000)
 
-
-
-population <- read.csv("population-regions-with-projections.csv")
-
-world_population <- population %>%
-  filter(between(Year, 1946, 2012)) %>%
-  group_by(Year) %>%
+priodeaths <- battledeaths_b |>
+  filter(type %in% c(3,4), between(year, 1946, 1988)) |>
+  group_by(id, year) |>
   summarise(
-    Population = sum(Population, na.rm = TRUE),
-    Entity = "World"
-  ) %>%
-  select(Entity, Year, Population)
+    conflict_deaths = max(bdeadbes, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  group_by(year) |>
+  summarise(
+    totaldeaths = sum(ifelse(conflict_deaths > 0, conflict_deaths, 0)) / 1000
+  )
 
-# Join and calculate deaths per 100,000
-deaths_per_capita <- totaldeaths |> 
-  left_join(world_population, by = "Year") |>
-  mutate(deaths_per_100k = (Deaths.in.ongoing.conflicts..best.estimate....Conflict.type..state.based / Population) * 1000000)
+deathtotal <- uppsaladeaths |> 
+  full_join(priodeaths) |> 
+  arrange(year) 
 ```
 
 ### Creating new data set
@@ -213,7 +230,7 @@ civil_wars_data <- data.frame(
     3.8, 9.3, 6.4, 2.3,
     
     # Europe
-    77.0, 27.0, 17.6, 2.4, 11.6, 3.6, 8.9, 4.3, 3.9, 2.6, 2.5,
+    77.0, 27.0, 17.6, 2.4, 11.6, 3.6, 8.9, 4.3, 3.9, 2.6, 1.5,
     
     # Americas
     28.7, 21.8, 20.3, 19.3, 11.4, 2.3, 2.0, 2.0
@@ -255,7 +272,6 @@ plot_data <- civil_wars_data |>
     label = paste0(location, ", ", deaths_thousands)
   )
 
-
 ```
 
 ```{r region_colors}
@@ -280,6 +296,16 @@ grey_strips <- data.frame(
   xmin = grey_xmin,
   xmax = grey_xmax
 )
+
+add_decade_shading <- function() {
+  geom_rect(
+    data = grey_strips,
+    aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+    inherit.aes = FALSE,
+    fill = "grey90",
+    alpha = 0.5
+  )
+}
 ```
 
 ## Graph replication
@@ -288,17 +314,17 @@ grey_strips <- data.frame(
 
 ```{r deathplot_cords&axes, fig.width=6, fig.height=2}
 
-deathplot <- ggplot(deaths_per_capita) +
-  aes(x = Year, y = deaths_per_100k) +
+deathplot <- ggplot(deathtotal) +
+  aes(x = year, y = totaldeaths) +
  scale_y_continuous(
-    limits = c(0,250),
-    breaks = seq(0, 250, 50)
+    breaks = seq(0, 400, 100),
+    labels = c(0, 100, 200, 300, 400)
   ) +
   scale_x_continuous(
     breaks = 1946:2012,
     labels = NULL,
   )  +
-  coord_cartesian(xlim=c(1942,2014), expand=FALSE)
+  coord_cartesian(xlim=c(1944,2014), expand=FALSE)
 
 print(deathplot)
 ```
@@ -306,21 +332,20 @@ print(deathplot)
 ```{r deathplot_data, fig.width=6, fig.height=2}
 
 deathplot <- deathplot +
-  geom_rect(data = grey_strips,
-            aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
-            fill = "grey90", 
-            alpha = 0.5,
-            inherit.aes = FALSE) +
-  geom_col(fill = "gray40", width = 0.7) +
+  add_decade_shading() +
+  geom_col(fill = "gray40", 
+           width = 0.7) +
   annotate(
     "text",
-    x = 1950,
-    y = 250,
+    x = 1949,
+    y = 400,
     label = "Total deaths*†, '000",
     hjust = -0.2,
     vjust = 3,
     size = 3.5,
-    fontface = "bold"
+    fontface = "bold",
+    color = "black",
+    family = "sans"  
   )
 
 print(deathplot)
@@ -331,32 +356,31 @@ print(deathplot)
 
 deathplot <- deathplot +
    theme_minimal() +
-  theme(
-    axis.title.x = element_blank(),
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank(),
-    
-    
-    # Text styling
-    axis.text.y = element_text(size = 9),
-    axis.title.y = element_blank(),
-    
-    # Background colors
-    panel.background = element_rect(fill = "white", color = NA),
-    plot.background = element_rect(fill = "white", color = NA),
-    
-    # Grid lines 
-    panel.grid.major.y = element_line(color = "grey85", linewidth = 0.3),
-    panel.grid.minor = element_blank(),
-    panel.grid.major.x = element_blank(),
-    
-    
-    # Add bottom border line
-    axis.line.x = element_line(color = "black", linewidth = 0.5),
-    
-    # Margins
-    plot.margin = margin(t = 5, b = 5)
-  ) 
+theme(
+ 
+  axis.title.x = element_blank(),
+  axis.text.x = element_blank(),
+  axis.ticks.x = element_blank(),
+  
+  # Text styling
+  axis.text.y = element_text(size = 9),
+  axis.title.y = element_blank(),
+  
+  # Background colors
+  panel.background = element_rect(fill = "white", color = NA),
+  plot.background = element_rect(fill = "white", color = NA),
+  
+  # Grid lines 
+  panel.grid.major.y = element_line(color = "grey85", linewidth = 0.3),
+  panel.grid.minor = element_blank(),
+  panel.grid.major.x = element_blank(),
+  
+  # Add bottom border line
+  axis.line.x = element_line(color = "black", linewidth = 0.5),
+  
+  # Margins
+  plot.margin = margin(t = 5, b = 5)
+)
 
 print(deathplot)
 
@@ -381,7 +405,7 @@ civilwar_plot <- ggplot(plot_data,
   ) +
   coord_cartesian(
     xlim = c(1942, 2014),
-    ylim = c(0, 100),
+    ylim = c(0, 103),
     expand = FALSE,
     clip = "off"
   ) +
@@ -390,7 +414,69 @@ civilwar_plot <- ggplot(plot_data,
 print(civilwar_plot)
 ```
 
+```{r civilwar_annotation, fig.width=8, fig.height= 10}
+
+ civilwar_plot <- civilwar_plot +
+   add_decade_shading() +
+  annotate("rect", 
+           xmin=1940, xmax=1944, 
+           ymin=0,ymax=100, 
+           alpha=0.4, 
+           fill="grey90") +
+  annotate(
+    "text",
+    x = 1942,            
+    y = 50,              
+    label = "100 deadliest ranked by number of combatant deaths (*†, '000)",
+    hjust = 0.5,           
+    angle = 90,          
+    size = 4,
+    color = "#565b5d",
+    fontface = "bold"
+  ) +
+  annotate(
+    "text",
+    x = 1942,            
+    y = 90,              
+    label = "Lowest",
+    angle = 90,
+    hjust = 1,           
+    size = 4,
+    color = "#565b5d",
+    fontface = "bold"
+  ) +
+  annotate(
+    "text",
+    x = 1942,           
+    y = 5,              
+    label = "Highest",
+    angle = 90,
+    hjust = 1,           
+    size = 4,
+    color = "#565b5d",
+    fontface = "bold"
+  ) +
+  annotate("rect",
+           xmin=c(1946, 1955, 1965, 1975, 1985, 1995, 2005),
+           xmax = c(1950, 1960, 1970, 1980, 1990, 2000, 2010),
+           ymin=c(-5), ymax=c(0),
+           alpha=0.2, fill="darkgrey")+
+  # Labels
+  geom_text(
+    aes(x = end_year, label = label),
+    hjust = 0.5,
+    vjust = -0.5,
+    size = 2,  
+    nudge_x = 0.5,
+    check_overlap = FALSE,
+    show.legend = FALSE
+  )
+ 
+ print(civilwar_plot)
+```
+
 ```{r civilwar_data, fig.width=8, fig.height= 8}
+
 
  civilwar_plot <- civilwar_plot +
    geom_segment(aes(xend = end_year, yend = rank),
@@ -408,81 +494,9 @@ print(civilwar_plot)
 print(civilwar_plot)
 ```
 
-```{r civilwar_annotation, fig.width=8, fig.height= 10}
-
- civilwar_plot <- civilwar_plot +
-   geom_rect(data = grey_strips,
-            aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
-            fill = "grey90", 
-            alpha = 0.5,
-            inherit.aes = FALSE) +
-  annotate("rect", xmin=1942, xmax=1944, ymin=0,ymax=100, alpha=0.4, fill="grey90") +
-  annotate(
-    "text",
-    x = 1943,            
-    y = 45,              
-    label = "100 deadliest ranked by number of combatant deaths (*†, '000)",
-    hjust = 0.5,           
-    angle = 90,          
-    size = 3,
-    color = "#565b5d",
-    fontface = "bold"
-  ) +
-  annotate(
-    "text",
-    x = 1943,            
-    y = 95,              
-    label = "Lowest",
-    angle = 90,
-    hjust = 1,           
-    size = 3,
-    color = "#565b5d",
-    fontface = "bold"
-  ) +
-  annotate(
-    "text",
-    x = 1943,           
-    y = 5,              
-    label = "Highest",
-    angle = 90,
-    hjust = 1,           
-    size = 3,
-    color = "#565b5d",
-    fontface = "bold"
-  ) +
-  annotate("rect", xmin=c(1946, 1955, 1965, 1975, 1985, 1995, 2005)
-           , xmax = c(1950, 1960, 1970, 1980, 1990, 2000, 2010),
-           ymin=c(-5), ymax=c(0),
-           alpha=0.2, fill="darkgrey")+
-  geom_segment(aes(xend = end_year, yend = rank),
-               linewidth = 1,
-               data = filter(plot_data, end_year < 2012),
-               show.legend = FALSE) + 
-  # Segments with arrows for ongoing conflicts
-  geom_segment(aes(xend = end_year, yend = rank),
-               linewidth = 1,
-               data = filter(plot_data, end_year == 2012),
-               arrow = arrow(length = unit(0.15, "cm"),
-                             ends = "last",
-                             type = "closed"),
-               show.legend = FALSE) +
-  # Labels
-  geom_text(
-    aes(x = end_year, label = label),
-    hjust = 0.5,
-    vjust = -0.5,
-    size = 2,  
-    nudge_x = 0.5,
-    check_overlap = FALSE,
-    show.legend = FALSE
-  )
- 
- print(civilwar_plot)
-```
-
 ```{r civilwar_themes, fig.width=8, fig.height= 10}
 
- civilwar_plot <- civilwar_plot +
+  civilwar_plot <- civilwar_plot +
    theme_minimal() +
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
@@ -499,17 +513,23 @@ print(civilwar_plot)
  
 ```
 
+## Combining the plots
+
+### Footer
+
 ```{r footer}
 
 left_caption <- "Source: PRIO, Uppsala University"
 right_caption <- "* Based on over 250 conflicts, 1946-2012  † Deaths in battle of government troops and troops of\npolitically organised groups: conflicts related within 10 years counted as one"
 
 footer <- ggdraw() + 
-  draw_label(left_caption, x = 0.01, hjust = 0, size = 8, color = "gray30") +
-  draw_label(right_caption, x = 0.99, hjust = 1, size = 8, color = "gray30")
+  draw_label(left_caption, x = 0.01, hjust = 0, size = 8, color = "gray30", fontfamily = "sans") +
+  draw_label(right_caption, x = 0.99, hjust = 1, size = 8, color = "gray30", fontfamily = "sans")
 ```
 
-```{r legend}
+### Legend
+
+```{r legend, warning = FALSE, message = FALSE}
 
 
 # Row 1: East Asia alone
@@ -518,12 +538,15 @@ legend_row1 <- get_legend(
          aes(x, y, color = region)) +
     geom_line(linewidth = 1) +  
     scale_color_manual(values = region_colors, name = NULL) +
-    theme(legend.position = "top",
-          legend.direction = "horizontal",
-          legend.text = element_text(size = 7),     
-          legend.key.width = unit(0.5, "cm"),        
-          legend.key.height = unit(0.3, "cm"),       
-          legend.spacing.x = unit(0.2, "cm"))       
+    theme(
+      text = element_text(family = "sans"),
+      legend.position = "top",
+      legend.direction = "horizontal",
+      legend.text = element_text(size = 7),     
+      legend.key.width = unit(0.5, "cm"),        
+      legend.key.height = unit(0.3, "cm"),       
+      legend.spacing.x = unit(0.2, "cm")
+    )
 )
 
 # Row 2: South & Central Asia + Middle East & North Africa
@@ -535,12 +558,15 @@ legend_row2 <- get_legend(
     scale_color_manual(values = region_colors, 
                        limits = c("South & Central Asia", "Middle East & North Africa"),
                        name = NULL) +
-    theme(legend.position = "top",
-          legend.direction = "horizontal",
-          legend.text = element_text(size = 7),      
-          legend.key.width = unit(0.5, "cm"),       
-          legend.key.height = unit(0.3, "cm"),       
-          legend.spacing.x = unit(0.2, "cm"))        
+    theme(
+      text = element_text(family = "sans"),
+      legend.position = "top",
+      legend.direction = "horizontal",
+      legend.text = element_text(size = 7),      
+      legend.key.width = unit(0.5, "cm"),       
+      legend.key.height = unit(0.3, "cm"),       
+      legend.spacing.x = unit(0.2, "cm")
+    )
 )
 
 # Row 3: Sub-Saharan Africa + Europe + Americas
@@ -552,14 +578,16 @@ legend_row3 <- get_legend(
     scale_color_manual(values = region_colors,
                        limits = c("Sub-Saharan Africa", "Europe", "Americas"),
                        name = NULL) +
-    theme(legend.position = "top",
-          legend.direction = "horizontal",
-          legend.text = element_text(size = 7),      
-          legend.key.width = unit(0.5, "cm"),        
-          legend.key.height = unit(0.3, "cm"),       
-          legend.spacing.x = unit(0.2, "cm"))        
+    theme(
+      text = element_text(family = "sans"),
+      legend.position = "top",
+      legend.direction = "horizontal",
+      legend.text = element_text(size = 7),      
+      legend.key.width = unit(0.5, "cm"),        
+      legend.key.height = unit(0.3, "cm"),       
+      legend.spacing.x = unit(0.2, "cm")
+    )
 )
-
 
 custom_legend <- plot_grid(
   legend_row1,
@@ -570,23 +598,26 @@ custom_legend <- plot_grid(
   rel_heights = c(0.5, 0.5, 0.5) 
 )
 
-
 ```
 
-```{r title}
+### Title
 
+```{r title}
 
 title_plot <- ggplot() + 
   labs(title = "The long and the short of the problem",
        subtitle = "Civil wars and internal armed conflicts, 1946-2012") +
   theme_void() +
   theme(
-    plot.title = element_text(face = "bold", size = 12, hjust = 0),
+    text = element_text(family = "sans"),
+    plot.title = element_text(face = "bold", size = 12, hjust = 0, color = "black" ),
     plot.subtitle = element_text(size = 8, color = "gray40", hjust = 0, face = "bold"),
     plot.margin = margin(5, 5, 5, 10)
   )
    
 ```
+
+## Final plot 
 
 ```{r combined_plot, fig.width=8, fig.height= 10}
 
@@ -604,6 +635,113 @@ print(finishedplot)
 ```
 
 ## Graph improvement
+
+I am still working on the graph improvement. My most important thoughts on it is that the original graph tries to visualize too much information, so an improvement would be to limit the data visualized while still keeping it informative. I want the improved version to keep the death plot as contextual framing, but simplify the lower panel to reduce cognitive overload.
+
+I will still need to work with the grey lines here, get all the data points right and then find a good way to visualize the deaths per conflict as well. Have to fix it so all facets work with the same scale for y-axis so the data is not misleading. I have been trying to get deaths as size but looks like the geom_smooth is causing some trouble there. Maybe the solution is to not work with region colors but with a color scale for deaths and then label the deadliest ones.
+
+```{r improved_graph, fig.width=8, fig.height= 10}
+
+duration_data <- plot_data |> 
+  mutate(duration = end_year-start_year)
+
+improved_civilwar_plot <- ggplot(
+  duration_data,
+  aes(x = start_year, y = duration, size = deaths_thousands)
+) +
+  
+ 
+  add_decade_shading() +
+  
+  geom_point(
+    aes(color = region),
+    size = 1.8,
+    alpha = 0.8
+  ) +
+geom_smooth(
+    aes(
+      x = start_year,
+      y = duration,
+      group = region,
+      color = region
+    ),
+    method = "loess",
+    se = FALSE,
+    linewidth = 0.6,
+    linetype = "dashed",
+    inherit.aes = FALSE,
+    data = duration_data
+  )  +
+  
+
+  facet_wrap(
+    ~ region,
+    ncol = 2,
+    scales = "free_y"
+  ) +
+  
+
+  scale_x_continuous(
+    breaks = seq(1950, 2010, 10),
+    labels = c("50", "60", "70", "80", "90", "2000", "10"),
+    position = "top"
+  ) +
+  
+  coord_cartesian(
+    xlim = c(1944, 2014),
+    expand = FALSE
+  ) +
+  
+  scale_color_manual(values = region_colors) +
+  scale_size_continuous(
+  range = c(2, 10),
+  breaks = c(10, 100, 1000),
+  labels = c("10k", "100k", "1M"),
+  name = "Deaths"
+) +
+  
+  labs(
+    y = "Conflict duration (years)",
+    x = NULL
+  ) +
+  
+  theme_minimal() +
+  theme(
+  
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    
+    strip.background = element_rect(fill = "grey90", color = NA),
+    strip.text = element_text(
+      face = "bold",
+      size = 9,
+      color = "#565b5d"
+    ),
+    
+    axis.text.x.top = element_text(face = "bold", size = 9),
+    axis.ticks.x.top = element_line(color = "black", linewidth = 0.5),
+    axis.line.x.top = element_line(color = "black", linewidth = 0.5),
+    
+    axis.text.y = element_text(size = 8),
+    axis.title.y = element_text(size = 9, color = "gray40"),
+    
+    legend.position = "none",
+    plot.margin = margin(t = 5, r = 5, b = 5, l = 8)
+  )
+improved_finishedplot <- (wrap_elements(title_plot) | wrap_elements(custom_legend)) /
+  deathplot /
+  improved_civilwar_plot /
+  wrap_elements(footer) +
+  plot_layout(
+    heights = c(0.4, 0.6, 5, 0.03),
+    widths = c(1.5, 1)
+  )
+
+print(improved_finishedplot)
+
+```
+
+## Conclusion
 
 Distill is a publication format for scientific and technical writing, native to the web.
 
