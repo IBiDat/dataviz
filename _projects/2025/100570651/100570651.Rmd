@@ -233,7 +233,7 @@ data <- combined_data |>
 # Calculate empty bars between groups
 # "Data to viz" suggests adding empty rows to create gaps
 
-empty_bar <- 3  # Number of empty positions between groups indicates the size of each gap
+empty_bar <- 2.5  # Number of empty positions between groups indicates the size of each gap
 
 data <- data |> 
   mutate(
@@ -380,7 +380,7 @@ coord_polar(theta = "x", start = 0) +
   # Tutorial 295: states the importance of the ylim() argument 
   #if ylim starts at 0 then the bars start at the center of the circle, ours need to be large
   scale_x_continuous(expand = c(0, 0)) +
-  scale_y_continuous(limits = c(0, 210), expand = c(0, 0))   # this is my limit to show all elements of graph 
+  scale_y_continuous(limits = c(-50, 220), expand = c(0, 0))   # this is my limit to show all elements of graph 
 ```
 
 #### Graphing Stylistic Elements
@@ -392,31 +392,31 @@ Here we graph the central dot of the "mandala" shape, the attitude dots which ar
 
 # 1: Center dot
 p <- p +
-  geom_point(aes(x = 0, y = 0), size = 2, color = "black") +
+  geom_point(aes(x = 0, y = -50), size = 2, color = "black") +
   
 # 2: radial lines from center 
 # these go from central dot to the attitude dots 
 geom_segment(data = country_positions,
              aes(x = center_position, xend = center_position, 
-                 y = 0, yend = 60),
+                 y = -50, yend = 50),
              color = "black", linewidth = 0.6) +
   
 # 3a: singular lines extending from attitude dots to our "split point"
   geom_segment(data = country_positions,
                aes(x = center_position, xend = center_position,
-                   y = 60, yend = 75),  # yend = 75 to split slightly "before" halfway to barchart
+                   y = 50, yend = 75),  
                color = "black", linewidth = 0.6) +
   
 # 3b: Lines from determined "split point" connecting to the outer bars
   geom_segment(data = data,
                aes(x = center_position, xend = bar_position,
-                   y = 75, yend = 120), #starting at "split point", ending at base of bars
+                   y = 60, yend = 130), #starting at "split point", ending at base of bars
                color = "black", linewidth = 0.4) +
   
 # 4: Attitude dots with gradient colors 
 # Using attitude_normalized directly with scale_fill_gradient2 funx
   geom_point(data = country_positions,
-             aes(x = center_position, y = 60, #position on radial lines
+             aes(x = center_position, y = 40, #position on radial lines
                   fill = attitude_normalized),
              size = 4, shape = 21, stroke = 0) +
   
@@ -443,12 +443,12 @@ This section maps the inner ring country labels. It also uses the shadowtext fun
 # 5: Receiving country labels (gradient colored)
 p <- p + 
   geom_shadowtext(data = country_positions,
-                  aes(x = center_position, y = 65,
+                  aes(x = center_position, y = 50,
                       label = full_name,
                       color = label_color,
                       angle = angle,
                       hjust = hjust_receiving),
-                  size = 3.5, 
+                  size = 2.75, 
                   fontface = "bold",
                   bg.colour = "white",  # White outline color
                   bg.r = 0.15,          # Outline thickness 
@@ -469,10 +469,10 @@ p <- p +
   geom_segment(data = data, #segment instead of bar/col
              aes(x = bar_position,
                  xend = bar_position,
-                 y = 120,
-                 yend = 120 + (percentage * 1.7), #"bar" length
+                 y = 130,
+                 yend = 130 + (percentage * 1.7), #"bar" length
                  color = continent), #colored by continent 
-             linewidth = 6, #thick!
+             linewidth = 5, 
              lineend = "butt") + #this create a flat and straight end to the "bars"
   
   #continent color categories
@@ -496,12 +496,12 @@ This section creates the labels for the outer ring, which extend from the end of
 p <- p + 
   geom_text(data = data,
           aes(x = bar_position,
-              y = 120 + (percentage * 1.7) + 5,
+              y = 130 + (percentage * 1.7) + 5,
               label = glue("{round(percentage, 1)}% {origin_full_name}"), #adds in percentage
               color = continent, # colored by the continent
               angle = bar_angle, # on same radial angle as the corresponding bar
               hjust = hjust_bar),
-          size = 3.5, fontface = "bold") 
+          size = 3, fontface = "bold") 
 ```
 
 #### Theme and (Non)Titles
@@ -538,22 +538,22 @@ Here, I use patchwork to create the two distinct legends (1 for continent classi
 ### LEGENDS 
 
 # Legend 1: Attitude gradient scale 
-legend1_data <- data.frame(x = 1:50, y = 1)  #1:50 determining length being about half of plot width
+legend1_data <- data.frame(x = rep(1:50, each = 3), y = rep(1:3, times = 50))  #1:50 determining length being about half of plot width, and repeating y for thickness
 legend1 <- ggplot(legend1_data, aes(x = x, y = y, fill = x)) +
   geom_tile() +
   scale_fill_gradient2(low = "#be0e01", mid = "#810180", high = "#0e01c2", 
                        midpoint = 25) + 
-  annotate("text", x = 1, y = -0.1, label = "Worsens my\ncountry", #\n to create unique break
+  annotate("text", x = 1, y = -0.2, label = "Worsens my\ncountry", #\n to create unique break
            #x sets position of text under the legend
            hjust = 0, vjust = 1, size = 2.8, family = "oswald") +
-  annotate("text", x = 25, y = -0.1, label = "Neutral", 
+  annotate("text", x = 25, y = -0.3, label = "Neutral", 
            hjust = 0.5, vjust = 1, size = 2.8, family = "oswald") +
-  annotate("text", x = 50, y = -0.1, label = "Improves my\ncountry", 
+  annotate("text", x = 50, y = -0.3, label = "Improves my\ncountry", 
            hjust = 1, vjust = 1, size = 2.8, family = "oswald") +
-  coord_cartesian(ylim = c(-1, 1.5), clip = "off") +  # Extend y-axis to show labels below
+  coord_cartesian(ylim = c(-1.5, 4), clip = "off") +  # Extend y-axis to show labels below
   theme_void() +
   theme(legend.position = "none",
-        plot.margin = margin(5, 5, 10, 5))  # Add slight margin for labels
+        plot.margin = margin(0, 0, 0, 0))  #trying to make 0 for scaling
 
 # Legend 2: Continent Category with Colors
 legend2_data <- data.frame( 
@@ -574,10 +574,10 @@ legend2 <- ggplot(
   coord_cartesian(xlim = c(0.5, 9.5), ylim = c(0.5, 1.5)) +
   theme_void() +
   theme(legend.position = "none",
-        plot.margin = margin(5, 5, 10, 5))
+        plot.margin = margin(0, 0, 0, 0)) #trying to make 0 for scaling
 
 # combine legends side by side before combining to main plot
-legends <- legend1 + legend2 + plot_layout(widths = c(1.5, 1))
+legends <- legend1 + legend2 + plot_layout(widths = c(1.25, 1))
 
 # combine legends to the main plot 
 final_plot <- legends / p + 
@@ -586,10 +586,10 @@ final_plot <- legends / p +
     title = "**Where do most immigrants of these European countries originate from?**",
     subtitle = "Arranged by their citizens' feelings towards immigrants, together with the top 5 countries of origin",
     theme = theme(
-      plot.title = element_markdown(size = 26, hjust = 0.5,
+      plot.title = element_markdown(size = 19, hjust = 0.5,
                                     margin = margin(t = 5, b = 1),
                                     family = "oswald"),
-      plot.subtitle = element_markdown(size = 18, hjust = 0.5,
+      plot.subtitle = element_markdown(size = 14, hjust = 0.5,
                                        margin = margin(t = 1, b = 10),
                                        family = "oswald")
     )
@@ -599,7 +599,7 @@ final_plot <- legends / p +
 #### Printing Recreation
 Here, we print to see our final product. 
 
-```{r print-rec, fig.showtext=TRUE, fig.width=11, fig.height=14, preview=TRUE}
+```{r print-rec, fig.showtext=TRUE, fig.width=8, fig.height=9, preview=TRUE}
 # Display plot
 print(final_plot)
 ```
