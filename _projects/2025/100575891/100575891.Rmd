@@ -10,6 +10,10 @@ output:
     self_contained: false
 ---
 
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(out.width="100%", fig.align="center", fig.showtext=TRUE)
+```
+
 # Introduction
 
 On April 28th, 2025 starting at 12:33 CEST (local time), Spain, parts of Portugal, and parts of France suffered complete shutdown of the electricity grid which lasted roughly ten hours. Trains ceased to run, radio and cellular signals shut down, shops returned to a cash-based system, and Spain's nuclear power plants were taken off the grid automatically. The BBC estimates that the blackout caused a €1.6 billion hit to the economy.
@@ -20,7 +24,7 @@ Red Eléctrica has [publicly available generation data](https://demanda.ree.es/v
 
 ## Original Graph
 
-![](images/clipboard-175591426.jpeg){width="589"}
+![Original chart. Source: <https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html>](images/original-chart.png){.external alt="Original chart. Source: https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html" width="100%"}
 
 There are some obvious issues with this graph: it's density of information makes it difficult to read and comprehend. With 15 types of energy and storage being tracked, along with marking the blackout time and line of real demand, there is a lot of information here that is missing context.
 
@@ -38,7 +42,7 @@ However, there are larger issues when the graph is studied in more detail. As se
 
 `Patchwork` is relevant for the improvement, as it allows graphs to be plotted side-by-side.
 
-```{r}
+```{r libraries}
 library(tidyverse)
 library(lubridate)
 library(ggplot2)
@@ -52,7 +56,7 @@ library(patchwork)
 
 As mentioned before, Red Eléctrica [offers access](https://demanda.ree.es/visiona/peninsula/nacionalau/acumulada/2025-04-28) to their historical generation and storage data as convenient .csv files. While most of the data is contained in "Estructura de generación", "Estructura de almacenamiento" provided turbinación bombeo, consumo bombeo, entrega de baterías, and carga de baterías. "Seguimiento de la demanda de energía eléctria" provided the data for the "real demand" line.
 
-```{r}
+```{r data sets}
 generacion <- read.csv(file = "100575891_files/data/Custom-Report-2025-04-28-Estructura de generación (MW).csv")
 almacenamiento <- read.csv(file = "100575891_files/data/Custom-Report-2025-04-28-Estructura de almacenamiento (MW).csv")
 demanda <- read.csv(file = "100575891_files/data/Custom-Report-2025-04-28-Seguimiento de la demanda de energía eléctrica (MW).csv")
@@ -63,8 +67,8 @@ demanda <- read.csv(file = "100575891_files/data/Custom-Report-2025-04-28-Seguim
 When looking at the original graph and the replicated graph, it is clear the data is not the same.
 
 | Original Graph | Replicated Graph |
-|----|----|
-| ![](images/clipboard-175591426.jpeg){width="258"} | ![](images/clipboard-3501742140.png){width="258"} |
+|------------------------------------|------------------------------------|
+| ![Original chart. Source: https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html](images/original-chart.png){.external alt="Original chart. Source: https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html" width="100%"} | ![Replicated chart.](images/replicated-chart.png){.external alt="Replicated chart." width="100%"} |
 
 The left half of the graph, the data before the blackout, is nearly identical between the original graph and the replicated graph. The right half of the graph, after the blackout, is starkly different. The prevailing theory is that the data was manipulated in the original graph in order to better distinguish the labeling. In the replicated graph, some areas are too small to properly label. However, the original graph makes no indication of this change in the graph or in the accompanying webpage. It also lists the x axis as the same time frames, and the y axis as the same scales. Since replicating the modification would be a game of trial and error - not to mention unethical - it was excluded from the replication. The replicated graph uses the original, unedited data gathered from Red Eléctrica.
 
@@ -72,7 +76,7 @@ The left half of the graph, the data before the blackout, is nearly identical be
 
 The original graph uses a subset of variables from the generation and demand data sets. These datasets were also combined into one using "Hora" or hour.
 
-```{r}
+```{r remove columns}
 # --------
 # Remove Unnecessary Columns
 # --------
@@ -145,7 +149,7 @@ full_data <- full_data |>
 
 The variable "Type" was set as a factor to properly order the areas as they appear in the graph. "Rating" was ensured to be numeric for the y graph, and "Hora" was set to a date-time variable with as.POSIXct().
 
-```{r}
+```{r data_refinement}
 # --------
 # Set Type as Factor
 # --------
@@ -216,7 +220,7 @@ Rating \<- The rating of the type of energy.
 
 "Demanda" has the date and time of the energy demand, and the variable "real" represents the real demand for energy in megawatts.
 
-```{r}
+```{r data_print}
 full_data
 demanda
 ```
@@ -227,7 +231,7 @@ demanda
 
 The original fonts in the graph were Avenir Next. However, due to licensing and copyright, it was replaced with Roboto from Google fonts which has open licensing.
 
-```{r}
+```{r fonts}
 sysfonts::font_add_google("Roboto", family="roboto")
 showtext::showtext_auto()
 ```
@@ -236,11 +240,10 @@ showtext::showtext_auto()
 
 GGplot was used to set the x axis as time, the y axis as Rating (in Megawatts), and fill to Type. The lines were colored to white to match the original graph.
 
-```{r}
+```{r basic_plot}
 final <-
   # data
   ggplot() +
-    coord_cartesian(clip = "off") +
   # area lines 
   geom_area(
     data = full_data, 
@@ -261,7 +264,7 @@ The limits for the y scale were set to -10,000 and 40,000 to match the graph. Th
 
 The x scale limits were set in date and time format. The division was also set to 2 hours to have the correct number of breaks. Finally, the formatting was set to only show the time.
 
-```{r}
+```{r scaling}
 final <- final +
     # colors
   scale_fill_manual(values = c(
@@ -289,6 +292,7 @@ final <- final +
     Portugal.exportación = "#006600",
     Andorra.exportación = "#211e83")
   ) +
+  coord_fixed(ratio = 1, xlim = NULL, ylim = NULL, expand = TRUE, clip = "off") +
   # remove legend
   guides(fill = "none") +
   # remove labels for scales
@@ -320,7 +324,7 @@ final
 
 The theme removed the plot's grid lines, changed the color of the axis, modified the tick length and color, and set a global default for the fonts. It also modified the padding in order to add space for the external annotations.
 
-```{r}
+```{r basic_theming}
 final <- final +
   theme(
     # removes background grey
@@ -361,7 +365,7 @@ final <- final +
       element_text(color = "#b8b8b8"),
     # padding of plot
     plot.margin = margin(15, # top
-                         80, # right
+                         90, # right
                          45, # bottom
                          15 # left
     )
@@ -373,7 +377,7 @@ final
 
 The most difficult part of this graph were annotations set outside the plot of the graph. Four functions were attempted: `annotate()`, `annotation_custom()`, `grid.text()` and `geom_text()`. `Annotate()` worked well for annotations within the plot. However, it did not appear when the x and y values of the annotation were pushed beyond the limits of the plot. `Annotation_custom()` required the use of `unit(value, NPC)` as the x and y coordinate values. This meant that the text would respond to the preview panel size and not stay fixed to the graph.
 
-![](images/clipboard-3621868756.gif)
+![Annotation Issues.](images/annotation-issues.gif){.external alt="Annotation Issues." width="100%"}
 
 It also was struggling to work with `coord_cartesian(clip = "off")` meaning it would not appear even with clipping was off. `Grid.text()` was working with `coord_cartesian(clip = "off")`, however it still required the use of `unit(value, NPC)`, meaning it would respond with the browser size.
 
@@ -381,7 +385,7 @@ Finally, `geom_text()` and `geom_segment()` were used to add lines and words out
 
 Each internal text annotation was given an x and y coordinate, a text color, a size, and a label. Each internal line annotation was given an x and y coordinate, an ending x and y coordinate, a line color of black, and a line width of 0.2.
 
-```{r}
+```{r internal_annotations}
 final <- final +
   # demanda real line
   geom_line(
@@ -587,7 +591,7 @@ Each external line annotation was an x and y coordinate, an ending x and y coord
 
 Finally, the title was treated with `ggtitle()` instead of `geom_text()`. Initially, `geom_text()` was struggling to push the title so far out of the y axis, and `ggtitle()` was working better.
 
-```{r}
+```{r external_annotations}
 final <- final +
   # caption line
   geom_segment(
@@ -622,7 +626,7 @@ final <- final +
   geom_text(
     data = NULL,
     x = as.POSIXct("2025-04-29 01:00", tz = "Europe/Madrid"),
-    y = 18500,
+    y = 19000,
     label = "Solar \ntérmica",
     color = "#ff0400",
     size = 2.7,
@@ -751,12 +755,12 @@ final <- final +
     x = as.POSIXct("2025-04-29 00:00", tz = "Europe/Madrid"),
     xend = as.POSIXct("2025-04-29 00:45", tz = "Europe/Madrid"),
     y = 17500,
-    yend = 21000,
+    yend = 22000,
     linewidth = 0.1
   ) +
   # title line
   geom_segment(
-    x = as.POSIXct("2025-04-27 21:00", tz = "Europe/Madrid"),
+    x = as.POSIXct("2025-04-27 21:40", tz = "Europe/Madrid"),
     xend = as.POSIXct("2025-04-29 03:00", tz = "Europe/Madrid"),
     y = 43000,
     yend = 43000,
@@ -837,7 +841,7 @@ Imports and Exports \<- Portugal, France, Andorra, and Morocco have variables fo
 
 Re-importing the data allows for reprocessing.
 
-```{r}
+```{r re_import_data}
 # --------
 # Import Data
 # --------
@@ -850,7 +854,7 @@ demanda <- read.csv(file = "100575891_files/data/Custom-Report-2025-04-28-Seguim
 
 From this analysis, it is clear that two erroneous data points were included: consumo bombeo and carga de baterías. These are distinct from the rest of the included data points because they are not ways of producing energy, and represent one half of a process to store energy. The mixing of storage and production makes the original graph dense and difficult to interpret. These data points will not be included in the improved version.
 
-```{r}
+```{r remove_columns}
 # --------
 # Remove Unnecessary Columns
 # --------
@@ -866,11 +870,11 @@ almacenamiento <- almacenamiento |>
 
 Imports and Exports are represented by separate areas. However, they are two halves of the same data point and should be treated as such. Additionally, this can be confirmed by looking at the data itself, where a missing value from Andorra imports is made up for with a value in Andorra exports. See the example below.
 
-![](images/clipboard-3042714963.png)
+![Import and Export Values from Red Eléctrica.](images/import-export-issues.png){.external alt="Import and Export Values from Red Eléctrica." width="100%"}
 
 In the improved version, imports and exports are combined.
 
-```{r}
+```{r combine_imports}
 # --------
 # Combining Imports with the Exports
 # --------
@@ -900,7 +904,7 @@ generacion <- generacion |>
 
 The general public will not care to make the distinction between Solar panels and solar processed with mirrors. Both solars are combined.
 
-```{r}
+```{r combine_solar}
 # --------
 # Combine Solar
 # --------
@@ -912,7 +916,7 @@ generacion <- generacion |>
 
 These altered data points need to be converted to numerical variables.
 
-```{r}
+```{r convert_numeric}
 # --------
 # Convert it to numeric
 # --------
@@ -926,7 +930,7 @@ generacion$Solar <- as.numeric(generacion$Solar)
 
 The same combining of data sets is completed as before.
 
-```{r}
+```{r combining_data}
 # --------
 # Combining Data sets
 # --------
@@ -937,11 +941,11 @@ combined_data <- generacion |>
 
 For the improvement, four graphs will be needed. One to combine Renewable, Non-renewable, stored energy, and imported energy sources and three others to break out the categories by sub-categories.
 
-![](images/clipboard-3033861489.png)
+![Improvement.](images/improvement.png){.external alt="Improvement." width="100%"}
 
 The below code combines the sub-categories into the broader categories of Renewable, non-renewable, stored energy use, and imported energy use. The data is then transformed to have tidy data, and refactored to set the correct order.
 
-```{r}
+```{r main_graph_data}
 # --------
 # Data Subset 1
 # --------
@@ -1009,7 +1013,7 @@ demanda <- demanda |>
 
 Pre-processing of the full_data data set is completed to be able to process it into smaller categories.
 
-```{r}
+```{r data_refinement2}
 # --------
 # Pivot Longer
 # --------
@@ -1083,7 +1087,7 @@ full_data <- full_data |>
 
 The data is divided into four subsets in order to build the four smaller graphs.
 
-```{r}
+```{r data_subsets}
 # --------
 # Renewable Subset
 # --------
@@ -1118,7 +1122,7 @@ imported_energy_data <- full_data |>
 
 ## Main Plot
 
-```{r}
+```{r main_plot}
 # --------
 # Main Plot
 # --------
@@ -1332,7 +1336,7 @@ combined
 
 ## Renewable Plot
 
-```{r}
+```{r renewable}
 # --------
 # Renewable Plot
 # --------
@@ -1498,7 +1502,7 @@ renewable
 
 ## Non-Renewable Plot
 
-```{r}
+```{r non_renewable}
 # --------
 # Non_Renewable Plot
 # --------
@@ -1734,7 +1738,7 @@ non_renewable
 
 ## Stored Energy Plot
 
-```{r}
+```{r stored_energy}
 # --------
 # Stored_Energy Plot
 # --------
@@ -1858,7 +1862,7 @@ stored_energy
 
 ## Imported Energy
 
-```{r}
+```{r imported_energy}
 # --------
 # Imported_Energy Plot
 # --------
@@ -2030,11 +2034,13 @@ imported_energy
 
 In the original, there was only one ggplot needed to reconstruct the graph. This new version has four graphs laid out with a title across the top. Patchwork was utilized to combine the graphs.
 
-```{r}
+```{r side_rail}
 siderail <- renewable / non_renewable / imported_energy / stored_energy
 siderail
+```
 
-final <- combined + siderail +
+```{r improvement, fig.width = 8, fig.height = 7}
+improved <- combined + siderail +
     plot_layout(ncol = 2, widths = c(2,1)) +
   plot_annotation(
     title = str_wrap("Energy Production during the April 28th Blackout in Spain", width = 39), 
@@ -2045,9 +2051,5 @@ final <- combined + siderail +
       face = "bold",
       hjust = 0
     )))
-final
+improved
 ```
-
-The Rmd makes the file run weirdly, but here is a screenshot of the R file.
-
-![](images/clipboard-442227354.png)
