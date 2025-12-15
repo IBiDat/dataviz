@@ -1032,12 +1032,158 @@ r5
 
 ```
 
-
+#### Add completed graphs together 
+```{r}
+graphs <- free(
+  p10 + l4 + f10 + r5 +  
+  plot_layout(nrow = 1, 
+              widths = unit(c(3.42, 
+                              2.39, 
+                              1.7, 
+                              2.55),"inches")))
+```
 
 ## Final Plot - Recreation 
+```{r}
+final <- top_banner/
+  second_banner/ third_banner/ 
+  graphs / bottom_banner_f +
+  plot_layout(heights = unit(c(0.71,0.325,0.45, 4.4, 0.4), "inches"),
+              nrow = 5,
+              ncol = 1)
+
+ggsave("final.png", plot = final, width = 10.66, height = 6.35, units = "in", dpi = 300)
+```
+
+![Original chart.](final.png){.external width="100%"}
 
 ## Improvement
 
+## Main plot 
+
+```{r}
+
+m1 <- ggplot() +
+  scale_x_continuous(
+    limits = c(2010, 2035), 
+    breaks = seq(2010, 2035, by = 10)) +
+  scale_y_continuous(
+    limits = c(-100, 699),
+    breaks = seq(-100, 600, by = 100)) +
+  labs(title = "Australian Emissions", 
+       subtitle = expression(MtCO[2]*e / year ~ (GWP ~ AR5))) +
+  theme(
+    plot.title = element_text(size = 32, face = "bold"),
+    plot.subtitle = element_text(size = 28),
+    panel.background = element_rect(fill = "grey90",
+                                    color = NA),
+    plot.background = element_rect(fill = "grey90",
+                                   color = NA),
+    panel.grid.major.x = element_line(colour = "grey90"),
+    panel.grid.major.y = element_line(colour = "grey", 
+                                      linewidth = 0.3),
+    panel.grid.minor = element_line(colour = 
+                                        "grey90"),
+    axis.text.y = element_text(size = 22,
+                              colour = "#1D252A",
+                              margin = margin(0,0.1,0,0, "inches")),
+    axis.text.x = element_text(size = 24, 
+                              face = "bold",
+                              margin = margin(0.1,0,0,0, "inches"),
+                              colour = "#1D252A"),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.ticks = element_blank()
+    ) +
+  coord_cartesian(
+    xlim = c(2010,2035),
+    ylim = c(-100, 600),
+    clip = "off",
+    expand = FALSE) 
+ ### ADD , "Modelled Domestic Pathways"
+
+# Add coloured areas (so they are underneath)
+m2 <- m1 + 
+  geom_ribbon(data = dom_data |> 
+                filter(year >= 2024),
+              aes(x = year, 
+                  ymin = 0, 
+                  ymax = emissions),
+              fill = "#81B18E", alpha = 0.6) + 
+  geom_ribbon(data = fair_data |> 
+                filter(year >= 2024), 
+              aes(x = year,
+                  ymin = 0,
+                  ymax = emissions),
+              fill = "#A3B4AC", alpha = 0.6)
+
+m2
+# Add historical data, LULUCF data and 0 ref line
+
+m3 <- m2 +  
+  geom_line(data = country_1 |>  
+              filter(scenario == "Historical", 
+                     year >= 2010,
+                     sector == "Economy-wide, excluding LULUCF"),
+            aes(x = year, 
+                y = emissions),
+            linewidth = 1, 
+            color = "#36454F") + 
+  geom_line(data = country_1 |>  
+              filter(scenario == "Historical", 
+                     year >= 2010,
+                     sector == "LULUCF"),
+            aes(x = year, 
+                y = emissions),
+            linewidth = 1, color = "#36454F") +
+  geom_ribbon(data = country_1 |>  
+              filter(scenario == "Historical", 
+                     year >= 2010,
+                     sector == "LULUCF"),
+              aes(x = year, 
+                  ymin = 0, 
+                  ymax = emissions), 
+              fill = "#839AAA", alpha = 0.5) + 
+  geom_hline(yintercept = 0, 
+             linetype = "solid", 
+             color = "#1D252A", 
+             linewidth = 0.8)
+
+
+
+# add 1.5 compatible line and policy 
+m4 <- m3 + 
+    geom_line(data = dom_data,
+            aes(x = year, y = emissions),
+            color = "#81B18E",
+            linewidth = 1, 
+            linetype = 2) +
+  geom_ribbon(data = policies_r,
+              aes(x = year, 
+                  ymin = `Current Policy, Min`, 
+                  ymax = `Current Policy, Max`),
+              fill = "#F5BD84", alpha = 0.6) + 
+  geom_line(data = policies_r, 
+            aes(x = year, 
+                y = mid_range),
+            linewidth = 1, 
+            color = "#F5BD84") +
+  geom_line(data = fair_data, 
+            aes(x = year,
+                y = emissions), 
+            colour = "#364F4D", 
+            linewidth = 0.5, 
+            linetype = 2) +
+  geom_vline(xintercept = 2024, 
+             colour = "#1D252A") +
+  geom_text(aes(x = 2024.1, y = 625), label = "Modelled Pathways (from 2024)", 
+            size = 10, fontface = "bold", 
+            vjust = 0,
+            hjust = 0)
+  
+m4
+
+```
 
 
 
