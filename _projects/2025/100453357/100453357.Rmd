@@ -1,7 +1,7 @@
 ---
-title: "Miriam dataviz"
+title: "Track National Unemployment"
 description: |
-  A short description of the post.
+  National Unemployment, Job Gains and Job Losses.
 categories: "2025"
 author: Miriam Lim Leal
 date: "`r Sys.Date()`"
@@ -10,6 +10,534 @@ output:
     self_contained: false
     toc: true
 ---
+## Libraries
+
+```{r}
+library(tidyverse)
+library(cowplot)
+library(colorspace)
+```
+
+## 1.Import data
+
+```{r}
+payrol_unemployment <- read.csv(file = "./monthly.csv")
+```
+
+## 2.Add names to variables and convert "date" variable into date
+
+```{r}
+new_payrol_unemployement <- 
+  payrol_unemployment |> 
+  rename(date = "observation_date",
+         transportation_and_warehousing = "CES4300000001",
+         utilities = "CES4422000001",
+         education = "CES6561000001",
+         health_care_and_social_assistance = "CES6562000001",
+         arts_entertainment_and_rec = "CES7071000001",
+         accommodation = "CES7072100001",
+         restaurants_and_bars = "CES7072200001",
+         federal_government = "CES9091000001",
+         state_government = "CES9092000001",
+         local_government = "CES9093000001",
+         durable_goods_manufacturing = "DMANEMP",
+         nondurable_goods_manufacturing = "NDMANEMP",
+         construction = "USCONS",
+         financial_activities = "USFIRE",
+         information = "USINFO",
+         mining_and_logging = "USMINE",
+         professional_and_business_services = "USPBS",
+         other_services = "USSERV",
+         retail_trade = "USTRADE",
+         wholesale_trade = "USWTRADE"
+         ) |> 
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))
+```
+
+## 3.Calculate month-over-month % change
+
+```{r}
+percentage_payroles <- new_payrol_unemployement |> 
+  arrange(date) |> 
+  mutate(across(
+    c(transportation_and_warehousing, 
+      utilities,
+      education,
+      health_care_and_social_assistance,
+      arts_entertainment_and_rec,
+      accommodation,
+      restaurants_and_bars,
+      federal_government,
+      state_government,
+      local_government,
+      durable_goods_manufacturing,
+      nondurable_goods_manufacturing,
+      construction,
+      financial_activities,
+      information,
+      mining_and_logging,
+      professional_and_business_services,
+      other_services,
+      retail_trade,
+      wholesale_trade),
+    ~ (. - lag(.)) / lag(.) * 100
+  ))
+```
+
+order data from january-feb to check
+
+```{r}
+percentage_payroles |>
+  filter(date == "2008-02-01") |>
+  select(-date) |>  # temporarily remove date
+  pivot_longer(everything(), names_to = "industry", values_to = "pct_change") |>
+  arrange(desc(pct_change)) |>
+  select(industry, pct_change)
+```
+
+Data is slightly different than original because the BLS(Bureau of Labor Statistics) constantly revises employment numbers after they're first released, so data downloaded at different times will have slightly different values.
+
+## 4. Split data into 2: stacked data and data_cero (values between -0.01 and 0.01)
+
+### 4.1 plot_data (only values that are not between -0.01 and 0.01)
+
+Reorganise data, dates as columns rest of info as rows
+
+```{r}
+plot_data <- percentage_payroles |> 
+  pivot_longer(
+    cols = -date,
+    names_to = "sector",
+    values_to = "percentage_change"
+  ) |> 
+  filter(date >= "2008-02-01" & date <= "2017-03-01") |> 
+  filter(percentage_change <= -0.01 | percentage_change >= 0.01)
+```
+
+### 4.2 data_cero (only values between -0.01 and 0.01)
+
+Reorganise data, dates as columns rest of info as rows
+
+```{r}
+data_zero <- percentage_payroles |> 
+  pivot_longer(
+    cols = -date,
+    names_to = "sector",
+    values_to = "percentage_change"
+  ) |> 
+  filter(date >= "2008-02-01" & date <= "2017-03-01") |> 
+  filter(percentage_change > -0.01 & percentage_change < 0.01)
+```
+
+## 5.Sort and stack data
+
+### 5.1 plot_data
+
+```{r}
+staked_data <- plot_data |> 
+  group_by(date) |>  
+  arrange(date, desc(percentage_change)) |> 
+  mutate(is_positive = percentage_change > 0) |> 
+  group_by(date, is_positive) |> 
+    mutate(order = ifelse(is_positive,
+                          rev(row_number()) - 0.5,
+                          -row_number() + 0.5)
+    ) |> 
+  ungroup() |> 
+  mutate(pc_bin = cut(   #create intervals with breaks saved in pc_bin
+    percentage_change,
+    breaks = c(-Inf, -1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, Inf),
+    include.lowest = TRUE,
+    labels = c("(-Inf,-1]", "(-1,-0.75]", "(-0.75,-0.5]", 
+               "(-0.5,-0.25]", "(-0.25,0]", "(0,0.25]", 
+               "(0.25,0.5]", "(0.5,0.75]", "(0.75,Inf]")
+  ))
+
+```
+
+### 5.2 data_cero
+
+```{r}
+zero_stacked <- data_zero |> 
+  group_by(date) |> 
+  arrange(date, percentage_change) |> 
+  mutate(stacked_position = row_number()) |> 
+  ungroup()
+  
+```
+
+## 6. Join data
+
+```{r}
+combined_data <- bind_rows(
+  staked_data |> 
+    mutate(category = "main") |> 
+    select(date, order, pc_bin, category),
+  
+  zero_stacked |> 
+    mutate(
+      category = "unch",
+      pc_bin = "unchanged"
+    ) |> 
+    mutate(order = -22 + (stacked_position - 1)) |>   # Separate mutate after
+    select(date, order, pc_bin, category))
+```
+
+## 7. PLOTTING DATA
+
+Create two tile plots joined
+
+```{r}
+p1 <- ggplot(combined_data, aes(x = date, y = order)) +
+  annotate("rect", 
+           xmin = as.Date(-Inf), 
+           xmax = as.Date("2009-06-30"), 
+           ymin = -Inf, 
+           ymax = 20, 
+           fill = "grey90", 
+           alpha = 0.5) +
+  annotate("text",
+           x = as.Date("2008-02-01"),
+           y = 16,
+           label = "RECESSION",
+           hjust = 0,
+           vjust = 0.5,
+           size = 2.5,
+           color = "grey30") +
+  
+  geom_tile(data = subset(combined_data, 
+                          category == "main"),
+            aes(fill = pc_bin),
+            width = 25, 
+            height = 1, 
+            colour = "white", 
+            linewidth = 0.1) +
+  
+  geom_tile(data = subset(combined_data, 
+                          category == "unch"),
+            width = 25, 
+            height = 1, 
+            fill = "#999999", 
+            colour = "white", 
+            linewidth = 0.1) +
+  
+  scale_fill_manual(values = c(
+    "(-Inf,-1]" = "#ce472e",
+    "(-1,-0.75]" = "#f05336",
+    "(-0.75,-0.5]" = "#faa224",
+    "(-0.5,-0.25]" = "#ffd73e",
+    "(-0.25,0]" = "#efe3be",
+    "(0,0.25]" = "#c6e3bb",
+    "(0.25,0.5]" = "#a3d393",
+    "(0.5,0.75]" = "#64bc52",
+    "(0.75,Inf]" = "#0099dc"
+  )) +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y", position = "top", expand = c(0, 0)) +
+  scale_y_continuous(breaks = c(20, 15, 10, 5, 0, -5, -10, -15, -20, -22),
+                     labels = c("20", "15", "10", "5", "0", "-5", "-10", "-15", "-20", "Unch."),
+                     limits = c(-23, 21),
+                     expand = c(0, 0)) +
+  coord_fixed(ratio = 25) +
+  theme_minimal() +
+  theme(
+    axis.text.x.top = element_text(size = 6, angle = 0, hjust = 0.5, vjust = -1),
+    axis.text.y = element_text(size = 6, hjust = 1, vjust = 0.5),
+    axis.title.y = element_text(size = 5, angle = 90, vjust = 0.5),
+    
+    axis.ticks.x.top = element_line(color = "black", linewidth = 0.5),
+    axis.ticks.length.x.top = unit(0.1, "cm"),
+    
+    axis.ticks.y = element_line(color = "black", linewidth = 0.5),
+    axis.ticks.length.y = unit(0.1, "cm"),
+    
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background = element_rect(fill = "white", color = NA),
+    
+    plot.margin = margin(10, 10, 10, 10),
+    legend.position = "none"
+  ) +
+  labs(x = NULL,
+       y = "< SECTORS FALLING                SECTORS RISING > ",
+       fill = NULL)
+p1
+```
+
+Create a data for the legend of the colour scale
+
+```{r}
+legend_data <- data.frame(
+  x = 1:9,
+  y = 1,
+  color_bin = c("(-Inf,-1]", "(-1,-0.75]", "(-0.75,-0.5]", "(-0.5,-0.25]", 
+                "(-0.25,0]", "(0,0.25]", "(0.25,0.5]", "(0.5,0.75]", "(0.75,Inf]")
+)
+```
+
+Create the plot
+
+```{r}
+p2 <- ggplot(legend_data, aes(x = x, y = y, fill = color_bin)) +
+  geom_tile(width = 1, height = 1, color = NA) +
+  scale_fill_manual(values = c(
+    "(-Inf,-1]" = "#ce472e",
+    "(-1,-0.75]" = "#f05336",
+    "(-0.75,-0.5]" = "#faa224",
+    "(-0.5,-0.25]" = "#ffd73e",
+    "(-0.25,0]" = "#efe3be",
+    "(0,0.25]" = "#c6e3bb",
+    "(0.25,0.5]" = "#a3d393",
+    "(0.5,0.75]" = "#64bc52",
+    "(0.75,Inf]" = "#0099dc"
+  )) +
+  annotate("segment", x= 1.5, xend = 1.5, y = 0.35, yend = 0.15, 
+           color = "black", linewidth = 0.5) +
+  annotate("segment", x = 5.5, xend = 5.5, y = 0.35, yend = 0.15, 
+           color = "black", linewidth = 0.5) +
+  annotate("segment", x = 8.5, xend = 8.5, y = 0.35, yend = 0.15, 
+           color = "black", linewidth = 0.5) +  
+  
+  annotate("text", x = 1.5, y = -0.1, label = "-1%", size = 2.4) +
+  annotate("text", x = 5.5, y = -0.1, label = "0%", size = 2.4) +
+  annotate("text", x = 8.5, y = -0.1, label = "0.75%", size = 2.4) +
+  
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  coord_fixed(ratio = 1, clip = "off") +
+  theme_void() +
+  theme(
+    legend.position = "none",
+    plot.margin = margin(5, 5, 20, 5)
+  )
+
+p2
+```
+
+## Join plots
+
+```{r}
+ggdraw() +
+  draw_plot(p1) +
+  draw_plot(p2, x = 0.65, y = 0.75, width = 0.25, height = 0.20)
+```
+
+
+## Improvement
+new plot data
+```{r}
+bar_plot_new <- percentage_payroles |> 
+  pivot_longer(
+    cols = -date,
+    names_to = "sector",
+    values_to = "percentage_change"
+  ) |> 
+  filter(date >= "2008-02-01" & date <= "2017-03-01") 
+
+```
+
+
+
+maybe change percentage_payroles to include zero_data
+```{r}
+ggplot(bar_plot_new, aes(x = date, y = percentage_change, fill = sector)) +
+  geom_col(position = "stack", width = 30) +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y", expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 9, angle = 0, hjust = 0.5),
+    axis.title.y = element_text(size = 9),
+    
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background = element_rect(fill = "white", color = NA),
+    
+    plot.margin = margin(10, 10, 10, 10),
+    legend.position = "right",
+    legend.text = element_text(size = 7),
+    legend.key.size = unit(0.4, "cm")
+  ) +
+  labs(x = NULL,
+       y = "Total Percentage Change",
+       fill = "Sector",
+       title = "Employment Changes by Sector Over Time"
+       )
+  
+```
+
+
+Small plots
+Create a named vector with shaded colors for each sector
+```{r}
+sector_colors <- c(
+  # Goods-producing (RED shades)
+  "mining_and_logging" = "#245501",             
+  "construction" = "#538d22",                     
+  "durable_goods_manufacturing" = "#73a942",      
+  "nondurable_goods_manufacturing" = "#aad576",   
+  
+  #
+  "transportation_and_warehousing" = "#ffe5ec",   
+  "wholesale_trade" = "#ffb3c6",             
+  "utilities" = "#e0aaff",                     
+  "information" = "#c77dff",                   
+  "financial_activities" = "#9d4edd",             
+  "professional_and_business_services" = "#5a189a", 
+  "retail_trade" = "#240046",  
+  "education" = "#03045e",                        
+  "health_care_and_social_assistance" = "#023e8a", 
+  "accommodation" = "#0096c7",      
+  "restaurants_and_bars" = "#48cae4",     
+  "other_services" = "#90e0ef", 
+  "arts_entertainment_and_rec" = "#caf0f8", 
+  #-----------------------------------------------------------
+  # Trade & Transportation (BLUES - 4 sectors)
+  "wholesale_trade" = "#08519C",
+  "retail_trade" = "#3182BD",
+  "transportation_and_warehousing" = "#48cae4",
+  "utilities" = "#9ECAE1",
+  
+  # Business & Financial Services (PURPLES - 3 sectors)
+  "information" = "#5a189a",
+  "financial_activities" = "#9d4edd",
+  "professional_and_business_services" = "#e0aaff",
+  
+  # Consumer & Social Services (TEALS/GREENS - 6 sectors)
+  "education" = "#ffea00",
+  "health_care_and_social_assistance" = "#ffb700",
+  "accommodation" = " n#ffaa00",
+  "restaurants_and_bars" = "#A1D99B",
+  "arts_entertainment_and_rec" = "#C7E9C0",
+  "other_services" = "#E5F5E0"
+  
+  # Government (GREEN shades)
+  "federal_government" =  "#8B0000",               
+  "state_government" = "#ad2e24",                 
+  "local_government" = "#c75146"                  
+)
+
+```
+
+
+
+Goods producing industries
+```{r}
+goods_plot <- bar_plot_new|> 
+  filter(sector %in% c("mining_and_logging", "construction", 
+                        "durable_goods_manufacturing", "nondurable_goods_manufacturing")
+         )|> 
+  ggplot(aes(x = date, y = percentage_change, fill = sector)) +
+  geom_col(position = "stack", width = 25) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2009:2017, "-01-01"))), 
+           color = "grey60", linewidth = 0.3, linetype = "dotted") +
+  geom_hline(yintercept = 0, color = "black", linewidth = 0.5) +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y", expand = c(0, 0), position = "top") +
+  scale_y_continuous(expand = c(0, 0),
+                      limits = c(-8, 15)) +
+  scale_fill_manual(values = sector_colors,
+                    labels= c("construction" = "Construction",
+             "durable_goods_manufacturing" = "Durable Goods Manufact.",
+             "mining_and_logging" = "Mining & Logging",
+             "nondurable_goods_manufacturing" = "Nondurable Goods Manufact.")) +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background = element_rect(fill = "white", color = NA),
+  ) +
+  labs(title = "Goods-producing industries", x = NULL, y = NULL) +
+  theme(legend.position = "bottom", legend.text = element_text(size = 8))
+
+goods_plot
+```
+
+
+Private service provinding industries
+```{r}
+
+library(RColorBrewer)
+
+service_plot <- bar_plot_new|> 
+  filter(sector %in% c("transportation_and_warehousing", "wholesale_trade", "utilities", "information",
+                       "financial_activities", "professional_and_business_services", "retail_trade", 
+                       "education", "health_care_and_social_assistance", "accommodation", 
+                       "restaurants_and_bars", "other_services","arts_entertainment_and_rec")
+         ) |> 
+  ggplot(aes(x = date, y = percentage_change, fill = sector)) +
+  geom_col(position = "stack", width = 25) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2009:2017, "-01-01"))), 
+           color = "grey60", linewidth = 0.3, linetype = "dotted") +
+  geom_hline(yintercept = 0, color = "black", linewidth = 0.5) +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y", expand = c(0, 0), position = "top") +
+  scale_y_continuous(expand = c(0, 0),
+                      limits = c(-8, 15)) +
+  scale_fill_manual(values = sector_colors,
+                    labels= c("transportation_and_warehousing" = "Transportation & warehousing",
+                              "wholesale_trade" = "Wholesale trade",
+                              "utilities" = "Utilities",
+                              "information" = "Information",
+                              "financial_activities" = "Financial activities",
+                              "professional_and_business_services" = "Professional & business serv.",
+                              "retail_trade" = "Retail trade",
+                              "education" = "Education",
+                              "health_care_and_social_assistance" = "Healthcare & social assistance",
+                              "accommodation" = "Accommodation",
+                              "restaurants_and_bars" = "Restaurants & bars",
+                              "other_services" = "Other services",
+                              "arts_entertainment_and_rec" = "Arts, entertainment & rec.")) +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background = element_rect(fill = "white", color = NA),
+  ) +
+  labs(title = "Goods-producing industries", x = NULL, y = NULL) +
+  theme(legend.position = "right", legend.text = element_text(size = 8))
+
+service_plot
+
+
+```
+
+Government
+```{r}
+gov_plot <- bar_plot_new|> 
+  filter(sector %in% c("federal_government", "state_government", "local_government")
+         )|> 
+  ggplot(aes(x = date, y = percentage_change, fill = sector)) +
+  geom_col(position = "stack", width = 25) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2009:2017, "-01-01"))), 
+           color = "grey60", linewidth = 0.3, linetype = "dotted") +
+  geom_hline(yintercept = 0, color = "black", linewidth = 0.5) +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y", expand = c(0, 0), position = "top") +
+  scale_y_continuous(expand = c(0, 0),
+                     limits = c(-8, 15)) +
+  scale_fill_manual(values = sector_colors,
+                    labels= c("federal_government" = "Federal gov.", 
+                              "state_government" = "State gov.", 
+                              "local_government" = "Local gov.")
+                    ) +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background = element_rect(fill = "white", color = NA),
+  ) +
+  labs(title = "Goods-producing industries", x = NULL, y = NULL) +
+  theme(legend.position = "bottom", legend.text = element_text(size = 8))
+
+gov_plot
+```
 
 
 Distill is a publication format for scientific and technical writing, native to the web.
