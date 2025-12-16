@@ -647,23 +647,18 @@ duration_data <- plot_data |>
 
 improved_civilwar_plot <- ggplot(
   duration_data,
-  aes(x = start_year, y = duration, size = deaths_thousands)
+  aes(x = start_year, y = duration, size = deaths_thousands, color = deaths_thousands)
 ) +
   
  
   add_decade_shading() +
   
-  geom_point(
-    aes(color = region),
-    size = 1.8,
-    alpha = 0.8
-  ) +
+  geom_point() +
 geom_smooth(
     aes(
       x = start_year,
       y = duration,
-      group = region,
-      color = region
+      group = region
     ),
     method = "loess",
     se = FALSE,
@@ -692,7 +687,13 @@ geom_smooth(
     expand = FALSE
   ) +
   
-  scale_color_manual(values = region_colors) +
+  scale_color_gradient(
+    low = "#ffcccc",
+    high = "#8B0000",
+    name = "Deaths\n(thousands)",
+    trans = "log10",
+    labels = scales::comma
+  ) +
   scale_size_continuous(
   range = c(2, 10),
   breaks = c(10, 100, 1000),
@@ -728,6 +729,7 @@ geom_smooth(
     legend.position = "none",
     plot.margin = margin(t = 5, r = 5, b = 5, l = 8)
   )
+
 improved_finishedplot <- (wrap_elements(title_plot) | wrap_elements(custom_legend)) /
   deathplot /
   improved_civilwar_plot /
@@ -739,6 +741,100 @@ improved_finishedplot <- (wrap_elements(title_plot) | wrap_elements(custom_legen
 
 print(improved_finishedplot)
 
+```
+
+Here is another suggestion for improvement. I think this can look good when the deadliest conflicts get labels as well as the longest ones, can also label the peaks for the total deaths.
+
+```{r second_improvement, fig.width=8, fig.height= 10}
+Second_improvement <- ggplot() +
+  # Line for total deaths per year
+  geom_area(data = deathtotal,
+            aes(x = year, y = totaldeaths),
+            fill = "gray85", 
+            alpha = 0.3)    +  
+
+geom_line(data = deathtotal,
+          aes(x = year, y = totaldeaths),
+          color = "gray60", 
+          linewidth = 0.8,
+          alpha = 0.6) +
+  
+  # Points for individual conflicts
+  geom_point(data = duration_data,
+             aes(x = start_year, y = deaths_thousands, 
+                 size = duration, colour = duration),
+             alpha = 0.7) +
+  
+  scale_colour_viridis_c(
+    option = "turbo",
+    name = "Duration (years)",
+    breaks = c(0, 20, 40, 60),
+    guide = guide_colorbar(
+      barheight = 1,           # Horizontal legend
+      barwidth = 8,
+      title.position = "left",
+      title.hjust = 0.5
+    )
+  ) +
+  scale_size_continuous(range = c(2, 15), guide = "none") +
+  scale_y_log10(
+    labels = scales::comma,
+    breaks = c(1, 10, 100, 400)
+  ) +
+  scale_x_continuous(
+    breaks = 1946:2012,
+    labels = c("1946","", "", "", "50", "", "", "", "", "55","","","","", "60", "","","","", "65","","","","", "70","","","","", "75","","","","", "80","","","","", "85",
+               "","","","","90","","","","", "95","","","","", "2000","","","","", "05","","","","", "10", "", "12")
+    
+  ) +
+  coord_cartesian(xlim = c(1944, 2014), ylim = c(-4, 420), expand = FALSE) +
+  
+  facet_wrap(~region, ncol = 2) +
+  
+  labs(
+    title = "Civil War Duration, Deadliness, and Total Annual Deaths",
+    subtitle = "Gray area shows total deaths per year; colored points show individual conflicts",
+    x = "Year",
+    y = "Deaths"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "sans"),
+    
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    
+    
+    strip.background = element_blank(), 
+    strip.text = element_text(
+      color = "gray20", 
+      face = "bold", 
+      size = 11,
+      hjust = 0,          
+      margin = margin(b = 5)
+    ),
+    
+    plot.title = element_text(size = 16, face = "bold", color = "gray20", margin = margin(b = 5)),
+    plot.subtitle = element_text(size = 10, color = "gray40", margin = margin(b = 10)),
+    
+    axis.title = element_text(color = "gray40", size = 11, face = "bold"),
+    axis.text = element_text(color = "gray40", size = 9),
+    
+    legend.position = "top",
+    legend.justification = "right",
+    legend.direction = "horizontal",
+    legend.title = element_text(size = 9, face = "bold"),
+    legend.text = element_text(size = 8),
+    legend.background = element_blank(),
+    legend.box.spacing = unit(0, "pt"),
+    
+    plot.margin = margin(t = 15, r = 15, b = 10, l = 10)
+  )
+
+Second_improvement
 ```
 
 ## Conclusion
