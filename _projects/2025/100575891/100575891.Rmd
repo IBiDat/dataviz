@@ -24,7 +24,7 @@ Red Eléctrica has [publicly available generation data](https://demanda.ree.es/v
 
 ## Original Graph
 
-![Original chart. Source: <https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html>](images/original-chart.png){.external alt="Original chart. Source: https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html" width="100%"}
+![Original chart. Source: <https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html>](images/original-chart.png){.external width="100%"}
 
 There are some obvious issues with this graph: it's density of information makes it difficult to read and comprehend. With 15 types of energy and storage being tracked, along with marking the blackout time and line of real demand, there is a lot of information here that is missing context.
 
@@ -42,12 +42,15 @@ However, there are larger issues when the graph is studied in more detail. As se
 
 `Patchwork` is relevant for the improvement, as it allows graphs to be plotted side-by-side.
 
+`Grid` plots custom annotations outside the plot area.
+
 ```{r libraries}
 library(tidyverse)
 library(lubridate)
 library(ggplot2)
 library(scales)
 library(patchwork)
+library(grid)
 ```
 
 # Data
@@ -67,7 +70,7 @@ demanda <- read.csv(file = "100575891_files/data/Custom-Report-2025-04-28-Seguim
 When looking at the original graph and the replicated graph, it is clear the data is not the same.
 
 | Original Graph | Replicated Graph |
-|------------------------------------|------------------------------------|
+|----|----|
 | ![Original chart. Source: https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html](images/original-chart.png){.external alt="Original chart. Source: https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html" width="100%"} | ![Replicated chart.](images/replicated-chart.png){.external alt="Replicated chart." width="100%"} |
 
 The left half of the graph, the data before the blackout, is nearly identical between the original graph and the replicated graph. The right half of the graph, after the blackout, is starkly different. The prevailing theory is that the data was manipulated in the original graph in order to better distinguish the labeling. In the replicated graph, some areas are too small to properly label. However, the original graph makes no indication of this change in the graph or in the accompanying webpage. It also lists the x axis as the same time frames, and the y axis as the same scales. Since replicating the modification would be a game of trial and error - not to mention unethical - it was excluded from the replication. The replicated graph uses the original, unedited data gathered from Red Eléctrica.
@@ -145,6 +148,18 @@ full_data <- full_data |>
       Andorra.exportación),
     names_to = "Type",
     values_to = "Rating")
+
+# --------
+# Filter Data
+# --------
+
+full_data <- full_data |>
+  filter(Hora >= as.POSIXct("2025-04-27 22:45", tz = "Europe/Madrid") &
+           Hora <= as.POSIXct("2025-04-29 01:15", tz = "Europe/Madrid"))
+
+demanda <- demanda |>
+  filter(Hora >= as.POSIXct("2025-04-27 22:45", tz = "Europe/Madrid") &
+           Hora <= as.POSIXct("2025-04-29 01:15", tz = "Europe/Madrid"))
 ```
 
 The variable "Type" was set as a factor to properly order the areas as they appear in the graph. "Rating" was ensured to be numeric for the y graph, and "Hora" was set to a date-time variable with as.POSIXct().
@@ -240,17 +255,15 @@ showtext::showtext_auto()
 
 GGplot was used to set the x axis as time, the y axis as Rating (in Megawatts), and fill to Type. The lines were colored to white to match the original graph.
 
-```{r basic_plot}
-final <-
-  # data
-  ggplot() +
-  # area lines 
+```{r basic_plot, fig.width = 6.82, fig.height = 6.37}
+final <- ggplot() +
+  # area lines
   geom_area(
-    data = full_data, 
-         aes(
-           x = Hora,
-           y = Rating,
-           fill = Type),
+    data = full_data,
+    aes(
+      x = Hora,
+      y = Rating,
+      fill = Type),
     color = "white", # line color
     lwd = 0.1) # line width
 final
@@ -264,9 +277,9 @@ The limits for the y scale were set to -10,000 and 40,000 to match the graph. Th
 
 The x scale limits were set in date and time format. The division was also set to 2 hours to have the correct number of breaks. Finally, the formatting was set to only show the time.
 
-```{r scaling}
+```{r scaling, fig.width = 6.82, fig.height = 6.37}
 final <- final +
-    # colors
+  # colors
   scale_fill_manual(values = c(
     Marruecos.importación = "#d68888",
     Portugal.importación = "#91b086",
@@ -292,7 +305,8 @@ final <- final +
     Portugal.exportación = "#006600",
     Andorra.exportación = "#211e83")
   ) +
-  coord_fixed(ratio = 1, xlim = NULL, ylim = NULL, expand = TRUE, clip = "off") +
+  # unhides annotations outside graph
+  coord_cartesian(clip = "off") +
   # remove legend
   guides(fill = "none") +
   # remove labels for scales
@@ -301,21 +315,19 @@ final <- final +
   # adds . to y scale
   scale_y_continuous(
     labels = label_number(big.mark = ".", decimal.mark = ","),
-    limits = c(-10000, 40000)
+    breaks = c(-10000, 0, 10000, 20000, 30000, 40000),
+    expand = expansion(mult = c(0.02, 0.10))
   ) +
   # sets x scale
   scale_x_datetime(
+    timezone = "Europe/Madrid",
     breaks = seq(
       from = as.POSIXct("2025-04-28 00:00", tz = "Europe/Madrid"),
       to   = as.POSIXct("2025-04-29 00:00", tz = "Europe/Madrid"),
       by   = "2 hours"
     ),
     labels = function(x) format(x, "%H:%M"),
-    limits = c(
-      as.POSIXct("2025-04-27 23:45", tz="Europe/Madrid"),
-      as.POSIXct("2025-04-29 00:30", tz="Europe/Madrid")
-    ),
-    expand = c(0, 0)
+    expand = c(0,0)
   )
 final
 ```
@@ -324,51 +336,53 @@ final
 
 The theme removed the plot's grid lines, changed the color of the axis, modified the tick length and color, and set a global default for the fonts. It also modified the padding in order to add space for the external annotations.
 
-```{r basic_theming}
+```{r basic_theming, fig.width = 6.82, fig.height = 6.37}
 final <- final +
   theme(
     # removes background grey
-    panel.background = 
+    panel.background =
       element_rect(fill = "white"),
     # changes line color
-    panel.grid.major.y = 
+    panel.grid.major.y =
       element_line(color = "#d6d6d6", linewidth = 0.2),
     # remove axis tick y
     axis.ticks.y =
       element_line(color = "#ffffff"),
     # changes axis tick color
-    axis.ticks.x = 
+    axis.ticks.x =
       element_line(color = "#b8b8b8", linewidth = 0.1),
     # changes axis length
-    axis.ticks.length = 
+    axis.ticks.length =
       unit(.3, "cm"),
     # changes axis line
-    axis.line = 
+    axis.line =
       element_line(color = "#b8b8b8", linewidth = 0.3),
     # remove x grid
-    panel.grid.major.x = 
+    panel.grid.major.x =
       element_line(color = "#ffffff00"),
     # set global font family
-    text = 
+    text =
       element_text(family = "roboto"),
     # set title size and weight
-    plot.title = 
-      element_text(size = 14, face = "bold"),
+    plot.title =
+      element_text(size = 12,
+                   face = "bold",
+                   hjust = -0.2),
     plot.title.position = "plot",
     # set x and y axis color
-    axis.text = 
+    axis.text =
       element_text(color = "#b8b8b8"),
     axis.text.x =
       element_text(face = "bold"),
     # set caption color
-    plot.caption = 
+    plot.caption =
       element_text(color = "#b8b8b8"),
     # padding of plot
-    plot.margin = margin(15, # top
+    plot.margin = margin(20, # top
                          90, # right
                          45, # bottom
-                         15 # left
-    )
+                         0 # left
+                         )
     )
 final
 ```
@@ -377,7 +391,7 @@ final
 
 The most difficult part of this graph were annotations set outside the plot of the graph. Four functions were attempted: `annotate()`, `annotation_custom()`, `grid.text()` and `geom_text()`. `Annotate()` worked well for annotations within the plot. However, it did not appear when the x and y values of the annotation were pushed beyond the limits of the plot. `Annotation_custom()` required the use of `unit(value, NPC)` as the x and y coordinate values. This meant that the text would respond to the preview panel size and not stay fixed to the graph.
 
-![Annotation Issues.](images/annotation-issues.gif){.external alt="Annotation Issues." width="100%"}
+![Annotation Issues.](images/annotation-issues.gif){.external width="100%"}
 
 It also was struggling to work with `coord_cartesian(clip = "off")` meaning it would not appear even with clipping was off. `Grid.text()` was working with `coord_cartesian(clip = "off")`, however it still required the use of `unit(value, NPC)`, meaning it would respond with the browser size.
 
@@ -385,8 +399,9 @@ Finally, `geom_text()` and `geom_segment()` were used to add lines and words out
 
 Each internal text annotation was given an x and y coordinate, a text color, a size, and a label. Each internal line annotation was given an x and y coordinate, an ending x and y coordinate, a line color of black, and a line width of 0.2.
 
-```{r internal_annotations}
+```{r internal_annotations, fig.width = 6.82, fig.height = 6.37}
 final <- final +
+  # annotations
   # demanda real line
   geom_line(
     data = demanda,
@@ -395,14 +410,13 @@ final <- final +
     linewidth = 0.3) +
   # title
   ggtitle("Estructura de generación y almacenamiento de energía en España durante el apagón") +
-  # annotations
   # apagón
   geom_segment(
     aes(
       x = as.POSIXct("2025-04-28 12:32", tz = "Europe/Madrid"),
       xend = as.POSIXct("2025-04-28 12:32", tz = "Europe/Madrid"),
       y = 35000,
-      yend = -10000),
+      yend = -13000),
     linetype = "dashed",
     linewidth = 0.6
   ) +
@@ -412,7 +426,7 @@ final <- final +
     y = 37000,
     label = "Apagón",
     color = "black",
-    size = 4,
+    size = 3.7,
     fontface = "bold"
   ) +
   # demanda real
@@ -422,7 +436,7 @@ final <- final +
     y = 20500,
     label = "Demanda real",
     color = "black",
-    size = 4,
+    size = 3.7,
     fontface = "bold"
   ) +
   annotate(
@@ -446,7 +460,7 @@ final <- final +
   annotate(
     "text",
     x = as.POSIXct("2025-04-28 15:20", tz = "Europe/Madrid"),
-    y = 14500,
+    y = 14000,
     label = "Francia \nimportación",
     color = "#809ad3",
     size = 2.7,
@@ -458,7 +472,7 @@ final <- final +
     "segment",
     x = as.POSIXct("2025-04-28 15:35", tz = "Europe/Madrid"),
     xend = as.POSIXct("2025-04-28 18:35", tz = "Europe/Madrid"),
-    y = 13000,
+    y = 12000,
     yend = 8000,
     color = "black",
     linewidth = 0.2
@@ -488,7 +502,7 @@ final <- final +
   annotate(
     "text",
     x = as.POSIXct("2025-04-28 02:15", tz = "Europe/Madrid"),
-    y = -9000,
+    y = -8700,
     label = "Francia \nexportación",
     color = "#0035a7",
     size = 2.7,
@@ -501,20 +515,20 @@ final <- final +
     x = as.POSIXct("2025-04-28 02:15", tz = "Europe/Madrid"),
     xend = as.POSIXct("2025-04-28 02:15", tz = "Europe/Madrid"),
     y = -2000,
-    yend = -7500,
+    yend = -7200,
     color = "black",
     linewidth = 0.2
   ) +
   # marruecos exportacion
   annotate(
     "text",
-    x = as.POSIXct("2025-04-28 07:00", tz = "Europe/Madrid"),
+    x = as.POSIXct("2025-04-28 08:05", tz = "Europe/Madrid"),
     y = -8000,
     label = "Marruecos \nexportación",
     color = "#b91017",
     size = 2.7,
     fontface = "bold",
-    hjust = 0.5,
+    hjust = 1,
     lineheight = 0.8
   ) +
   annotate(
@@ -529,13 +543,13 @@ final <- final +
   # portugal exportacion
   annotate(
     "text",
-    x = as.POSIXct("2025-04-28 10:25", tz = "Europe/Madrid"),
-    y = -10000,
+    x = as.POSIXct("2025-04-28 11:15", tz = "Europe/Madrid"),
+    y = -11000,
     label = "Portugal \nexportación",
     color = "#006600",
     size = 2.7,
     fontface = "bold",
-    hjust = 0.5,
+    hjust = 1,
     lineheight = 0.8
   ) +
   annotate(
@@ -591,180 +605,254 @@ Each external line annotation was an x and y coordinate, an ending x and y coord
 
 Finally, the title was treated with `ggtitle()` instead of `geom_text()`. Initially, `geom_text()` was struggling to push the title so far out of the y axis, and `ggtitle()` was working better.
 
-```{r external_annotations}
+```{r external_annotations, fig.width = 6.82, fig.height = 6.37}
 final <- final +
-  # caption line
-  geom_segment(
-    x = as.POSIXct("2025-04-27 21:40", tz = "Europe/Madrid"),
-    xend = as.POSIXct("2025-04-29 03:00", tz = "Europe/Madrid"),
-    y = -20000,
-    yend = -20000,
-    linewidth = 0.2,
-    color = "#e2e2e2"
-  ) +
-  # caption text
-  geom_text (
-    x = as.POSIXct("2025-04-29 00:30", tz = "Europe/Madrid"),
-    y = -21500,
-    label = "Fuente: Red Elétrica - EpData 2025",
-    color = "#b8b8b8",
-    size = 2.7
-  )  +
   # termica renovable text
-  geom_text(
-    data = NULL,
-    x = as.POSIXct("2025-04-29 00:30", tz = "Europe/Madrid"),
-    y = 22500,
-    label = "Térmica \nrenovable",
-    color = "#9e00ff",
-    size = 2.7,
-    family = "roboto",
-    lineheight = 0.8,
-    hjust = 0
+  annotation_custom(
+    grob = textGrob(
+      "Térmica \nrenovable",
+      hjust = 0,
+      gp = gpar(
+        col = "#9e00ff",
+        fontsize = 8,
+        family = "roboto",
+        fontface = "bold",
+        lineheight = 0.8)),
+    xmin = as.POSIXct("2025-04-29 01:30", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 01:30", tz = "Europe/Madrid"),
+    ymin = 22500,
+    ymax = 22500
   ) +
   # solar termica text
-  geom_text(
-    data = NULL,
-    x = as.POSIXct("2025-04-29 01:00", tz = "Europe/Madrid"),
-    y = 19000,
-    label = "Solar \ntérmica",
-    color = "#ff0400",
-    size = 2.7,
-    family = "roboto",
-    lineheight = 0.8,
-    hjust = 0
+  annotation_custom(
+    grob = textGrob(
+      "Solar \ntérmica",
+      hjust = 0,
+      gp = gpar(
+        col = "#ff0400",
+        fontsize = 8,
+        family = "roboto",
+        fontface = "bold",
+        lineheight = 0.8)),
+    xmin = as.POSIXct("2025-04-29 02:30", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 02:30", tz = "Europe/Madrid"),
+    ymin = 19000,
+    ymax = 19000
   ) +
   # solar fotovoltaica text
-  geom_text(
-    data = NULL,
-    x = as.POSIXct("2025-04-29 00:55", tz = "Europe/Madrid"),
-    y = 16000,
-    label = "Solar \nfotovoltaica",
-    color = "#e58401",
-    size = 2.7,
-    family = "roboto",
-    lineheight = 0.8,
-    hjust = 0
+  annotation_custom(
+    grob = textGrob(
+      "Solar \nfotovoltaica",
+      hjust = 0,
+      gp = gpar(
+        col = "#e58401",
+        fontsize = 8,
+        family = "roboto",
+        fontface = "bold",
+        lineheight = 0.8)),
+    xmin = as.POSIXct("2025-04-29 02:30", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 02:30", tz = "Europe/Madrid"),
+    ymin = 16000,
+    ymax = 16000
   ) +
   # eólica text
-  geom_text(
-    data = NULL,
-    x = as.POSIXct("2025-04-29 00:55", tz = "Europe/Madrid"),
-    y = 13500,
-    label = "Eólica",
-    color = "#70b026",
-    size = 2.7,
-    family = "roboto",
-    lineheight = 0.8,
-    hjust = 0
+  annotation_custom(
+    grob = textGrob(
+      "Eólica",
+      hjust = 0,
+      gp = gpar(
+        col = "#70b026",
+        fontsize = 8,
+        family = "roboto",
+        fontface = "bold",
+        lineheight = 0.8)),
+    xmin = as.POSIXct("2025-04-29 02:30", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 02:30", tz = "Europe/Madrid"),
+    ymin = 13500,
+    ymax = 13500
   ) +
   # hidráulica text
-  geom_text(
-    data = NULL,
-    x = as.POSIXct("2025-04-29 00:55", tz = "Europe/Madrid"),
-    y = 11500,
-    label = "Hidráulica",
-    color = "#018fd1",
-    size = 2.7,
-    family = "roboto",
-    lineheight = 0.8,
-    hjust = 0
+  annotation_custom(
+    grob = textGrob(
+      "Hidráulica",
+      hjust = 0,
+      gp = gpar(
+        col = "#018fd1",
+        fontsize = 8,
+        family = "roboto",
+        fontface = "bold",
+        lineheight = 0.8)),
+    xmin = as.POSIXct("2025-04-29 02:30", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 02:30", tz = "Europe/Madrid"),
+    ymin = 10500,
+    ymax = 10500
   ) +
   # cogeneracion y residuos text
-  geom_text(
-    data = NULL,
-    x = as.POSIXct("2025-04-29 00:55", tz = "Europe/Madrid"),
-    y = 9000,
-    label = "Cogeneración \ny residuos",
-    color = "#d6a1d7",
-    size = 2.7,
-    family = "roboto",
-    lineheight = 0.8,
-    hjust = 0
+  annotation_custom(
+    grob = textGrob(
+      "Cogeneración \ny residuos",
+      hjust = 0,
+      gp = gpar(
+      col = "#d6a1d7",
+      fontsize = 8,
+      family = "roboto",
+      fontface = "bold",
+      lineheight = 0.8)),
+    xmin = as.POSIXct("2025-04-29 02:30", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 02:30", tz = "Europe/Madrid"),
+    ymin = 8000,
+    ymax = 8000
   ) +
-  # Ciclo combinado
-  geom_text(
-    data = NULL,
-    x = as.POSIXct("2025-04-29 00:55", tz = "Europe/Madrid"),
-    y = 2000,
-    label = "Cogeneración \ny residuos",
-    color = "#ab9559",
-    size = 2.7,
-    family = "roboto",
-    lineheight = 0.8,
-    hjust = 0
+  # Ciclo combinado text
+  annotation_custom(
+    grob = textGrob(
+      "Ciclo \ncombinado",
+      hjust = 0,
+      gp = gpar(
+        col = "#ab9559",
+        fontsize = 8,
+        family = "roboto",
+        fontface = "bold",
+        lineheight = 0.8)),
+    xmin = as.POSIXct("2025-04-29 02:30", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 02:30", tz = "Europe/Madrid"),
+    ymin = 0,
+    ymax = 0
   ) +
-  # line consumo bombeo
-  geom_segment(
-    x = as.POSIXct("2025-04-29 00:25", tz = "Europe/Madrid"),
-    xend = as.POSIXct("2025-04-29 00:30", tz = "Europe/Madrid"),
-    y = -200,
-    yend = -4000,
-    linewidth = 0.1
+  # caption text
+  annotation_custom(
+    grob = textGrob(
+      "Fuente: Red Elétrica - EpData 2025",
+      hjust = 1,
+      gp = gpar(
+        col = "#b8b8b8",
+        fontsize = 8,
+        family = "roboto",
+        lineheight = 0.8)),
+    xmin = as.POSIXct("2025-04-29 06:30", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 06:30", tz = "Europe/Madrid"),
+    ymin = -21500,
+    ymax = -21500
   ) +
-  # line ciclo combinado
-  geom_segment(
-    x = as.POSIXct("2025-04-29 00:00", tz = "Europe/Madrid"),
-    xend = as.POSIXct("2025-04-29 00:45", tz = "Europe/Madrid"),
-    y = 4000,
-    yend = 2500,
-    linewidth = 0.1
-  ) +
-  # line cogeneracion y residuos
-  geom_segment(
-    x = as.POSIXct("2025-04-29 00:00", tz = "Europe/Madrid"),
-    xend = as.POSIXct("2025-04-29 00:45", tz = "Europe/Madrid"),
-    y = 9800,
-    yend = 9500,
-    linewidth = 0.1
-  ) +
-  # line hidraulica
-  geom_segment(
-    x = as.POSIXct("2025-04-29 00:00", tz = "Europe/Madrid"),
-    xend = as.POSIXct("2025-04-29 00:45", tz = "Europe/Madrid"),
-    y = 13000,
-    yend = 12000,
-    linewidth = 0.1
-  ) +
-  # line eolica
-  geom_segment(
-    x = as.POSIXct("2025-04-29 00:00", tz = "Europe/Madrid"),
-    xend = as.POSIXct("2025-04-29 00:45", tz = "Europe/Madrid"),
-    y = 17500,
-    yend = 13500,
-    linewidth = 0.1
-  ) +
-  # line solar fotovoltaica 
-  geom_segment(
-    x = as.POSIXct("2025-04-29 00:00", tz = "Europe/Madrid"),
-    xend = as.POSIXct("2025-04-29 00:45", tz = "Europe/Madrid"),
-    y = 17500,
-    yend = 16000,
-    linewidth = 0.1
-  ) +
-  # line solar termica
-  geom_segment(
-    x = as.POSIXct("2025-04-29 00:00", tz = "Europe/Madrid"),
-    xend = as.POSIXct("2025-04-29 00:45", tz = "Europe/Madrid"),
-    y = 17500,
-    yend = 19000,
-    linewidth = 0.1
-  ) +
-  # line termica renovable
-  geom_segment(
-    x = as.POSIXct("2025-04-29 00:00", tz = "Europe/Madrid"),
-    xend = as.POSIXct("2025-04-29 00:45", tz = "Europe/Madrid"),
-    y = 17500,
-    yend = 22000,
-    linewidth = 0.1
+  # caption line
+  annotation_custom(
+    grob = linesGrob(
+      x = unit(c(0,1), "npc"),
+      y = unit(c(0.5,0.5), "npc"),
+      gp = gpar(col = "#e2e2e2", lwd = 0.5)
+    ),
+    xmin = as.POSIXct("2025-04-27 20:00", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 06:30", tz = "Europe/Madrid"),
+    ymin = -20000,
+    ymax = -20000
   ) +
   # title line
-  geom_segment(
-    x = as.POSIXct("2025-04-27 21:40", tz = "Europe/Madrid"),
-    xend = as.POSIXct("2025-04-29 03:00", tz = "Europe/Madrid"),
-    y = 43000,
-    yend = 43000,
-    linewidth = 0.3
+  annotation_custom(
+    grob = linesGrob(
+      x = unit(c(0,1), "npc"),
+      y = unit(c(0.5,0.5), "npc"),
+      gp = gpar(col = "#000000", lwd = 0.5)
+    ),
+    xmin = as.POSIXct("2025-04-27 19:45", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 06:30", tz = "Europe/Madrid"),
+    ymin = 42500,
+    ymax = 42500
+  ) +
+  # consumo bombeo line
+  annotation_custom(
+    grob = linesGrob(
+      x = unit(c(1,0), "npc"),
+      y = unit(c(0,1), "npc"),
+      gp = gpar(col = "#000000", lwd = 0.5)
+    ),
+    xmin = as.POSIXct("2025-04-29 01:15", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 01:30", tz = "Europe/Madrid"),
+    ymin = -4000,
+    ymax = -200
+  ) +
+  # ciclo combinado line
+  annotation_custom(
+    grob = linesGrob(
+      x = unit(c(1,0), "npc"),
+      y = unit(c(0,1), "npc"),
+      gp = gpar(col = "#000000", lwd = 0.5)
+    ),
+    xmin = as.POSIXct("2025-04-29 00:45", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 02:15", tz = "Europe/Madrid"),
+    ymin = 4000,
+    ymax = 700
+  ) +
+  # cogeneracion y residuos line
+  annotation_custom(
+    grob = linesGrob(
+      x = unit(c(1,0), "npc"),
+      y = unit(c(0,1), "npc"),
+      gp = gpar(col = "#000000", lwd = 0.5)
+    ),
+    xmin = as.POSIXct("2025-04-29 00:45", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 02:15", tz = "Europe/Madrid"),
+    ymin = 9900,
+    ymax = 8900
+  ) +
+  # hidraulica line
+  annotation_custom(
+    grob = linesGrob(
+      x = unit(c(1,0), "npc"),
+      y = unit(c(0,1), "npc"),
+      gp = gpar(col = "#000000", lwd = 0.5)
+    ),
+    xmin = as.POSIXct("2025-04-29 00:45", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 02:15", tz = "Europe/Madrid"),
+    ymin = 13000,
+    ymax = 10500
+  ) +
+  # eolica line
+  annotation_custom(
+    grob = linesGrob(
+      x = unit(c(1,0), "npc"),
+      y = unit(c(0,1), "npc"),
+      gp = gpar(col = "#000000", lwd = 0.5)
+    ),
+    xmin = as.POSIXct("2025-04-29 00:35", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 02:15", tz = "Europe/Madrid"),
+    ymin = 16500,
+    ymax = 13500
+  ) +
+  # solar fotovoltaica line
+  annotation_custom(
+    grob = linesGrob(
+      x = unit(c(1,0), "npc"),
+      y = unit(c(0,1), "npc"),
+      gp = gpar(col = "#000000", lwd = 0.5)
+    ),
+    xmin = as.POSIXct("2025-04-29 01:00", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 02:15", tz = "Europe/Madrid"),
+    ymin = 16500,
+    ymax = 16000
+  ) +
+  # solar termica line
+  annotation_custom(
+    grob = linesGrob(
+      x = unit(c(1,0), "npc"),
+      y = unit(c(1,0), "npc"),
+      gp = gpar(col = "#000000", lwd = 0.5)
+    ),
+    xmin = as.POSIXct("2025-04-29 01:00", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 02:15", tz = "Europe/Madrid"),
+    ymin = 16500,
+    ymax = 19000
+  ) +
+  # solar termica renovable
+  annotation_custom(
+    grob = linesGrob(
+      x = unit(c(1,0), "npc"),
+      y = unit(c(1,0), "npc"),
+      gp = gpar(col = "#000000", lwd = 0.5)
+    ),
+    xmin = as.POSIXct("2025-04-29 00:45", tz = "Europe/Madrid"),
+    xmax = as.POSIXct("2025-04-29 02:15", tz = "Europe/Madrid"),
+    ymin = 16500,
+    ymax = 21000
   )
 final
 ```
@@ -870,7 +958,7 @@ almacenamiento <- almacenamiento |>
 
 Imports and Exports are represented by separate areas. However, they are two halves of the same data point and should be treated as such. Additionally, this can be confirmed by looking at the data itself, where a missing value from Andorra imports is made up for with a value in Andorra exports. See the example below.
 
-![Import and Export Values from Red Eléctrica.](images/import-export-issues.png){.external alt="Import and Export Values from Red Eléctrica." width="100%"}
+![Import and Export Values from Red Eléctrica.](images/import-export-issues.png){.external width="100%"}
 
 In the improved version, imports and exports are combined.
 
@@ -941,7 +1029,7 @@ combined_data <- generacion |>
 
 For the improvement, four graphs will be needed. One to combine Renewable, Non-renewable, stored energy, and imported energy sources and three others to break out the categories by sub-categories.
 
-![Improvement.](images/improvement.png){.external alt="Improvement." width="100%"}
+![Improvement.](images/improvement.png){.external width="100%"}
 
 The below code combines the sub-categories into the broader categories of Renewable, non-renewable, stored energy use, and imported energy use. The data is then transformed to have tidy data, and refactored to set the correct order.
 
@@ -1165,10 +1253,10 @@ combined <-
   ) +  
   # colors
   scale_fill_manual(values = c(
-    Renewable = "#38761d",
-    Non_Renewable = "#073259",
-    Stored_Energy = "#595959",
-    Imported_Energy = "#741b47")
+    Renewable = "#4CB944",
+    Non_Renewable = "#246EB9",
+    Stored_Energy = "#D58936",
+    Imported_Energy = "#AA4465")
   ) +
 theme(
   # removes background grey
@@ -1374,10 +1462,10 @@ renewable <-
   ) +  
   # colors
   scale_fill_manual(values = c(
-    Hidráulica = "#38761d",
-    Eólica = "#60914a",
-    Solar = "#88ad77",
-    Térmica.renovable = "#afc8a5")
+    Hidráulica = "#4CB944",
+    Eólica = "#70c769",
+    Solar = "#94d58f",
+    Térmica.renovable = "#b7e3b4")
   ) +
   theme(
     # removes background grey
@@ -1540,13 +1628,13 @@ non_renewable <-
   ) +  
   # colors
   scale_fill_manual(values = c(
-    Ciclo.combinado = "#073259",
-    Nuclear = "#094276",
-    Cogeneración.y.residuos = "#0b5394",
-    Motores.diésel = "#3c75a9",
-    Carbón = "#6d98bf",
-    Turbina.de.gas = "#9dbad4",
-    Turbina.de.vapor = "#ceddea")
+    Ciclo.combinado = "#16426f",
+    Nuclear = "#1d5894",
+    Cogeneración.y.residuos = "#246EB9",
+    Motores.diésel = "#508bc7",
+    Carbón = "#7ca8d5",
+    Turbina.de.gas = "#a7c5e3",
+    Turbina.de.vapor = "#d3e2f1")
   ) +
   theme(
     # removes background grey
@@ -1776,8 +1864,8 @@ stored_energy <-
   ) +  
   # colors
   scale_fill_manual(values = c(
-    Turbinación.bombeo = "#595959",
-    Entrega.de.baterías = "#000000")
+    Turbinación.bombeo = "#D58936",
+    Entrega.de.baterías = "#e6b886")
   ) +
   theme(
     # removes background grey
@@ -1900,10 +1988,10 @@ imported_energy <-
   ) +  
   # colors
   scale_fill_manual(values = c(
-    Portugal = "#741b47",
-    Francia = "#90496c",
-    Andorra = "#ac7691",
-    Marruecos = "#c7a4b5")
+    Portugal = "#AA4465",
+    Francia = "#bb6984",
+    Andorra = "#cc8fa3",
+    Marruecos = "#ddb4c1")
   ) +
   theme(
     # removes background grey
