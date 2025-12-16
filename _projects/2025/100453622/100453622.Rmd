@@ -1,0 +1,837 @@
+---
+title: "Protests in spanish regions 2022"
+description: Replication and Improvement of the chosen graph and database
+categories: "2025"
+author: Alicia Mira Guirao
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+# GRAPH REPLICATION
+
+This is the initial version of the graph replication about motive protest distribution across spanish provinces in 2022.
+
+## Data Preparing
+
+```{r Data Cleaning and Transformation}
+library(readxl)
+library(dplyr)
+library(tidyverse)
+library(sf)
+library(mapSpain)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(ggplot2)
+library(grid)
+#library(extrafont)
+library(showtext)
+
+# Font adding
+font_add("Lexend", regular = "/Users/cguirao/Library/Fonts/LexendDeca-VariableFont_wght.ttf") # needed font for the graph
+showtext_auto() 
+
+# Data import
+protests <- read_excel("~/Desktop/datavizu/_projects/2025/100453622/ReplicationDataBase.xlsx", 
+                   sheet = "TABLA 1-3-7",
+                   skip = 1) # skipping the title
+
+prov <- esp_get_prov()
+
+library(giscoR)
+neighbors <- gisco_get_countries(
+  country = c("Portugal", "France", "Morocco", "Algeria", "Andorra"))
+
+# Adding those that are left bc they are named differently in INE
+protests <- protests |>
+  mutate(
+    `Comunidad autónoma y provincia` = recode(
+      `Comunidad autónoma y provincia`,
+      "Murcia, Región de" = "Murcia",
+      "Navarra, Comunidad Foral de" = "Navarra",
+      "Madrid, Comunidad de"    = "Madrid",
+      "Asturias, Principado de"  = "Asturias"
+    )
+  )
+
+# Filter only provinces
+data_prov <- protests %>%
+  filter(`Comunidad autónoma y provincia` %in% prov$ine.prov.name)
+
+# Jonning shapefile with filtered dataframe
+protest_prov <- prov %>%
+  left_join(data_prov, 
+            by = c("ine.prov.name" = "Comunidad autónoma y provincia"))
+
+# Creating data for canary islands map
+canarias_data <- protest_prov %>%
+  filter(ine.prov.name %in% c("Palmas, Las", "Santa Cruz de Tenerife"))
+
+# Creating data for peninsula and baleares islands map
+peninsula_data <- protest_prov %>%
+  filter(!ine.prov.name %in% c("Palmas, Las", "Santa Cruz de Tenerife"))
+
+# Obtaining coordenates of each province
+peninsula_data <- peninsula_data |>
+  mutate(
+    centroide = st_centroid(geometry),
+    x = st_coordinates(centroide)[,1],
+    y = st_coordinates(centroide)[,2],
+
+    x = case_when(
+      ine.prov.name == "Segovia" ~ x + 0.2,
+      ine.prov.name == "Toledo" ~ x - 0.45,
+      ine.prov.name == "Pontevedra" ~ x - 0.2,
+      ine.prov.name == "Sevilla" ~ x - 0.05,
+      ine.prov.name == "Granada" ~ x - 0.4,
+      ine.prov.name == "Almería" ~ x + 0.1,
+      ine.prov.name == "Murcia" ~ x + 0.1,
+      ine.prov.name == "Alicante/Alacant" ~ x + 0.25,
+      ine.prov.name == "Castellón/Castelló" ~ x + 0.25,
+      ine.prov.name == "Valencia/València" ~ x + 0.4,
+      ine.prov.name == "Balears, Illes" ~ x - 0.3,
+      ine.prov.name == "Guadalajara" ~ x + 0.2,
+      ine.prov.name == "Ceuta" ~ x + 0.35,
+      ine.prov.name == "Melilla" ~ x + 0.25,
+      TRUE ~ x                                 
+    ),
+    y = case_when(
+      ine.prov.name == "Segovia" ~ y + 0.35,
+      ine.prov.name == "Coruña, A" ~ y + 0.1,
+      ine.prov.name == "Pontevedra" ~ y - 0.3,
+      ine.prov.name == "Navarra" ~ y + 0.25,
+      ine.prov.name == "Sevilla" ~ y + 0.25,
+      ine.prov.name == "Granada" ~ y - 0.15,
+      ine.prov.name == "Almería" ~ y - 0.1,
+      ine.prov.name == "Murcia" ~ y - 0.25,
+      ine.prov.name == "Asturias" ~ y + 0.2,
+      ine.prov.name == "Cantabria" ~ y + 0.2,
+      ine.prov.name == "Alicante/Alacant" ~ y - 0.2,
+      ine.prov.name == "Valencia/València" ~ y + 0.1,
+      ine.prov.name == "Ceuta" ~ y - 0.1,
+      ine.prov.name == "Melilla" ~ y + 0.1,
+      TRUE ~ y                                  ))
+
+canarias_data <- canarias_data |>
+  mutate(
+    centroide = st_centroid(geometry),
+    x = st_coordinates(centroide)[,1],
+    y = st_coordinates(centroide)[,2],
+
+    x = case_when(ine.prov.name == "Palmas, Las" ~ x - 0.2,
+      ine.prov.name == "Santa Cruz de Tenerife" ~ x - 0.3,
+            TRUE ~ x                                 ),
+     y = case_when(
+      TRUE ~ y                                  ))
+
+# Renaming names legend from the dataset as in the original graph 
+names(peninsula_data)[39] <- "Otras motivaciones*"
+names(canarias_data)[39] <- "Otras motivaciones*"
+
+# Creation of a vector of protest motives
+motivo_cols <- c(
+  "Temas laborales",
+  "Temas de inmigración",
+  "Asuntos vecinales",
+  "Contra la droga y la delincuencia",
+  "Apoyo a grupos terroristas",
+  "Libertad de presos de grupos terroristas",
+  "Contra el terrorismo",
+  "Enseñanza",
+  "Temas nacionalistas", 
+  "Contra medidas políticas y legislativas",
+  "Sanidad",
+  "Agrarias",
+  "Ecologistas",
+  "Contra la violencia de género",
+  "1º de Mayo",
+  "Otras motivaciones*"
+)
+
+# Regrouping motives as in the graphic
+motivo_cols <- case_when(
+  motivo_cols %in% c(
+    "Temas de inmigración",
+    "Contra la droga y la delincuencia",
+    "Contra el terrorismo",
+    "Libertad de presos de grupos terroristas",
+    "Apoyo a grupos terroristas",
+    "Temas nacionalistas",
+    "1º de Mayo",
+    "Otras motivaciones*"
+  ) ~ "Otras motivaciones*",
+  TRUE ~ motivo_cols
+)
+
+# Turning characteres into numeric in order to calculate proportions
+peninsula_data <- peninsula_data %>%
+  mutate(across(
+    .cols = all_of(c(motivo_cols, "Total")),
+    ~ as.numeric(.)
+  ))
+
+canarias_data <- canarias_data %>%
+  mutate(across(
+    .cols = all_of(c(motivo_cols, "Total")),
+    ~ as.numeric(.)
+  ))
+
+# Ordering motives as in the legend from the graph 
+orden_deseado <- c(
+  "Temas laborales",
+  "Asuntos vecinales",
+  "Enseñanza",
+  "Contra medidas políticas\ny legislativas",
+  "Sanidad",
+  "Agrarias",
+  "Ecologistas",
+  "Contra la violencia\nde género",
+  "Otras motivaciones*"
+)
+
+# Colors for each motive
+colores_motivos <- c(
+  "Temas laborales" = "#de5424",              
+  "Asuntos vecinales" = "#e0945d",            
+  "Enseñanza" = "#63a4bc",                    
+  "Contra medidas políticas\ny legislativas" = "#848ab5",
+  "Sanidad" = "#95bb9e",                     
+  "Agrarias" = "#ebd98c",                     
+  "Ecologistas" = "#b7c27e",                
+  "Contra la violencia\nde género"= "#a47297",
+  "Otras motivaciones*" = "#8a898a"        
+)
+
+# Creating data for pie charts
+pies_peninsula <- peninsula_data |>
+  select(ine.prov.name, x, y, all_of(motivo_cols), Total) |>
+  pivot_longer(
+    cols      = all_of(motivo_cols),
+    names_to  = "motivo",             
+    values_to = "valor") |> 
+  mutate(
+    # ← AQUÍ añades el recode para cambiar los nombres
+    motivo = recode(
+      motivo,
+      "Contra medidas políticas y legislativas" = "Contra medidas políticas\ny legislativas",
+      "Contra la violencia de género" = "Contra la violencia\nde género"
+    ),
+    # Y LUEGO lo conviertes a factor con los nombres ya modificados
+    motivo = factor(motivo, levels = orden_deseado)
+  ) |>
+  arrange(ine.prov.name, motivo) |>
+  group_by(ine.prov.name) |>             
+  mutate(
+    prop = valor / sum(valor, na.rm = TRUE),    
+    angle_end = cumsum(prop) * 2 * pi,         
+    angle_start = lag(angle_end, default = 0) 
+  ) |>
+  ungroup()
+
+# Pie proportion for each province
+max_total <- max(pies_peninsula$Total, na.rm = TRUE)
+factor_escala <- 0.9  
+
+pies_peninsula <- pies_peninsula %>%
+  mutate(
+    radius = sqrt(Total / max_total) * factor_escala
+  )
+
+# Same process for canary island pies
+canarias_pies <- canarias_data |>
+  select(ine.prov.name, x, y, all_of(motivo_cols), Total) |>
+  pivot_longer(
+    cols      = all_of(motivo_cols),
+    names_to  = "motivo",             
+    values_to = "valor") |>
+  mutate(
+
+    motivo = recode(
+      motivo,
+      "Contra medidas políticas y legislativas" = "Contra medidas políticas\ny legislativas",
+      "Contra la violencia de género" = "Contra la violencia\nde género"
+    ),
+
+    motivo = factor(motivo, levels = orden_deseado)
+  ) |>
+  arrange(ine.prov.name, motivo) |>
+  group_by(ine.prov.name) |>             
+  mutate(
+    prop = valor / sum(valor, na.rm = TRUE),    
+    angle_end = cumsum(prop) * 2 * pi,         
+    angle_start = lag(angle_end, default = 0) 
+  ) |>
+  ungroup()
+
+max_total <- max(canarias_pies$Total, na.rm = TRUE)
+factor_escala <- 0.4  # Ajusta esto para círculos más grandes/pequeños
+
+canarias_pies <- canarias_pies %>%
+  mutate(
+    radius = sqrt(Total / max_total) * factor_escala
+  )
+```
+
+## Pie-charts size legend
+
+```{r Pie-charts size Legend, fig.width=12, fig.height=7, fig.showtext=TRUE}
+# STILL STRUGGLING WITH THIS
+
+valores_originales <- c(4251, 3498, 2464, 1579, 949, 252, 58)
+etiquetas_originales <- c("4.251", "3.500", "2.500", "1.500", "1.000", "250", "58")
+
+
+valores_reales <- rev(valores_originales)
+etiquetas_display <- rev(etiquetas_originales)
+
+max_total_peninsula <- 4251
+
+factor_escala_leyenda <- 0.00031  # Factor de escala para coordenadas geográficas
+
+radios <- sqrt(valores_reales / pi) * factor_escala_leyenda
+
+y_centers <- c(41.9, 42.05, 42.2, 42.35, 42.5, 42.65, 42.8) + 0.25
+
+y_tops <- y_centers + radios
+
+# Tibble with all the data
+legend_data <- tibble(
+  manifestaciones = valores_reales,
+  etiqueta = etiquetas_display,
+  radius = radios,
+  x = -11,              # ← TODOS la misma X
+  y = y_centers           # ← Y va subiendo
+) |>
+  mutate(
+    # Punto en el borde IZQUIERDO del semicírculo (para las líneas)
+    x_start = x - radius,  # Borde izquierdo (en lugar de x + radius)
+    y_start = y
+  )
+
+```
+
+## Canary island Map
+
+```{r Canary Island Map, fig.width=12, fig.height=7, fig.showtext=TRUE}
+
+mapa_canarias <- ggplot() +
+  
+  geom_sf(
+    data = canarias_data,
+    fill = "#FEFAE0",   
+    color = "#4D5662",      
+    linewidth = 0.3
+  ) +
+  
+  ggforce::geom_arc_bar(
+    data = canarias_pies,
+    aes(
+      x0 = x,
+      y0 = y,
+      r0 = 0,
+      r = radius,
+      start = angle_start,
+      end = angle_end,
+      fill = motivo
+    ),
+    color = "black",
+    linewidth = 0.2,
+    alpha = 0.8
+  ) +
+  
+  scale_fill_manual(values = colores_motivos) +
+  
+  coord_sf(
+    expand = FALSE,   
+    clip = "off") +
+  theme_void() +
+  theme(
+    legend.position = "none",
+    plot.background = element_rect(
+      fill = "#e6ffff",
+      color = "#ffffff",        
+      linewidth = 5 
+    ),
+    panel.background = element_blank(),
+     plot.margin = margin(3,3,8,33, "pt")
+  )
+
+# Transforming the canary island into a graphical object (grob) to insert in the final map 
+grob_canarias <- ggplotGrob(mapa_canarias)
+
+mapa_canarias
+```
+
+## Plotting final map
+
+```{r Plotting final map, fig.width=12, fig.height=7, fig.showtext=TRUE}
+    
+final_map <- ggplot() +
+  
+      # Neighbor Countries
+        geom_sf(
+        data = neighbors,
+        fill = "#D6D6D6", 
+        color = "#4D5662",
+        linewidth = 0.3
+      ) +
+  
+      # Spanish provinces 
+      geom_sf(
+        data = peninsula_data,
+        fill = "#FEFAE0",   
+        color = "#4D5662",      
+        linewidth = 0.3
+      ) +
+      
+      # Pie-charts
+      ggforce::geom_arc_bar(
+        data = pies_peninsula,
+        aes(
+          x0 = x,              
+          y0 = y,              
+          r0 = 0,             
+          r = radius,          
+          start = angle_start, 
+          end = angle_end,    
+          fill = motivo,
+          color = "black",
+        ),
+        color = "black",       
+        linewidth = 0.2,
+        alpha = 0.8
+      )
+      
+# Colors for protest motives
+final_map <- final_map + scale_fill_manual(
+        values = colores_motivos)
+
+# Protest motives guides legend  
+final_map <- final_map + guides(
+      fill = guide_legend(
+        override.aes = list(
+          shape = 24,     
+          size = 1.3, #2      
+          color = "black",  
+          stroke = 0.4       
+        ),
+        byrow = TRUE,        # ← Organiza en una sola columna
+        spacing.y = unit(0.8, "cm")
+      ))
+
+# Coordenates
+final_map <- final_map + coord_sf(xlim = c(-11.7, 3.8), ylim = c(35.2, 44))
+  
+# Pie-charts size legend
+final_map <- final_map + 
+  ggforce::geom_arc_bar(
+    data = legend_data,
+    aes(
+      x0 = x,
+      y0 = y,
+      r0 = 0,
+      r = radius,
+      start = pi/2,      # Empieza arriba (90°)
+      end = 3*pi/2       # Termina abajo (270°) → semicírculo IZQUIERDO
+    ),
+    color = "black",
+    fill = NA,
+    linewidth = 0.4
+  ) +
+  
+  geom_segment(
+    data = legend_data,
+    aes(
+      x = x,                    # Empieza en el borde izquierdo del semicírculo
+      xend = x + max(radius) + 0.3,   # Todas terminan a la IZQUIERDA
+      y = y_tops,                      # En la parte superior
+      yend = y_tops                    # Línea horizontal
+    ),
+    linetype = "dotted",
+    linewidth = 0.3,
+    color = "black"
+  ) +
+  
+  geom_text(
+    data = legend_data,
+    aes(
+      x = x + max(radius) + 0.4,      
+      y = y_tops,                      # Alineadas con la parte superior
+      label = etiqueta
+    ),
+    hjust = 1,                        # Alineado a la derecha del texto
+    size = 2.5, # 4
+    family = "Lexend"
+  ) +
+  
+  annotate(
+    "text",
+    x = -11,  
+    y = 43.8,
+    label = "MANIFESTACIONES\n2022",
+    size = 3.7, # 6
+    hjust = 0.5,
+    vjust = 0,
+    lineheight = 0.8,
+    fontface = "plain",
+  )
+      
+# Adding texts      
+final_map <- final_map + geom_text(
+        data = data.frame(
+          x = 4,
+          y = 44,
+          label = "MANIFESTACIONES SEGÚN MOTIVACIÓN"
+        ),
+        aes(x = x, y = y, label = label),
+        size = 5, # 8
+        fontface = "bold",
+        hjust = 1,           # alineado a la derecha
+        vjust = 1,           # alineado arriba
+        color = "black"
+      ) +
+      
+    geom_text(
+      data = data.frame(
+        x = 4.15,
+        y = 35.38,
+        label = "Fuente: Anuario estadístico del Ministerio del Interior 2022"
+      ),
+      aes(x = x, y = y, label = label),
+      size = 2.5, # 4                  
+      family = "Lexend",
+      hjust = 1,
+      vjust = 0,
+      color = "black"
+    ) +
+    
+    geom_text(
+      data = data.frame(
+        x = 4.15,
+        y = 34.99,              
+        label = "Atlas Nacional de España (ANE) CC BY 4.0 ign.es\n\nParticipantes:www.ign.es/resources/ane/participantes.pdf"
+      ),
+      aes(x = x, y = y, label = label),
+      size = 2.5, # 4
+      family = "Lexend",
+      hjust = 1,
+      vjust = 0,
+      color = "black",
+      lineheight = 0.4
+    ) +
+      geom_text(
+      data = data.frame(
+        x = -12.2,
+        y = 37,              
+        label = "*Incluye inmigración, droga y\n\ndelincuencia, apoyo a grupos\n\nterroristas, contra el terrorismo,\n\ntemas nacionalistas o 1ª de mayo\n\n\nCataluña y País Vasco sin datos"
+      ),
+      aes(x = x, y = y, label = label),
+      size = 2.5, # 4
+      family = "Lexend",
+      hjust = 0,
+      vjust = 0,
+      color = "black",
+      lineheight = 0.5,
+      fontface = "bold" # ← Esto junta las dos últimas líneas
+    )
+      
+# Themes
+    final_map <- final_map + theme_void() +
+    theme(
+      plot.background = element_rect(fill = "#ffffff", 
+                                     color = "#ffffff",
+                                     linewidth = 5),
+      panel.background = element_rect(fill = "#e6ffff" ),
+      plot.margin = margin(5),
+      
+      legend.spacing.y = unit(0.8, "cm"),
+      
+      legend.position = c(0.012, 0.52),
+      legend.justification = c(0, 0.5),
+      
+      legend.text = element_text(
+        size = 7.5, # 11.5 # hay que ajustar los valores a la escala de showtext() 
+        family = "Lexend",
+        lineheight = 0.9
+        ),
+      
+      legend.title = element_blank(),
+      legend.background = element_blank(),
+      
+      legend.key = element_rect(
+    fill = "#e6ffff",
+    color = NA )
+    ) 
+
+# Adding Grob (Canary island map)
+final_map <- final_map + 
+annotation_custom(
+    grob = grob_canarias,
+    xmin = -12.87,   
+    xmax = -6.63,    
+    ymin = 34.47,    
+    ymax = 36.8)
+
+# ggsave("mi_grafico.png", plot = final_map, width = 10, height = 8, dpi = 150)
+# system("open mi_grafico.png")
+
+final_map
+```
+
+-----------------------------------------------------------------------------------------------------------
+
+# GRAPH IMPROVEMENT
+
+This is my initial improved version of the original graph about motive protest distribution in Spain (across autonomous communities in 2024)
+
+## Data Cleaning and Variable Transformation
+
+```{r Data Cleaning and Variable Transformation}
+library(readxl)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(grid)
+library(showtext)
+library(tidytext)
+library(showtext)
+
+# FONTS IMPORT
+font_add("Gravitas", regular = "/Users/cguirao/Library/Fonts/GravitasOne-Regular.ttf")
+font_add("Sans Code", regular = "	/Users/cguirao/Library/Fonts/GoogleSansCode-Regular.ttf")
+         # bold = "/Users/cguirao/Library/Fonts/GoogleSansCode-ExtraBold.ttf")
+font_add("Sans Code Extrabold", regular = "/Users/cguirao/Library/Fonts/GoogleSansCode-ExtraBold.ttf")
+font_add("Mulish", regular = "/Users/cguirao/Library/Fonts/Mulish-VariableFont_wght.ttf")
+# font_add("Mulish Semibold", regular = "/Users/cguirao/Library/Fonts/Mulish-VariableFont_wght.ttf")
+showtext_auto()
+
+#DATA IMPORT
+improvdata <- read_excel("~/Desktop/datavizu/_projects/2025/100453622/ImprovementDataBase.xlsx", 
+                   sheet = "TABLA 1-3-7",
+                   skip = 1) # skipping the title
+
+
+improvdata <- improvdata |> rename(`Autonomous Communities` = `Comunidad autónoma y provincia`)
+
+improvdata <- improvdata |> filter(`Autonomous Communities` %in% c(
+    "Andalucía",
+    "Aragón",
+    "Asturias, Principado de",
+    "Balears, Illes",
+    "Canarias",
+    "Cantabria",
+    "Castilla y León",
+    "Castilla-La Mancha",
+    "Comunitat Valenciana",
+    "Extremadura",
+    "Galicia",
+    "Madrid, Comunidad de",
+    "Murcia, Región de",
+    "Navarra, Comunidad Foral de",
+    "Rioja, La"
+  ))
+
+
+# Creating new group categories of protest motives: 
+improvdata <- improvdata |> rename(`Labour-Economic` = `Motivos laborales / económicos`,
+                                   `Political-Legislative` = `Contra medidas políticas / legislativas`,
+                                   `Healthcare` = `Motivos sanitarios`,
+                                   `Neighborhood Affairs` = `Movilizaciones vecinales`,
+                                   `Against Crime` = `Contra la droga / delincuencia`,
+                                   `Education` = `Movilizaciones enseñanza / educación`,
+                                   `Nationalism` = `Temas nacionalistas`,
+                                   `International Phenomena` = `Asuntos internacionales`,
+                                   `Commemorative Days` = `Conmemoración/ homenajes`,
+                                   `Religion` = `Temas religiosos`,
+                                   `Feminism` = `Contra violencia de género`,
+                                   `Other motives*` = `Otras`)
+
+improvdata <- improvdata |> 
+  mutate(across(
+    -`Autonomous Communities`,
+    as.numeric
+  ))
+
+improvdata <- improvdata |> 
+  mutate(`Enviromental Matters` = `Ecologismo` + `Cambio climático`,
+         `Human Rights` = `Derechos humanos` + `Contra el odio, racismo, xenofobia, etc.` + `Insumisión`,
+         `Terrorism`= Terrorismo + `Contra la radicalización violenta` ) |> 
+  select(-Ecologismo, -`Cambio climático`, -`Derechos humanos`, -`Contra el odio, racismo, xenofobia, etc.`, -`Insumisión`, -Terrorismo, -`Contra la radicalización violenta`) 
+
+improvdata <- improvdata |> relocate(Total, .after = everything()) |> relocate(`Other motives*`, .before = Total)
+```
+
+## Relative weights for each CCAA and Protest motive
+
+```{r Calculating relative weights for each CCAA and protest motive}
+datos_graphs <- improvdata |>
+
+  pivot_longer(
+    cols = -c(`Autonomous Communities`, Total),  
+    names_to = "Motivo",
+    values_to = "Frecuencia"
+  ) %>%
+
+  mutate(
+    Porcentaje = (Frecuencia / Total) * 100
+  ) %>%
+  select(`Autonomous Communities`, Motivo, Porcentaje)
+
+# Filtering top 10 most important motives and ordering them from the most to the least
+datos_graphs <- datos_graphs |> filter(Motivo %in% c(
+  "Labour-Economic",
+  "Other motives*",
+  "Political-Legislative",
+  "Neighborhood Affairs",
+  "International Phenomena",
+  "Healthcare",
+  "Feminism",
+  "Human Rights",
+  "Education",
+  "Enviromental Matters"
+)) 
+
+datos_graphs <- datos_graphs |> select(Motivo, `Autonomous Communities`, Porcentaje) |> arrange(Motivo, `Autonomous Communities`) 
+
+# Calculating national average for each motive
+national_average <- improvdata |>
+
+  pivot_longer(
+    cols = -c(`Autonomous Communities`, Total),
+    names_to = "Motivo",
+    values_to = "Frecuencia"
+  ) |>
+
+  group_by(Motivo) |>
+
+  summarise(
+    Frecuencia_Total = sum(Frecuencia),
+    Total_General = sum(Total)
+  ) |>
+
+  mutate(
+    Media_Nacional_pct = (Frecuencia_Total / Total_General) * 100
+  ) |>
+
+  select(Motivo, Media_Nacional_pct)
+
+# Joinning everithing in the same dataframe
+datos_graphs <- datos_graphs |> left_join(national_average, by = "Motivo")
+
+# Creating divergence column and ordering its values
+datos_graphs <- datos_graphs |>
+  mutate(Divergencia = Porcentaje - Media_Nacional_pct,
+         CCAA_ordenada = reorder_within(`Autonomous Communities`, Divergencia, Motivo))
+                          # ¿Qué hace reorder_within()?\n")
+                          # 1. Toma cada CCAA (ej: 'Aragón')\n")
+                          # 2. Le añade el motivo: 'Aragón___Education'\n")
+                          # 3. Ordena por Divergencia DENTRO de cada motivo\n")
+                          # 4. Resultado: orden correcto en cada faceta\n\n")
+
+# Changing names (ABREVIATURAS?)
+datos_graphs <- datos_graphs |>
+  mutate(
+    `Autonomous Communities` = recode(
+      `Autonomous Communities`,
+      "Murcia, Región de" = "Murcia",
+      "Navarra, Comunidad Foral de" = "Navarra",
+      "Madrid, Comunidad de"    = "Madrid",
+      "Asturias, Principado de"  = "Asturias",
+      "Balears, Illes" = "Baleares",
+      "Rioja, La" = "La Rioja",
+      "Comunitat Valenciana" = "Comunidad Valenciana"
+    )
+  )
+          
+# Choosing colors for each CCAA
+colores_CCAA <- c(
+  "Andalucía" = "#EFCE7B",
+  "Aragón" = "#2B2B23",
+  "Asturias" = "#238BB0",
+  "Balears" = "#D8560E",
+  "Canarias" = "#B28622",
+  "Cantabria" = "#92A2A6",
+  "Castilla y León" = "#849E15",
+  "Castilla-La Mancha" = "#6D1F42",
+  "Comunidad Valenciana" = "#876929",
+  "Extremadura" = "#25533F",
+    "Galicia" = "#F4BEAE",
+    "Madrid" = "#105666",
+    "Navarra" = "#976D90",
+    "La Rioja" = "#D9CBC2",
+    "Murcia" = "#112250")
+
+# Creating text labels with national average value for each motive
+datos_graphs <- datos_graphs %>%
+  mutate(
+    Motivo_label = paste0(Motivo, "\n(avg: ", 
+      round(Media_Nacional_pct, 1), 
+      "%)"))
+```
+
+## Plotting the graph
+
+```{r Plotting the final version, fig.width=16, fig.height=10, fig.showtext=TRUE}
+g <- ggplot(datos_graphs, aes(x = Divergencia, y = CCAA_ordenada))
+
+# Creating color-filled bars with CCAA categories
+g <- g + geom_col(aes(fill = `Autonomous Communities`), width = 0.7, alpha = 0.85)
+
+# Creating middle-line representing average values
+g <- g + geom_vline(xintercept = 0, linewidth = 0.3, color = "#6B6B6B") 
+
+# Doing faceting  
+g <- g + facet_wrap(~ Motivo_label, ncol = 5, scales = "free_y") 
+                    #labeller = labeller(group = label_wrap_gen(width = 25)))
+ 
+# Colors 
+g <- g + scale_fill_manual(values = colores_CCAA) + 
+  scale_x_continuous(labels = function(x) sprintf("%+.1f", x)) +
+  scale_y_reordered()
+
+# Labs 
+g <- g + labs(title = "Divergences in Protest Activity and Motives Across Spanish Autonomous Communities, 2024", x = NULL, y = NULL)
+
+# Text
+g <- g + geom_text(
+  aes(
+    label = paste0(`Autonomous Communities`, " (", round(Porcentaje, 1), "%)"),
+    x = Divergencia,  # Posición X = final de la barra
+    hjust = if_else(Divergencia >= 0, -0.05, 1.05)  # Ajustar según lado
+  ),
+  size = 2.6, # 1.5  html         # Tamaño nombres CCAA
+  family = "Mulish",
+  fontface = "plain"   
+)
+ 
+# Themes 
+g <- g + theme_void() +
+  theme(
+    panel.spacing = unit(0.25, "cm"),
+    plot.background = element_rect(fill = "#EFE7DA"),
+    panel.background = element_rect(fill = "#EFE7DA" ),
+    plot.margin = margin(10, 10, 30, 10),
+    aspect.ratio = 1.5,
+    plot.title = element_text(
+      size = 15, # 7.5 para html, # Tamaño título principal
+      fontface = "plain",
+      family = "Gravitas",
+      hjust = 0.5,         # Centrado (0 = izq, 0.5 = centro, 1 = der)
+      margin = margin(b = 17)  # Espacio abajo
+    ),
+    strip.text = element_text(
+      size = 9.3, # 5 para html --> 5.7 
+      fontface = "regular",
+      family = "Sans Code Extrabold",
+      hjust = 0,
+      color = "#3D211A",
+      ),
+    legend.position = "none"
+  )
+
+g
+```
+
+
