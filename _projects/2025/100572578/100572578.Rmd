@@ -1,0 +1,1507 @@
+---
+title: "CAT: Australia Country Profile"
+description: |
+  This article details the process of replicating a graph of the Australian Country Profile created by Climate Action Tracker (CAT) in 2025.
+categories: "2025"
+author: Samantha Riordan
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(out.width="100%", fig.align="center", fig.showtext=TRUE)
+```
+
+
+Add contents list here
+FIX PRINT VIEW FOR ALL INTERMEDIATE GRAPHS 
+
+## Introduction
+
+The CAT Project monitors government climate policies, actions and announcements to evaluate alignment with the Paris Agreement (2015) goal of limiting warming to 1.5-2°C. CAT analyses 34 countries that account for 85% of global emissions. The primary analysis for each country is assessing government action to limiting global warming. Emission gaps are calculated for each nation using emission projections and climate models to assess current policies, actions and announcements, compared to domestic and global temperature requirements.
+
+The chosen graph for this replication is the Australian country profile. The graph (Figure 1.) details an evaluation of the emissions trajectory achievable with Australia's current climate targets, action and policies, against what is needed to domestically, and globally, limit global warming to 1.5°C (as per the Paris Agreement, 2015).
+
+Figure 1. Australian Country Profile (original graph) ![Original chart. Source: Climate Action Tracker](original_graph.png){.external width="100%"}
+
+
+## Data and Packages  
+The data has been included in a seperate file due to the legnth of the code and being unable to create one table for all necessary data to be included on the graph, 
+
+```{r}
+library(ggplot2)
+library(tidyr)
+library(patchwork)
+library(ggtext)
+library(ggpubr)
+library(grid)
+library(showtext)
+
+# load data from Rscript 
+source("datascript.R")
+
+
+# Font for the graph replication 
+font_add_google(name = "Ubuntu", 
+                family = "Ubuntu", 
+                regular.wt = 400)
+showtext_auto()
+```
+
+
+
+## Replicating the Graph 
+
+### Main Graph (left side)
+
+```{r}
+#First plot - base
+p1 <- ggplot() +
+  scale_x_continuous(
+    limits = c(1990, 2031),
+    breaks = seq(1990, 2030, by = 10)) +
+  scale_y_continuous(
+    limits = c(-100, 600),
+    breaks = seq(-100, 600, by = 100)) +
+  theme(
+    text = element_text(family = "Ubuntu"),
+    axis.title = element_blank(),
+    panel.background =  element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.major.y = element_line(colour = "#D5D5D5", 
+                                      linewidth = 0.3),
+    axis.text.y = element_text(size = 11,
+                   margin = margin(0,.4,0,0, "cm"), 
+                   colour = "black"), 
+    axis.text.x = element_text(size = 12, 
+                              face = "bold",
+                              margin = margin(0.3,0,0,0, "cm"),
+                              colour = "black"),
+    axis.ticks = element_blank(),
+    plot.margin = margin(0,0,0,0.07, "inches")) +
+  coord_cartesian(
+    xlim = c(1990,2030),
+    clip = "off", 
+    expand = FALSE) +
+  # Add a horizontal line at zero for reference
+  geom_hline(yintercept = 0, 
+             linetype = "solid", 
+             color = "black", 
+             linewidth = 1) 
+```
+
+#### Add the rating bands and Historical emissions lines and annotations 
+
+
+
+```{r fig.width=10.66, fig.height=6.35, dpi=300}
+# Create plot with rating bands
+p2 <- p1 +
+  # Rating bands (drawn first so they're in background)
+  # Critically insufficient (top)
+  geom_ribbon(data = country,
+              aes(x = year, 
+                  ymin = `Highly insufficient`, 
+                  ymax = pmin(`Upper limit`, 600)),
+              fill = "#606060", alpha = 0.4) +
+  # Highly insufficient
+  geom_ribbon(data = country,
+              aes(x = year, 
+                  ymin = Insufficient, 
+                  ymax = `Highly insufficient`),
+              fill = "#EF694A", 
+              alpha = 0.4) +
+  # Insufficient
+  geom_ribbon(data = country,
+              aes(x = year, 
+                  ymin = `Almost sufficient`, 
+                  ymax = Insufficient),
+              fill = "#F2AC48", alpha = 0.4) +
+  # Almost sufficient
+  geom_ribbon(data = country,
+              aes(x = year, 
+                  ymin = `1.5C compatible`, 
+                  ymax = `Almost sufficient`),
+              fill = "#F2E464", alpha = 0.4) +
+  # 1.5C compatible (bottom)
+  geom_ribbon(data = country,
+              aes(x = year, 
+                  ymin = `Lower limit`, 
+                  ymax = `1.5C compatible`),
+              fill = "#B0CB67", 
+              alpha = 0.4)
+# Add lines to rating category bands 
+country
+p3 <- p2 + 
+  geom_line(data = country,
+            aes(x = year, 
+                y = `Highly insufficient`),
+            color = "#EF694A",
+            linewidth = 1) +
+    geom_line(data = country,
+            aes(x = year, 
+                y = `Insufficient`),
+            color = "#F2AC48",
+            linewidth = 1) +
+    geom_line(data = country,
+            aes(x = year, 
+                y = `Almost sufficient`),
+            color = "#F2E464",
+            linewidth = 1) +
+    geom_line(data = country,
+            aes(x = year, 
+                y = `1.5C compatible`),
+            color = "#B0CB67",
+            linewidth = 1)
+# History line 
+p4 <- p3 + 
+  geom_line(data = historical_exc, 
+            aes(x = year, 
+                y = emissions),
+            linewidth = 1, 
+            color = "black") + 
+    # Add labels for the series
+    annotate("text", 
+             x = 1990, 
+             y = 420, 
+             label = "Historical", 
+             hjust = 0, size = 3.5, 
+             family = "Ubuntu")
+# LULUCF line 
+p5 <- p4 + 
+  geom_line(data = lulucf, 
+            aes(x = year, y = emissions),
+            linewidth = 1, color = "#65A653") +
+  # Add labels for the series
+  annotate("text", 
+           x = 1997, 
+           y = 15, 
+           label = "Land use & forests", 
+           size = 3.5, 
+           color = "#65A653", 
+           hjust = 0, 
+           vjust = 0,
+           family = "Ubuntu") 
+# Announced policies annotation
+p6 <- p5 +
+  annotate("text", 
+           x = 2021, 
+           y = 385, 
+           label = "Announced policies", 
+           hjust = 1, 
+           vjust = 1, 
+           size = 3.5, 
+           color = "#4F8EB5",
+           family = "Ubuntu")
+# Connecting lines from points to labels
+p7 <- p6 +
+  geom_path(
+    data = line1p, 
+    aes(x = year, y = emissions), 
+    color = "black", linewidth = 0.3) +
+  geom_path(
+    data = line2p, 
+    aes(x = year, y = emissions), 
+    color = "black", linewidth = 0.3)
+
+p7 + theme(
+  plot.margin = margin(t = 0.5, r = 6, b = 0.5, l = 0.5, unit = "inches"))
+
+```
+
+
+#### Add Projection Bands and geom points
+
+```{r fig.width=10.66, fig.height=6.35, dpi=300}
+# Policies & action band and line
+p8 <- p7 +
+  geom_ribbon(data = policies,
+              aes(x = year, 
+                  ymin = `Total, excl LULUCF, Min`, 
+                  ymax = `Total, excl LULUCF, Max`),
+              fill = "#4F8EB5", alpha = 0.95) + 
+  geom_line(data = planned,
+            aes(x = year, 
+                y = `Total, excl LULUCF, Min`),
+            linewidth = 1,
+            color = "#795AA1") +
+  geom_line(data = policies, 
+            aes(x = year, 
+                y = mid_range),
+            linewidth = 1, 
+            color = "#4F8EB5") +
+  geom_point(data = policies |> 
+               filter(year == 2030),
+             aes(x = year, 
+                 y = mid_range),
+             color = "white",
+             fill = "#4F8EB5",
+             shape = 21,
+             stroke = 0.5,
+             size = 3.75) +
+  geom_point(data = planned |> 
+               filter(year == 2030),
+             aes(x = year, 
+                 y = `Total, excl LULUCF, Min`),
+             color = "white",
+             fill = "#795AA1",
+             shape = 21,
+             stroke = 0.5,
+             size = 3.75)
+# Add NDC geom point
+p9 <- p8 + 
+  geom_point(data = ndc_value,
+    aes(x = year + 0.6, 
+        y = emissions),  
+    size = 3.75, 
+    color = "white", 
+    fill = "black",
+    shape = 21,
+    stroke = 0.5)
+# Adding 1.5C geom points
+p10 <- p9 + 
+  geom_point(data = mod_1.5,
+            aes(x = year, 
+                y = emissions),
+            size = 3.5,
+            color = "white",
+            fill = "#B0CB67",
+            shape = 23,
+            stroke = 0.5)  + 
+  geom_point(data = fair,
+             aes(x = year, 
+                 y = emissions), 
+            size = 3.5,
+            color = "white",
+            fill = "#B0CB67",
+            shape = 22,
+            stroke = 0.5)
+p10 + theme(
+  plot.margin = margin(t = 0.5, r = 6, b = 0.5, l = 0.5, unit = "inches"))
+
+```
+
+
+### Main Graph (Right side )
+Based on fair share 
+
+```{r}
+#First plot - base
+f1 <- ggplot() +
+  scale_x_continuous(
+    breaks = seq(2010, 2030, by = 10),
+    limits = c(2010, 2031.5)) +
+  scale_y_continuous(
+    limits = c(-100, 600),
+    breaks = seq(-100, 600, by = 100), 
+    labels = NULL) +
+  labs(
+    x = NULL,
+    y = NULL) +
+  theme(
+    panel.background =  element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.major.y = element_line(colour = "#D5D5D5", 
+                                      linewidth = 0.3),
+    axis.title.y = element_blank(), 
+    axis.ticks = element_blank(), 
+    axis.text.x = element_text(size = 12, 
+                              face = "bold",
+                              margin = margin(0.2,0,0,0, "cm"),
+                              colour = "black"),
+    plot.margin = margin(0,0,0,0.07, "inches"), 
+    text = element_text(family = "Ubuntu")) +
+  coord_cartesian(
+    xlim = c(2010,2030),
+    clip = "off", 
+    expand = FALSE)
+```
+
+#### Add rating categories and panel lines 
+
+```{r fig.width=10.66, fig.height=6.35, dpi=300}
+f2 <- f1 +
+  geom_rect(data = fair_bars, 
+           aes(x = year,
+               ymin = ymin,
+               ymax = emissions,
+               fill = scenario, 
+               width = 2.75), 
+           colour = NA) + 
+  scale_fill_manual(
+    values = c("1.5C compatible" = "#B0CB67",
+               "Almost sufficient" = "#F2E464",
+               "Insufficient" = "#F2AC48",
+               "Highly insufficient" = "#EF694A",
+               "Critically insufficient" = "#575F62")) +
+  theme(legend.position = "none")
+f3 <- f2 +
+  geom_hline(yintercept = seq(-100, 600, by = 100), 
+             colour = "#D5D5D5",
+             linewidth = 0.3) +
+  # Add a horizontal line at zero for reference
+  geom_hline(yintercept = 0, 
+             linetype = "solid", 
+             color = "black", 
+             linewidth = 0.8)
+
+f3 + theme(
+  plot.margin = margin(t = 0.5, r = 3, b = 0.5, l = 6, unit = "inches"))
+
+```
+
+
+#### Add History lines and annotations 
+```{r}
+# History line 
+f4 <- f3 + 
+  geom_line(data = hist_fair, 
+            aes(x = year, 
+                y = emissions),
+            linewidth = 1, 
+            color = "black") + 
+    annotate("text", 
+             x = 2010, 
+             y = 520, 
+             label = "Historical", 
+             hjust = 0, size = 3.5, 
+             family = "Ubuntu")
+## LULUCF line (green, thinner)
+f5 <- f4 + 
+  geom_line(data = lulucf_hist, 
+            aes(x = year, y = emissions),
+            linewidth = 1, color = "#65A653") +
+  # Add text labels for the series
+  annotate("text", 
+           x = 2011.5, 
+           y = 45, 
+           label = "Land use & forests", 
+           size = 3.5, 
+           hjust = 0,
+           color = "#65A653",
+           family = "Ubuntu") 
+# Connecting lines from points to labels
+f6 <- f5 +
+  geom_path(
+    data = line1f, 
+    aes(x = year, y = emissions), 
+    color = "black", linewidth = 0.3) +
+  geom_path(
+    data = line2f, 
+    aes(x = year, y = emissions), 
+    color = "black", linewidth = 0.3)
+
+```
+
+#### Add Projection Bands and geom points
+```{r fig.width=10.66, fig.height=6.35, dpi=300}
+# Announced policies and pna annotations
+f7 <- f6 +
+  annotate("text",   # Labels
+           x = 2025.5, 
+           y = 385, 
+           label = "Announced policies", 
+           hjust = 1, 
+           vjust = 1,
+           size = 3.5, 
+           color = "#4F8EB5", 
+           family = "Ubuntu") +
+  annotate("text", 
+           x = 2025.5, 
+           y = 432.5334, 
+           label = "Policies & action", 
+           size = 3.5, 
+           color = "#4F8EB5", 
+           hjust = 1,
+           family = "Ubuntu") 
+# Policies & action band and line
+f8 <- f7 +
+  geom_ribbon(data = policies,
+              aes(x = year, 
+                  ymin = `Total, excl LULUCF, Min`, 
+                  ymax = `Total, excl LULUCF, Max`),
+              fill = "#4F8EB5", alpha = 0.9) + 
+  geom_line(data = planned,
+            aes(x = year, 
+                y = `Total, excl LULUCF, Min`),
+            linewidth = 1,
+            color = "#795AA1") +   
+  geom_line(data = policies, 
+            aes(x = year, 
+                y = mid_range),
+            linewidth = 1, 
+            color = "#4F8EB5") + 
+  geom_point(data = policies |> 
+               filter(year == 2030),
+             aes(x = year, 
+                 y = mid_range),
+             color = "white",
+             fill = "#4F8EB5",
+             shape = 21,
+             stroke = 0.5,
+             size = 3.75) +
+  geom_point(data = planned |> 
+               filter(year == 2030),
+             aes(x = year, 
+                 y = `Total, excl LULUCF, Min`),
+             color = "white",
+             fill = "#795AA1",
+             shape = 21,
+             stroke = 0.5,
+             size = 3.75)
+# Add NDC geom point
+f9 <- f8 + 
+  geom_point(data = ndc_value,
+    aes(x = year + 0.5, y = emissions),  
+    size = 3.75, 
+    color = "white", 
+    fill = "black",
+    shape = 21,
+    stroke = 0.5) 
+# Add 1.5C shapes 
+f10 <- f9 + 
+  geom_point(data = mod_1.5,
+            aes(x = year, 
+                y = emissions),
+            size = 3.5,
+            color = "white",
+            fill = "#B0CB67",
+            shape = 23,
+            stroke = 0.5) +
+  geom_point(data = fair,
+             aes(x = year, 
+                 y = emissions), 
+            size = 3.5,
+            color = "white",
+            fill = "#B0CB67",
+            shape = 22,
+            stroke = 0.5)
+
+f10 + theme(
+  plot.margin = margin(t = 0.5, r = 3, b = 0.5, l = 6, unit = "inches"))
+```
+
+### Banners 
+(top banner, modelled domestic and fair share, heading banner and bottom descriptors)
+
+```{r}
+# Top Banner 
+top_banner_f <- ggplot() +
+  scale_x_continuous(limits = c(0,1)) +
+  scale_y_continuous(limits = c(0,1)) +
+  theme_void() +
+  theme(plot.background = element_rect(fill = NA, 
+                                       color = NA)) +
+  annotation_custom(
+    grob = roundrectGrob(
+      r = unit(0.1, "snpc"),  # Rounded corners
+      gp = gpar(fill = "#F2AC48", col = "#F2AC48")),
+    ymin = -0.3, ymax = 1,
+    xmin = -0.01, xmax = 1.005) +
+  annotate("text", x = 0.5, y = 0.65,
+           label = "AUSTRALIA OVERALL RATING",
+           color = "white", size = 4.5,
+           family = "Ubuntu") +
+  annotate("text", x = 0.5, y = 0.25,
+           label = "INSUFFICIENT",
+           color = "white", size = 6.5, 
+           fontface = "bold",
+           family = "Ubuntu")
+
+top_banner <- free(top_banner_f + 
+                     plot_layout(widths = unit(
+                       11.54,"inches")))
+
+
+
+# Modelled domestic and fair share (blue banners) 
+bb_left <- grobTree(
+  rectGrob(gp = gpar(fill = "#83AFCB", col = NA)),
+  textGrob("BASED ON MODELLED DOMESTIC PATHWAYS +",
+           x = 0.48, y = 0.5,
+           just = "centre",
+           gp = gpar(col = "white",
+                    fontsize = 11.5,
+                    fontface = "bold",
+                    fontfamily = "Ubuntu")))  
+bb_left_g <-as_ggplot(bb_left) + 
+  theme(plot.margin = unit(c(0,0.035,0,0), "inches"))
+
+bb_right <- grobTree(
+  rectGrob(gp = gpar(fill = "#A7C6DA", col = NA)),
+  textGrob("BASED ON FAIR SHARE",
+           x = 0.48, y = 0.5,
+           just = "centre",
+           gp = gpar(col = "white",
+                    fontsize = 11.5,
+                    fontface = "bold",
+                    fontfamily = "Ubuntu")))
+bb_right_g <- as_ggplot(bb_right)
+
+second_banner <- free(bb_left_g + 
+  bb_right_g  +
+  plot_layout(nrow = 1, 
+              widths = unit(c(6.325,4.34), "inches"))+
+  theme(plot.margin = unit(c(0.035,0,0,0), "inches")))
+
+
+# Heading banner (third banner) 
+plot_title <- grobTree(
+  rectGrob(x = -0.01,
+           width = 1,
+           gp = gpar(fill = "white", col = NA)),
+  textGrob("Emissions excl. LULUCF",
+           x = -0.01, y = 0.70,
+           hjust = 0,
+           gp = gpar(col = "black",
+                    fontsize = 10,
+                    fontface = "bold",
+                    fontfamily = "Ubuntu")),
+  textGrob(bquote(MtCO[2]*e / year ~ (GWP ~ AR5)),
+           x = -0.01, y = 0.35,
+           hjust = 0,
+           gp = gpar(col = "black",
+                    fontsize = 10,
+                    fontfamily = "Ubuntu")))
+plot_title_g <- as_ggplot(plot_title)
+
+
+# Light blue headings  
+# policies and action
+pna_b3 <- grobTree(
+  rectGrob(gp = gpar(fill = "#E5EEF4", col = NA)),
+  textGrob("Policies\n& action",
+           x = 0.5, 
+           y = 0.5,
+           just = "centre", 
+           gp = gpar(col = "black",
+                    fontsize = 11,
+                    fontface = "bold",
+                    lineheight = 0.8,
+                    fontfamily = "Ubuntu")))  
+pna_b3_g <- as_ggplot(pna_b3) 
+
+# NDC Target 
+ndc_b3 <- grobTree(
+  rectGrob(gp = gpar(fill = "#E5EEF4", col = NA)),
+  textGrob("NDC\ntarget",
+           x = 0.5, 
+           y = 0.5,
+           just = "centre", 
+           gp = gpar(col = "black",
+                    fontsize = 11,
+                    fontface = "bold",
+                    lineheight = 0.8,
+                    fontfamily = "Ubuntu"))) 
+ndc_b3_g_1 <- as_ggplot(ndc_b3) + 
+     theme(plot.margin = margin(0,0,0,0.035, "inches")) 
+  
+ndc_b3_g_2 <- as_ggplot(ndc_b3) + 
+     theme(plot.margin = margin(0,0.035,0,0, "inches"))
+
+blank_b3 <- ggplot() +
+  theme_void() + 
+     theme(plot.margin = margin(0,0,0,0.03, "inches"))
+
+# Climate Finance 
+cf_b3 <- grobTree(
+  rectGrob(gp = gpar(fill = "#E5EEF4", col = NA)),
+  textGrob("Climate\nfinance",
+           x = 0.5, 
+           y = 0.5,
+           just = "centre", 
+           gp = gpar(col = "black",
+                    fontsize = 10,
+                    fontface = "bold",
+                    lineheight = 0.8,
+                    fontfamily = "Ubuntu"))) 
+cf_b3_g <- as_ggplot(cf_b3)
+
+# Add together 
+third_banner <- free(
+  plot_title_g + 
+  pna_b3_g + 
+  ndc_b3_g_1 + 
+  blank_b3 +
+  ndc_b3_g_2 + 
+  cf_b3_g + 
+  plot_layout(nrow = 1, 
+              widths = unit(c(3.9, 1.16, 1.162, 1.905, 1.155, 1.18), "inches")) +
+  theme(plot.margin = unit(c(0.035,0,0.035,0), "inches")))
+
+# Bottom descriptions
+
+bottom_banner_f <- ggplot() +
+  scale_x_continuous(limits = c(-0.01, 1)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_void() +
+  theme(plot.background = element_rect(fill = NA, 
+                                       color = NA),
+        margins = margin(0,0,0.35,0, unit = "inches")) +
+  annotate("text", x = -0.01, y = 0.75, 
+           label = "+ Modelled domestic pathways reflects a global economic efficiency perspective with pathways for different temperature ranges derived from global least-cost models",
+           color = "#3C494E", size = 3.5, 
+           fontface = "plain",
+           family = "Ubuntu",
+           hjust = 0.04) +
+  annotate("text", x = -0.01, y = 0.2,
+           label = "* Greenhouse gas emissions are calculated using global warmning potential values from the IPCC Fifth Assessment Report (GWP AR5)",
+           color = "#3C494E", size = 3.5, 
+           fontface = "plain",
+           family = "Ubuntu",
+           hjust = 0.05)
+
+
+```
+
+
+### Left Space (annotations)
+
+```{r fig.width= 10.66, fig.height=6.35, dpi=300}
+# Base plot
+l1 <- ggplot() +
+  scale_x_continuous(
+    breaks = seq(2030,2050, by = 10),
+    limits = c(2029, 2050)) +
+  scale_y_continuous(
+    limits = c(-100, 600),
+    breaks = seq(-100, 600, by = 100)) +
+  theme_void() +
+  coord_cartesian(
+    xlim = c(2030,2050),
+    clip = "off", 
+    expand = FALSE)
+# Left space labels 
+
+# Main plot with side panel annotations
+l2 <- l1 +
+# Policies & action box
+  annotate(
+    geom = "rect", 
+    xmin = 2030.4, xmax = 2040, 
+    ymin = 502, ymax = 600,
+    fill = "#F2AC48", color = "#F2AC48", 
+    linewidth = 0.3) +
+  annotate(
+    geom = "text", 
+    x = 2035.28, y = 565, 
+    label = "INSUFFICIENT",
+    size = 3.5, color = "white", 
+    fontface = "bold",
+    family = "Ubuntu") +
+  annotate(
+    geom = "text", 
+    x = 2035.28, y = 525, 
+    label = "< 3\u00B0C World", 
+    size = 3.5, color = "white", 
+    fontface = "italic", 
+    family = "Ubuntu") +
+# NDC target box
+  annotate(
+    geom = "rect", 
+    xmin = 2040.35, xmax = 2050, 
+    ymin = 502, ymax = 600,
+    fill = "#F2AC48", color = "#F2AC48", 
+    linewidth = 0.3) +
+  annotate(
+    geom = "text", 
+    x = 2045.13, y = 565, 
+    label = "INSUFFICIENT",
+    size = 3.5, color = "white", 
+    fontface = "bold",
+    family = "Ubuntu") +
+  annotate(
+    geom = "text", 
+    x = 2045.13, y = 525, 
+    label = "< 3\u00B0C World",
+    size = 3.5, color = "white", 
+    fontface = "italic",
+    family = "Ubuntu") +
+# Source box and label 
+  annotate(
+    geom = "rect", 
+    xmin = 2033.5, xmax = 2047.9, 
+    ymin = -100, ymax = -40,
+    fill = "white", color = "#EF694A", 
+    linewidth = 1.2) +
+  annotate(
+    geom = "text", 
+    x = 2040, y = 10, 
+    label = " Land use & forests have\n
+    historically been an emissions",
+    size = 3, color = "black", 
+    hjust = 0.5, 
+    vjust = 1, 
+    lineheight = 0.5,
+    family = "Ubuntu") +
+  annotate(
+    geom = "text", 
+    x = 2040, y = -70, 
+    label = "SOURCE",
+    size = 3.5, color = "#EF694A", 
+    fontface = "bold",
+    hjust = 0.5,
+    family = "Ubuntu")
+# Policies and action (label for blue dot in p10 graph) 
+l3 <- l2 + 
+  annotate(
+    geom = "text", 
+    x = 2030.4, y = 457,
+    label = "Policies\n& action", 
+    size = 3.5, color = "#4F8EB5", 
+    hjust = 0, 
+    lineheight = 0.8,
+    family = "Ubuntu") +  
+#NDC Label (label for black dot in p10)
+  annotate(
+    geom = "text",
+    x = 2031, y = 402, 
+    label = "NDC target",
+    size = 3.5, colour = "black", 
+    hjust = 0, 
+    vjust = 1,
+    family = "Ubuntu") +
+# Left labels (1.5 C mod - diamond) 
+  annotate(
+    geom = "text",
+    x = 2031, y = 314.84, 
+    label = "1.5\u00B0C modelled domestic pathway",
+    size = 3.5, color = "#88B572", 
+    hjust = 0,
+    family = "Ubuntu") +
+# 1.5 C fair - square 
+  annotate(
+    geom = "text", 
+    x = 2031, y = 237.8754, 
+    label = "1.5\u00B0C fair share",
+    size = 3.5, color = "#88B572", 
+    hjust = 0,
+    family = "Ubuntu") 
+
+
+# Connecting lines from points to labels
+l4 <- l3 +
+  geom_path(
+    data = line1, 
+    aes(x = year, y = emissions), 
+    color = "#4F8EB5", linewidth = 0.3) +
+  geom_path(
+    data = line2, 
+    aes(x = year, y = emissions), 
+    color = "black", linewidth = 0.3) +
+  geom_path(
+    data = line3, 
+    aes(x = year, y = emissions), 
+    colour = "black", linewidth = 0.3) 
+l4 + theme(
+  plot.margin = margin(t = 0.5, r = 4, b = 0.5, l = 4, unit = "inches"))
+```
+
+
+### Right Space (annotations)
+```{r}
+# Base plot
+r1 <- ggplot() +
+  scale_x_continuous(
+    breaks = seq(2030,2050, by = 10),
+    limits = c(2029, 2051)) +
+  scale_y_continuous(
+    limits = c(-100, 600),
+    breaks = seq(-100, 600, by = 100)) +
+  theme_void() +
+  coord_cartesian(
+    xlim = c(2030,2050),
+    clip = "off", 
+    expand = FALSE)
+
+# Left space labels 
+r2 <- r1 +
+# NDC target box
+  annotate(
+    geom = "rect", 
+    xmin = 2031.4, xmax = 2040.38, 
+    ymin = 502, ymax = 600,
+    fill = "#F2AC48", color = "#F2AC48", 
+    linewidth = 0.3) +
+  annotate(
+    geom = "text", 
+    x = 2035.9, y = 565, 
+    label = "INSUFFICIENT",
+    size = 3.5, color = "white", 
+    fontface = "bold",
+    family = "Ubuntu") +
+  annotate(
+    geom = "text", 
+    x = 2035.9, y = 525, 
+    label = "< 3\u00B0C World", 
+    size = 3.5, color = "white", 
+    fontface = "italic",
+    family = "Ubuntu") +
+# Climate finance 
+  annotate(
+    geom = "rect", 
+    xmin = 2040.71, xmax = 2050, 
+    ymin = 502, ymax = 600,
+    fill = "#575F62", color = "#575F62", 
+    linewidth = 0.3) +
+  annotate(
+    geom = "text", 
+    x = 2045.6, y = 550, 
+    label = "CRITICALLY\nINSUFFICIENT",
+    size = 3.5, color = "white", 
+    fontface = "bold", 
+    lineheight = 0.8,
+    family = "Ubuntu") +  
+  geom_richtext(
+    aes(x = 2035.5, y = -45), 
+    fill = NA, label.colour = NA,
+    label = "**June 2025**<br>Update",
+    size = 3.5, color = "#575F62",
+    lineheight = 0.5,
+    family = "Ubuntu", 
+    hjust = 0.5)
+#NDC Label (label for black dot in p10)
+r3 <- r2 + 
+  annotate(
+    geom = "text",
+    x = 2031.25, y = 402, 
+    label = "NDC target",
+    size = 3.5, colour = "black", 
+    hjust = "left",
+    vjust = "top",
+    family = "Ubuntu") + 
+# Left labels (1.5 C mod - diamond) 
+  annotate(
+    geom = "text",
+    x = 2031.25, y = 305, 
+    label = "1.5\u00B0C modelled\ndomestic pathway",
+    size = 3.5, color = "#88B572", 
+    hjust = "left",
+    vjust = 0.5,
+    lineheight = 0.8,
+    family = "Ubuntu") +
+# 1.5 C fair - square 
+  annotate(
+    geom = "text", 
+    x = 2031.25, y = 237.8754, 
+    label = "1.5\u00B0C fair share",
+    size = 3.5, color = "#88B572", 
+    hjust = "left",
+    family = "Ubuntu") 
+r4 <- r3 +
+  geom_path(
+    data = line1_r, 
+    aes(x = year, y = emissions), 
+    color = "black", linewidth = 0.3) 
+
+```
+
+### Legend 
+```{r fig.width=10.66, fig.height=6.35, dpi=300}
+legend_grob <- grobTree(
+# Title
+  textGrob("Rating categories", x = 0.025, y = 1,
+           gp = gpar(fontsize = 10, 
+                     col = "#3C494E",
+                     fontfamily = "Ubuntu"),
+           hjust = 0),
+# Title underline
+  linesGrob(x = c(0, 1), y = c(0.94, 0.94),
+            gp = gpar(col = "#575F62", 
+                      lwd = 2, 
+                      lineend = "square")),
+#Critically Insufficient 
+  #background
+  rectGrob(x = 0, y = 0.911, 
+           width = 1, height = 0.168,
+           gp = gpar(fill = "#575F62", 
+                     col = NA, 
+                     alpha = 0.2), 
+           just = c(0,1)),
+  #box
+  rectGrob(x = 0.033, y = 0.878, 
+           width = 0.185, height = 0.11,
+           gp = gpar(fill = "#575F62", 
+                     col = "white"),
+           just = c(0,1)),
+  #text
+  textGrob("CRITICALLY\nINSUFFICIENT", 
+           x = 0.26, y = 0.87, 
+           gp = gpar(fontsize = 9, 
+                     fontface = "bold", 
+                     col = "#575F62", 
+                     lineheight = 0.8,
+                     fontfamily = "Ubuntu"),
+           just = c(0,1)),
+#Highly Insufficient 
+  #background
+  rectGrob(x = 0, y = 0.724, 
+           width = 1, height = 0.168,
+           gp = gpar(fill = "#EF694A", col = NA, 
+                     alpha = 0.2), 
+           just = c(0,1)),
+  #box
+  rectGrob(x = 0.033, y = 0.693, 
+           width = 0.185, height = 0.11,
+           gp = gpar(fill = "#EF694A", 
+                     col = "white"),
+           just = c(0,1)),
+  #text
+  textGrob("HIGHLY\nINSUFFICIENT", 
+           x = 0.26, y = 0.683,
+           gp = gpar(fontsize = 9, 
+                     fontface = "bold", 
+                     col = "#EF694A", 
+                     lineheight = 0.8,
+                     fontfamily = "Ubuntu"),
+           just = c(0,1)),
+  
+#Insufficient 
+  #background
+  rectGrob(x = 0, y = 0.537, 
+           width = 1, height = 0.168,
+           gp = gpar(fill = "#F2AC48", 
+                     col = NA, 
+                     alpha = 0.2),
+           just = c(0,1)),
+  #box
+  rectGrob(x = 0.033, y = 0.506, 
+           width = 0.185, height = 0.11,
+           gp = gpar(fill = "#F2AC48", 
+                     col = "white"), 
+           just = c(0,1)),
+  #text
+  textGrob("INSUFFICIENT", 
+           x = 0.26, y = 0.466,
+           gp = gpar(fontsize = 9, 
+                     fontface = "bold", 
+                     col = "#F2AC48",
+                     fontfamily = "Ubuntu"),
+           just = c(0,1)),
+#Almost Sufficient 
+  #background
+  rectGrob(x = 0, y = 0.35, 
+           width = 1, height = 0.168,
+           gp = gpar(fill = "#F2E464", 
+                     col = NA, 
+                     alpha = 0.2),
+           just = c(0,1)),
+  #box
+  rectGrob(x = 0.033, y = 0.319, 
+           width = 0.185, height = 0.11,
+           gp = gpar(fill = "#F2E464", 
+                     col = "white"),
+           just = c(0,1)),
+  #text
+  textGrob("ALMOST\nSUFFICIENT", 
+           x = 0.26, y = 0.31,
+           gp = gpar(fontsize = 9, 
+                     fontface = "bold", 
+                     col = "#9A9FA1", 
+                     lineheight = 0.8,
+                     fontfamily = "Ubuntu"),
+           just = c(0,1)),
+#1.5°C Compatible 
+  #background
+  rectGrob(x = 0, y = 0.163, 
+           width = 1, height = 0.168,
+           gp = gpar(fill = "#B0CB67", 
+                     col = NA, 
+                     alpha = 0.2),
+           just = c(0,1)),
+  #box
+  rectGrob(x = 0.033, y = 0.132, 
+           width = 0.185, height = 0.11,
+           gp = gpar(fill = "#B0CB67", 
+                     col = "white"),
+           just = c(0,1)),
+  #text
+  textGrob("1.5\u00B0C\nCOMPATIBLE", 
+           x = 0.26, y = 0.123,
+           gp = gpar(fontsize = 9, 
+                     fontface = "bold", 
+                     col = "#B0CB67", 
+                     lineheight = 0.8,
+                     fontfamily = "Ubuntu"),
+           just = c(0,1)))
+
+
+##############################################
+## Add legend to right side plot 
+r5 <- r4 +
+  annotation_custom(
+    grob = legend_grob,
+    xmin = 2040.71,  
+    xmax = 2050,  
+    ymin = -100,   
+    ymax = 250)
+
+r5 + theme(
+  plot.margin = margin(t = 0.5, r = 0, b = 0.5, l = 8, unit = "inches"))
+
+```
+
+#### Add completed graphs together 
+```{r fig.width=10.66, fig.height=4.4, dpi=300}
+graphs <- free(
+  p10 + l4 + f10 + r5 +  
+  plot_layout(nrow = 1, 
+              widths = unit(c(3.42, 
+                              2.39, 
+                              1.7, 
+                              2.55),"inches")))
+graphs
+```
+
+## Final Plot - Recreation 
+```{r fig.width=10.66, fig.height=6.35, dpi=300}
+final <- top_banner/
+  second_banner/ third_banner/ 
+  graphs / bottom_banner_f +
+  plot_layout(heights = unit(c(0.71,0.325,0.45, 4.4, 0.4), "inches"),
+              nrow = 5,
+              ncol = 1)
+final
+
+```
+
+
+
+## Improvement
+
+## Main plot 
+
+```{r fig.width=6.25, fig.height=5, dpi=300}
+
+m1 <- ggplot() +
+  scale_x_continuous(
+    limits = c(2010, 2035), 
+    breaks = seq(2010, 2035, by = 10)) +
+  scale_y_continuous(
+    limits = c(-100, 699),
+    breaks = seq(-100, 600, by = 100)) +
+  labs(title = "Australian Emissions", 
+       subtitle = expression(MtCO[2]*e / year ~ (GWP ~ AR5))) +
+  theme(
+    plot.title = element_text(size = 32, face = "bold"),
+    plot.subtitle = element_text(size = 28),
+    panel.background = element_rect(fill = "grey90",
+                                    color = NA),
+    plot.background = element_rect(fill = "grey90",
+                                   color = NA),
+    panel.grid.major.x = element_line(colour = "grey90"),
+    panel.grid.major.y = element_line(colour = "grey", 
+                                      linewidth = 0.3),
+    panel.grid.minor = element_line(colour = 
+                                        "grey90"),
+    axis.text.y = element_text(size = 22,
+                              colour = "#1D252A",
+                              margin = margin(0,0.1,0,0, "inches")),
+    axis.text.x = element_text(size = 24, 
+                              face = "bold",
+                              margin = margin(0.1,0,0,0, "inches"),
+                              colour = "#1D252A"),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.ticks = element_blank()
+    ) +
+  coord_cartesian(
+    xlim = c(2010,2035),
+    ylim = c(-100, 600),
+    clip = "off",
+    expand = FALSE) 
+ ### ADD , "Modelled Domestic Pathways"
+
+# Add coloured areas (so they are underneath)
+m2 <- m1 + 
+  geom_ribbon(data = dom_data |> 
+                filter(year >= 2024),
+              aes(x = year, 
+                  ymin = 0, 
+                  ymax = emissions),
+              fill = "#81B18E", alpha = 0.6) + 
+  geom_ribbon(data = fair_data |> 
+                filter(year >= 2024), 
+              aes(x = year,
+                  ymin = 0,
+                  ymax = emissions),
+              fill = "#A3B4AC", alpha = 0.6)
+
+m2
+# Add historical data, LULUCF data and 0 ref line
+
+m3 <- m2 +  
+  geom_line(data = country_1 |>  
+              filter(scenario == "Historical", 
+                     year >= 2010,
+                     sector == "Economy-wide, excluding LULUCF"),
+            aes(x = year, 
+                y = emissions),
+            linewidth = 1, 
+            color = "#36454F") + 
+  geom_line(data = country_1 |>  
+              filter(scenario == "Historical", 
+                     year >= 2010,
+                     sector == "LULUCF"),
+            aes(x = year, 
+                y = emissions),
+            linewidth = 1, color = "#36454F") +
+  geom_ribbon(data = country_1 |>  
+              filter(scenario == "Historical", 
+                     year >= 2010,
+                     sector == "LULUCF"),
+              aes(x = year, 
+                  ymin = 0, 
+                  ymax = emissions), 
+              fill = "#839AAA", alpha = 0.5) + 
+  geom_hline(yintercept = 0, 
+             linetype = "solid", 
+             color = "#1D252A", 
+             linewidth = 0.8)
+
+
+
+# add 1.5 compatible line and policy 
+m4 <- m3 + 
+    geom_line(data = dom_data,
+            aes(x = year, y = emissions),
+            color = "#81B18E",
+            linewidth = 1, 
+            linetype = 2) +
+  geom_ribbon(data = policies_r,
+              aes(x = year, 
+                  ymin = `Current Policy, Min`, 
+                  ymax = `Current Policy, Max`),
+              fill = "#F5BD84", alpha = 0.6) + 
+  geom_line(data = policies_r, 
+            aes(x = year, 
+                y = mid_range),
+            linewidth = 1, 
+            color = "#F5BD84") +
+  geom_line(data = fair_data, 
+            aes(x = year,
+                y = emissions), 
+            colour = "#364F4D", 
+            linewidth = 0.5, 
+            linetype = 2) +
+  geom_vline(xintercept = 2024, 
+             colour = "#1D252A") +
+  geom_text(aes(x = 2024.1, y = 625), label = "Modelled Pathways (from 2024)", 
+            size = 10, fontface = "bold", 
+            vjust = 0,
+            hjust = 0)
+  
+m4
+
+```
+
+
+
+
+## Annotations  
+```{r fig.width=6.25, fig.height=5, dpi=300}
+
+m5 <- m4 + 
+  annotate("text",
+           x = 2010, 
+           y = 520,
+           label = "Historical",
+           hjust = 0, size = 10, 
+           colour = "#36454F") + 
+  annotate("text", 
+           x = 2010, 
+           y = 85, 
+           label = "Land use & forests", 
+           size = 10, 
+           hjust = 0,
+           color = "#36454F") +
+  geom_richtext(aes(x = 2024, y = 294.41,
+                 label = "Required for **global** 1.5\u00B0C target"),
+             size = 10,
+             color = "#364F4D",
+             hjust = 1,
+             vjust = 1,
+             fill = "grey90",
+             label.padding = unit(0.1, "lines")) +
+  geom_label(aes(x = 2011.3, y = 45,
+                 label = "Transition from source to sink"),
+             size = 10,
+             color = "#36454F",
+             fontface = "italic",
+             hjust = 0,
+             fill = "grey90",
+             label.padding = unit(0.1, "lines"),
+             linewidth = 0.25, 
+             lineheight = 0.3) + 
+ geom_richtext(data = dom_data |> 
+              filter(year == 2024),
+            aes(x = year, 
+                y = emissions,
+                 label = "Required for **domestic** 1.5\u00B0C target"),
+             size = 10,
+             color = "#3E6548", # If too light 364F4D
+             hjust = 1,
+             vjust = 1,
+             fill = "grey90",
+             label.padding = unit(0.1, "lines"))
+
+m5
+```
+
+
+## Right side annotations 
+```{r fig.width=6.25, fig.height=5, dpi=300}
+m6 <- m5 + 
+  geom_label(data = policies_r |>  
+               filter(year == 2030),
+               aes(x = 2030.1, y = mid_range+2,
+                 label = "  Current Policies &    \n  Action Pathway"),
+             size = 10,
+             color = "#EF963E",
+             fontface = "bold",
+             hjust = 0,
+             vjust = 0.1,
+             fill = "white",
+             label.padding = unit(0.1, "lines"),
+             linewidth = 0.25,
+            lineheight = 0.3) +
+  geom_label(data = country_1 |> 
+               filter(year == 2030,
+                      scenario == "NDC Unconditional, Max"),
+             aes(x = 2030.1, y = emissions - 2,
+                 label = "  2030 National Target\n  (NDC)"),
+             size = 10,
+             color = "#1D252A",
+             fontface = "bold",
+             hjust = 0,
+             vjust = 0.9,
+             fill = "white",
+             label.padding = unit(0.09, "lines"),
+             linewidth = 0.25,
+            lineheight = 0.3) 
+m6
+
+# Add points 
+m7 <- m6 + 
+  geom_point(data = policies_r |> 
+               filter(year == 2030),
+             aes(x = year, 
+                 y = mid_range),
+             color = "#1D252A",
+             fill = "#EF963E",
+             shape = 21,
+             stroke = 0.2,
+             size = 3.25) +
+  geom_point(data = country_1 |> 
+               filter(year == 2030,
+                      scenario == "NDC Unconditional, Max"),
+             aes(x = year, y = emissions), 
+             size = 3.25, 
+             color = "#1D252A", 
+             fill = "#1D252A",
+             shape = 21,
+             stroke = 0.2)  + 
+  geom_point(data = dom_data |> 
+               filter(year == 2030),
+            aes(x = year, 
+                y = emissions),
+            size = 3.25,
+            color = "#1D252A",
+            fill = "#81B18E",
+            shape = 23,
+            stroke = 0.2) +
+  geom_point(data = fair_data |> 
+               filter(year == 2030),
+             aes(x = year, y = emissions), 
+             size = 3.25, 
+             color = "#1D252A", 
+             fill = "#364F4D",
+             shape = 22,
+             stroke = 0.2) 
+```
+
+
+
+## Bar plot (left graph) 
+Domestic 
+```{r fig.width=1.75, fig.height=3, dpi=300}
+bp1 <- ggplot() +
+  scale_x_continuous(limits = c(2029.99, 2030.99),
+                     breaks = seq(2030,2031, by = 1)) +
+  scale_y_continuous(limits = c(-100, 600),
+                     breaks = seq(-100, 600, by = 100)) +
+  labs(subtitle = "Domestic Ratings") +
+  theme(
+    plot.subtitle = element_text(size = 28,
+                     colour = "#1D252A"),
+    panel.background = element_rect(fill = "grey90",
+                                    color = NA),
+    plot.background = element_rect(fill = "grey90",
+                                   color = NA),
+    panel.grid.major.x = element_line(
+      colour = "grey90"),
+    panel.grid.minor.y = element_line(colour = 
+                                        "grey90"),
+    panel.grid.major.y = element_line(colour = "grey",
+                                      linewidth = 0.3),
+    axis.text.y = element_blank(),
+    axis.text.x = element_text(size = 24, 
+                              face = "bold",
+                              margin = margin(0.1,0,0,0, "inches"),
+                              colour = "#36454F"),
+    axis.title = element_blank(),
+    axis.ticks = element_blank(), 
+    plot.margin = margin(0,1.3,0,0.25, unit = "inches")) +
+  coord_cartesian(expand = FALSE,
+                  clip = "off",
+                  xlim = c(2030,2030.04))
+
+bp1
+bp2 <- bp1 + 
+  geom_rect(data = bar_ratings,
+            aes(xmin = 2030, 
+                xmax = 2030.03,
+                ymin = ymin, ymax = emissions, 
+                fill = scenario),
+            colour = NA,
+            alpha = 0.6) +
+  scale_fill_manual(
+    values = c("1.5C compatible" = "#81B18E",
+               "Almost sufficient" = "#F5E091", #OR darker F1C43B "#FAF5BA"
+               "Insufficient" = "#F5BD84",
+               "Highly insufficient" = "#EB8562",
+               "Critically insufficient" = "#E15656")) +
+  theme(legend.position = "none")
+
+
+# add points and rating labels 
+bp3 <- bp2 +
+  geom_point(data = policies_r |> 
+               filter(year == 2030),
+             aes(x = year, 
+                 y = mid_range),
+             color = "#1D252A",
+             fill = "#EF963E",
+             shape = 21,
+             stroke = 0.2,
+             size = 3.25) +
+  geom_point(data = country_1 |> 
+               filter(year == 2030,
+                      scenario == "NDC Unconditional, Max"),
+             aes(x = year, y = emissions), 
+             size = 3.25, 
+             color = "#1D252A", 
+             fill = "#1D252A",
+             shape = 21,
+             stroke = 0.2)  + 
+  geom_point(data = dom_data |> 
+               filter(year == 2030),
+            aes(x = year, 
+                y = emissions),
+            size = 3.25,
+            color = "#1D252A",
+            fill = "#81B18E",
+            shape = 23,
+            stroke = 0.2)
+bp3
+
+
+# Add labels for colour desc 
+
+bp4 <- bp3 + 
+    geom_label(aes(x = 2030.03, y = 310,
+                 label = "1.5\u00B0C compatible (< 1.5\u00B0C) "),
+             size = 8,
+             color = "#3E6548",
+             hjust = 0,
+             vjust = 0.5,
+             fill = "grey90",
+             label.padding = unit(0.08, "lines"),
+             linewidth = 0.25, 
+             lineheight = 0.35) +
+  geom_label(aes(x = 2030.03, y = 364.61,
+                 label = "Almost sufficient (< 2\u00B0C)     "),
+             size = 8,
+             color = "#756A4F",
+             hjust = 0,
+             vjust = 0.5,
+             fill = "grey90",
+             label.padding = unit(0.08, "lines"),
+             linewidth = 0.25, 
+             lineheight = 0.3)+
+  geom_label(aes(x = 2030.03, y = 454.350,
+                 label = "Insufficient (< 3\u00B0C)   "),
+             size = 10,
+             color = "#EF963E",
+             fontface = "bold",
+             hjust = 0,
+             vjust = 0.5,
+             fill = "white",
+             label.padding = unit(0.1, "lines"),
+             linewidth = 0.25, 
+             lineheight = 0.3)+
+  geom_label(aes(x = 2030.03, y = 535.51	,
+                 label = "Highly insufficient (< 4\u00B0C)    "),
+             size = 8,
+             color = "#E76E46",
+             hjust = 0,
+             vjust = 0.6,
+             fill = "grey90",
+             label.padding = unit(0.08, "lines"),
+             linewidth = 0.25, 
+             lineheight = 0.3)+
+  geom_label(aes(x = 2030.03, y = 576.23,
+                 label = "Critically insufficient (> 4\u00B0C)"),
+             size = 8,
+             color = "#B21F1F",
+             hjust = 0,
+             vjust = 0.5,
+             fill = "grey90",
+             label.padding = unit(0.08, "lines"),
+             linewidth = 0.25, 
+             lineheight = 0.3)+ 
+  geom_hline(yintercept = 0, 
+             linetype = "solid", 
+             color = "#1D252A", 
+             linewidth = 0.8)
+
+bp4
+```
+
+#### Banner 
+
+```{r fig.width=8, fig.height=0.5, dpi=300}
+banner_r <- ggplot() +
+  theme_void() +
+  theme(plot.background = element_rect(fill = "#F5BD84", 
+                                       color = NA)) +
+  annotate("text", x = 0.6, y = 0.7, 
+           label = "AUSTRALIA OVERALL RATING",
+           color = "#36454F", size = 11) +
+  annotate("text", x = 0.6, y = 0.25,
+           label = "INSUFFICIENT", 
+           color = "#36454F", size = 14, fontface = "bold") +
+  coord_cartesian(xlim = c(0,1), ylim = c(0,1))
+
+banner_r
+```
+
+## Final Improvement Graph - Add together 
+
+```{r fig.width=8, fig.height=5, dpi=300}
+
+redo <- banner_r / (m7 + bp4 +
+    plot_layout(widths = c(6.25,0.2))) + 
+  plot_layout(heights = c(0.5, 4.5))
+redo
+ggsave("redo.png", plot = redo, width = 8, height = 5, units = "in", dpi = 300)
+
+```
+
+
+
+
+
