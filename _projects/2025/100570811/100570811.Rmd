@@ -1,8 +1,7 @@
 ---
 title: "The long and the short of the problem"
 description: |
-  Replication and improvement of the Economist's 
-  graph on civil wars and internal armed conflicts from 1946 to 2012.
+  The deadliness and duration of civil wars and internal armed conflicts from 1946 to 2012, replication and improvement of the Economist's original graph.
 categories: "2025"
 author: Tone Varberg Sabri
 date: "`r Sys.Date()`"
@@ -94,6 +93,10 @@ deathtotal <- uppsaladeaths |>
 ```
 
 ### Creating new data set
+
+For the data on the civil wars the original plot used data from the UCDP/PRIO Armed Conflict data set. I started of with cleaning the data set and joining it with the data sets on battle deaths. I quickly realized that their methods for defining a civil war in terms of duration and deaths were difficult to grasp, and even though i tried several times to replicate the same data as in the graph, I failed.
+
+In the end, I decided on reading directly of the original graph and manually making a data set with the location, region, start year, end year, and number of deaths for the 100 deadliest conflicts from 1946-2012.
 
 ```{r creating_data}
 
@@ -264,6 +267,8 @@ civil_wars_data <- data.frame(
 
 ### Preparing the data
 
+After getting all the data i needed I prepared it to be plotted. First of all i created a new variable containing the label for each civil war with the location and number of deaths per thousand.
+
 ```{r plot_prep}
 
 plot_data <- civil_wars_data |>
@@ -273,6 +278,8 @@ plot_data <- civil_wars_data |>
   )
 
 ```
+
+For the colors of the regions I used a color identificator on the original graph to get the right code. I then made a data frame with the colors to be used later in the plot and the legend.
 
 ```{r region_colors}
 
@@ -285,6 +292,8 @@ region_colors <- c(
   "Americas" = "#33a5c1"
 )
 ```
+
+Then it was time for the grey background line indicating every 5th year. I started of with blablabla
 
 ```{r grey_lines}
 
@@ -640,121 +649,18 @@ I am still working on the graph improvement. My most important thoughts on it is
 
 I will still need to work with the grey lines here, get all the data points right and then find a good way to visualize the deaths per conflict as well. Have to fix it so all facets work with the same scale for y-axis so the data is not misleading. I have been trying to get deaths as size but looks like the geom_smooth is causing some trouble there. Maybe the solution is to not work with region colors but with a color scale for deaths and then label the deadliest ones.
 
-```{r improved_graph, fig.width=8, fig.height= 10}
+### Adjusting the data
 
-duration_data <- plot_data |> 
-  mutate(duration = end_year-start_year)
-
-improved_civilwar_plot <- ggplot(
-  duration_data,
-  aes(x = start_year, y = duration, size = deaths_thousands, color = deaths_thousands)
-) +
-  
- 
-  add_decade_shading() +
-  
-  geom_point() +
-geom_smooth(
-    aes(
-      x = start_year,
-      y = duration,
-      group = region
-    ),
-    method = "loess",
-    se = FALSE,
-    linewidth = 0.6,
-    linetype = "dashed",
-    inherit.aes = FALSE,
-    data = duration_data
-  )  +
-  
-
-  facet_wrap(
-    ~ region,
-    ncol = 2,
-    scales = "free_y"
-  ) +
-  
-
-  scale_x_continuous(
-    breaks = seq(1950, 2010, 10),
-    labels = c("50", "60", "70", "80", "90", "2000", "10"),
-    position = "top"
-  ) +
-  
-  coord_cartesian(
-    xlim = c(1944, 2014),
-    expand = FALSE
-  ) +
-  
-  scale_color_gradient(
-    low = "#ffcccc",
-    high = "#8B0000",
-    name = "Deaths\n(thousands)",
-    trans = "log10",
-    labels = scales::comma
-  ) +
-  scale_size_continuous(
-  range = c(2, 10),
-  breaks = c(10, 100, 1000),
-  labels = c("10k", "100k", "1M"),
-  name = "Deaths"
-) +
-  
-  labs(
-    y = "Conflict duration (years)",
-    x = NULL
-  ) +
-  
-  theme_minimal() +
-  theme(
-  
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    
-    strip.background = element_rect(fill = "grey90", color = NA),
-    strip.text = element_text(
-      face = "bold",
-      size = 9,
-      color = "#565b5d"
-    ),
-    
-    axis.text.x.top = element_text(face = "bold", size = 9),
-    axis.ticks.x.top = element_line(color = "black", linewidth = 0.5),
-    axis.line.x.top = element_line(color = "black", linewidth = 0.5),
-    
-    axis.text.y = element_text(size = 8),
-    axis.title.y = element_text(size = 9, color = "gray40"),
-    
-    legend.position = "none",
-    plot.margin = margin(t = 5, r = 5, b = 5, l = 8)
-  )
-
-improved_finishedplot <- (wrap_elements(title_plot) | wrap_elements(custom_legend)) /
-  deathplot /
-  improved_civilwar_plot /
-  wrap_elements(footer) +
-  plot_layout(
-    heights = c(0.4, 0.6, 5, 0.03),
-    widths = c(1.5, 1)
-  )
-
-print(improved_finishedplot)
-
-```
-
-Here is another suggestion for improvement. I think this can look good when the deadliest conflicts get labels as well as the longest ones, can also label the peaks for the total deaths.
-
-```{r second_improvement, fig.width=11, fig.height= 10}
+```{r data_improvement}
 
  duration_data <- plot_data |> 
   mutate(
-    duration = end_year - start_year,  # Calculate duration
+    duration = end_year - start_year,  
   ) |> 
   group_by(region) |> 
   mutate(
-    is_deadliest = deaths_thousands == max(deaths_thousands),  # Deadliest in region
-    is_longest = duration == max(duration),  # Longest in region
+    is_deadliest = deaths_thousands == max(deaths_thousands),
+    is_longest = duration == max(duration),  
     # Create label
     conflict_label = case_when(
       is_deadliest & is_longest ~ label,
@@ -764,6 +670,13 @@ Here is another suggestion for improvement. I think this can look good when the 
     )
   ) |> 
   ungroup()
+```
+
+Here is another suggestion for improvement. I think this can look good when the deadliest conflicts get labels as well as the longest ones, can also label the peaks for the total deaths.
+
+```{r second_improvement, fig.width=11, fig.height= 10}
+
+
 
 Second_improvement <- ggplot() +
   geom_vline(
@@ -795,7 +708,6 @@ geom_line(data = deathtotal,
     aes(x = start_year, y = deaths_thousands, label = conflict_label),
     size = 2.5,
     color = "black",
-    fontface = "bold",
     box.padding = 0.5,
     point.padding = 0.3,
     segment.color = "gray40",
@@ -806,7 +718,7 @@ geom_line(data = deathtotal,
   geom_text(
     data = data.frame(
       x = c(1948, 1955, 1965, 1975, 1985, 1995, 2005, 2011),
-      y = 398,  # At the top
+      y = 450,  
       label = c("40s", "50s", "60s", "70s", "80s", "90s", "00s", "10s")
     ),
     aes(x = x, y = y, label = label),
@@ -820,30 +732,34 @@ geom_line(data = deathtotal,
   high = "#99000d",
   name = "Deaths\n(thousands)",
   trans = "log10",
+  limits = c(1, 600),  
+  breaks = c(1, 10, 50, 100, 600),
   labels = scales::comma
 ) +
 
-  scale_size_continuous(range = c(2, 15), guide = "none") +
+  scale_size_continuous(range = c(2, 15), name = "Duration\n(years)") +
   scale_y_log10(
     labels = scales::comma,
-    breaks = c(1, 10, 100, 400, 600)
+    breaks = c(1, 10, 100, 600)
   ) +
   scale_x_continuous(
     breaks = seq(1946,2012,10)
     
   ) +
-  coord_cartesian(xlim = c(1944, 2014), ylim = c(-4, 650), expand = FALSE) +
+  coord_cartesian(xlim = c(1944, 2014), ylim = c(-4, 800), expand = FALSE) +
   
   facet_wrap(~region, ncol = 2) +
   
   labs(
     title = "Civil War Duration, Deadliness, and Total Annual Deaths",
     subtitle = 
-    "Gray area shows total deaths per year; colored points show individual conflict.
+    "Gray area shows total deaths per year; colored points show individual conflict;
+     
      The bigger and the darker the point is the longer and deadlier the conflict is.
+    
      The longest and the deadliest conflict in each region is labeled",
-    x = "Year",
-    y = "Deaths"
+    x = NULL,
+    y = "Deaths (log)"
   ) +
   theme_minimal() +
   theme(
@@ -862,31 +778,33 @@ geom_line(data = deathtotal,
       face = "bold", 
       size = 11,
       hjust = 0,          
-      margin = margin(b = 5)
+      margin = margin(b = 10)
     ),
     
-    plot.title = element_text(size = 16, face = "bold", color = "gray20", margin = margin(b = 5)),
-    plot.subtitle = element_text(size = 10, color = "gray40", margin = margin(b = 10)),
+    plot.title = element_text(size = 16, face = "bold", color = "gray20", margin = margin(b = 10)),
+    plot.subtitle = element_text(size = 10, color = "gray40", margin = margin(b = 0)),
     
     axis.title = element_text(color = "gray40", size = 11, face = "bold"),
     axis.text = element_text(color = "gray40", size = 9),
     
     legend.position = "top",
     legend.justification = "right",
-    legend.direction = "horizontal",
+    legend.direction = "horizontal",  
+    legend.box = "vertical",         
     legend.title = element_text(size = 9, face = "bold"),
-    legend.text = element_text(size = 8),
+    legend.text = element_text(size = 6),
     legend.background = element_blank(),
-    legend.box.spacing = unit(0, "pt"),
+    legend.spacing.y = unit(0.2, "cm"),
     
-    plot.margin = margin(t = 40, r = 15, b = 10, l = 10)
+    plot.margin = margin(t = 30, r = 15, b = 5, l = 10)
   )
 
 second_improved <- Second_improvement / footer +
   plot_layout(
-    heights = c(2, 0.03)
+    heights = c(2, 0.1)
   )
 
+print(second_improved)
 
 ```
 
