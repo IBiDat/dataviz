@@ -10,23 +10,21 @@ output:
     toc: true
 ---
 
-# GRAPH REPLICATION
+This is the initial version of my graph replication project about motive protest distribution across spanish provinces in 2022.
 
-This is the initial version of the graph replication about motive protest distribution across spanish provinces in 2022.
+![Original chart. Source: Atlas Nacional de España (ANE)](Gráfico original.jpg){.external width="100%"}
 
 ## Data Preparing
 
-```{r Data Cleaning and Transformation}
-library(readxl)
-library(dplyr)
+```{r Data Import and Transformation}
 library(tidyverse)
+library(readxl)
 library(sf)
+library(giscoR)
 library(mapSpain)
 library(rnaturalearth)
 library(rnaturalearthdata)
-library(ggplot2)
 library(grid)
-#library(extrafont)
 library(showtext)
 
 # Font adding
@@ -34,13 +32,12 @@ font_add("Lexend", regular = "/Users/cguirao/Library/Fonts/LexendDeca-VariableFo
 showtext_auto() 
 
 # Data import
-protests <- read_excel("~/Desktop/datavizu/_projects/2025/100453622/ReplicationDataBase.xlsx", 
+protests <- read_excel("~/Desktop/Data Visualization/datavizu/_projects/2025/100453622/ReplicationDataBase.xlsx", 
                    sheet = "TABLA 1-3-7",
                    skip = 1) # skipping the title
 
 prov <- esp_get_prov()
 
-library(giscoR)
 neighbors <- gisco_get_countries(
   country = c("Portugal", "France", "Morocco", "Algeria", "Andorra"))
 
@@ -73,7 +70,8 @@ canarias_data <- protest_prov %>%
 peninsula_data <- protest_prov %>%
   filter(!ine.prov.name %in% c("Palmas, Las", "Santa Cruz de Tenerife"))
 
-# Obtaining coordenates of each province
+# Obtaining coordenates of each province and moving them as in the graph 
+# (most of them are not exacty in the center of the area)
 peninsula_data <- peninsula_data |>
   mutate(
     centroide = st_centroid(geometry),
@@ -212,13 +210,13 @@ pies_peninsula <- peninsula_data |>
     names_to  = "motivo",             
     values_to = "valor") |> 
   mutate(
-    # ← AQUÍ añades el recode para cambiar los nombres
+    # recoding names to be shown in two lines
     motivo = recode(
       motivo,
       "Contra medidas políticas y legislativas" = "Contra medidas políticas\ny legislativas",
       "Contra la violencia de género" = "Contra la violencia\nde género"
     ),
-    # Y LUEGO lo conviertes a factor con los nombres ya modificados
+    # converting into factor establishing the order 
     motivo = factor(motivo, levels = orden_deseado)
   ) |>
   arrange(ine.prov.name, motivo) |>
@@ -266,50 +264,12 @@ canarias_pies <- canarias_data |>
   ungroup()
 
 max_total <- max(canarias_pies$Total, na.rm = TRUE)
-factor_escala <- 0.4  # Ajusta esto para círculos más grandes/pequeños
+factor_escala <- 0.4
 
 canarias_pies <- canarias_pies %>%
   mutate(
     radius = sqrt(Total / max_total) * factor_escala
   )
-```
-
-## Pie-charts size legend
-
-```{r Pie-charts size Legend, fig.width=12, fig.height=7, fig.showtext=TRUE}
-# STILL STRUGGLING WITH THIS
-
-valores_originales <- c(4251, 3498, 2464, 1579, 949, 252, 58)
-etiquetas_originales <- c("4.251", "3.500", "2.500", "1.500", "1.000", "250", "58")
-
-
-valores_reales <- rev(valores_originales)
-etiquetas_display <- rev(etiquetas_originales)
-
-max_total_peninsula <- 4251
-
-factor_escala_leyenda <- 0.00031  # Factor de escala para coordenadas geográficas
-
-radios <- sqrt(valores_reales / pi) * factor_escala_leyenda
-
-y_centers <- c(41.9, 42.05, 42.2, 42.35, 42.5, 42.65, 42.8) + 0.25
-
-y_tops <- y_centers + radios
-
-# Tibble with all the data
-legend_data <- tibble(
-  manifestaciones = valores_reales,
-  etiqueta = etiquetas_display,
-  radius = radios,
-  x = -11,              # ← TODOS la misma X
-  y = y_centers           # ← Y va subiendo
-) |>
-  mutate(
-    # Punto en el borde IZQUIERDO del semicírculo (para las líneas)
-    x_start = x - radius,  # Borde izquierdo (en lugar de x + radius)
-    y_start = y
-  )
-
 ```
 
 ## Canary island Map
@@ -364,9 +324,43 @@ grob_canarias <- ggplotGrob(mapa_canarias)
 mapa_canarias
 ```
 
+## Pie-charts size legend
+
+```{r Pie-charts size Legend, fig.width=12, fig.height=7, fig.showtext=TRUE}
+
+valores_reales <- c(58, 252, 949, 1579, 2464, 3498, 4241)
+etiquetas_display <- c("58", "250", "1.000", "1.500", "2.500", "3.500", "4.251")
+
+max_total_peninsula <- 4251
+
+factor_escala_leyenda <- 0.020
+
+radios <- sqrt(valores_reales / pi) * factor_escala_leyenda
+
+y_base_comun <- 41.9 
+
+y_centers <- y_base_comun + radios 
+
+y_tops <- y_centers + radios
+
+# Tibble with all the data
+legend_data <- tibble(
+  manifestaciones = valores_reales,
+  etiqueta = etiquetas_display,
+  radius = radios,
+  x = -11,              # same X for every circle
+  y = y_centers           # Y go increasingly
+) |>
+  mutate(
+    x_start = x - radius,  # Left edge (instead of x + radius)
+    y_start = y
+  )
+
+```
+
 ## Plotting final map
 
-```{r Plotting final map, fig.width=12, fig.height=7, fig.showtext=TRUE}
+```{r Plotting final map, fig.width=12, fig.height=7, fig.showtext=TRUE, preview=TRUE}
     
 final_map <- ggplot() +
   
@@ -417,12 +411,9 @@ final_map <- final_map + guides(
           color = "black",  
           stroke = 0.4       
         ),
-        byrow = TRUE,        # ← Organiza en una sola columna
+        byrow = TRUE,        
         spacing.y = unit(0.8, "cm")
       ))
-
-# Coordenates
-final_map <- final_map + coord_sf(xlim = c(-11.7, 3.8), ylim = c(35.2, 44))
   
 # Pie-charts size legend
 final_map <- final_map + 
@@ -433,8 +424,9 @@ final_map <- final_map +
       y0 = y,
       r0 = 0,
       r = radius,
-      start = pi/2,      # Empieza arriba (90°)
-      end = 3*pi/2       # Termina abajo (270°) → semicírculo IZQUIERDO
+      start = -pi,      
+      end = 0,      
+      inherit.aes = FALSE  # No crossing with the aesthetics of coord_sf
     ),
     color = "black",
     fill = NA,
@@ -444,24 +436,24 @@ final_map <- final_map +
   geom_segment(
     data = legend_data,
     aes(
-      x = x,                    # Empieza en el borde izquierdo del semicírculo
-      xend = x + max(radius) + 0.3,   # Todas terminan a la IZQUIERDA
-      y = y_tops,                      # En la parte superior
-      yend = y_tops                    # Línea horizontal
+      x = x,                   
+      xend = x + max(radius) - 0.35,   
+      y = y_tops,                      
+      yend = y_tops           
     ),
     linetype = "dotted",
-    linewidth = 0.3,
+    linewidth = 0.2,
     color = "black"
   ) +
   
   geom_text(
     data = legend_data,
     aes(
-      x = x + max(radius) + 0.4,      
-      y = y_tops,                      # Alineadas con la parte superior
+      x = x + max(radius) - 0.15,     
+      y = y_tops,                      # Top part
       label = etiqueta
     ),
-    hjust = 1,                        # Alineado a la derecha del texto
+    hjust = 1,                        # Right side
     size = 2.5, # 4
     family = "Lexend"
   ) +
@@ -469,14 +461,17 @@ final_map <- final_map +
   annotate(
     "text",
     x = -11,  
-    y = 43.8,
+    y = 43.65,
     label = "MANIFESTACIONES\n2022",
-    size = 3.7, # 6
+    size = 3.5, # 6
     hjust = 0.5,
     vjust = 0,
     lineheight = 0.8,
     fontface = "plain",
   )
+
+# Coordenates
+final_map <- final_map + coord_sf(xlim = c(-11.7, 3.8), ylim = c(35.2, 44))
       
 # Adding texts      
 final_map <- final_map + geom_text(
@@ -488,8 +483,8 @@ final_map <- final_map + geom_text(
         aes(x = x, y = y, label = label),
         size = 5, # 8
         fontface = "bold",
-        hjust = 1,           # alineado a la derecha
-        vjust = 1,           # alineado arriba
+        hjust = 1,           # Right side
+        vjust = 1,           # Top side
         color = "black"
       ) +
       
@@ -534,7 +529,7 @@ final_map <- final_map + geom_text(
       vjust = 0,
       color = "black",
       lineheight = 0.5,
-      fontface = "bold" # ← Esto junta las dos últimas líneas
+      fontface = "bold" 
     )
       
 # Themes
@@ -582,21 +577,16 @@ final_map
 
 -----------------------------------------------------------------------------------------------------------
 
-# GRAPH IMPROVEMENT
-
 This is my initial improved version of the original graph about motive protest distribution in Spain (across autonomous communities in 2024)
 
 ## Data Cleaning and Variable Transformation
 
 ```{r Data Cleaning and Variable Transformation}
 library(readxl)
-library(dplyr)
 library(tidyverse)
-library(ggplot2)
 library(grid)
 library(showtext)
 library(tidytext)
-library(showtext)
 
 # FONTS IMPORT
 font_add("Gravitas", regular = "/Users/cguirao/Library/Fonts/GravitasOne-Regular.ttf")
@@ -604,11 +594,11 @@ font_add("Sans Code", regular = "	/Users/cguirao/Library/Fonts/GoogleSansCode-Re
          # bold = "/Users/cguirao/Library/Fonts/GoogleSansCode-ExtraBold.ttf")
 font_add("Sans Code Extrabold", regular = "/Users/cguirao/Library/Fonts/GoogleSansCode-ExtraBold.ttf")
 font_add("Mulish", regular = "/Users/cguirao/Library/Fonts/Mulish-VariableFont_wght.ttf")
-# font_add("Mulish Semibold", regular = "/Users/cguirao/Library/Fonts/Mulish-VariableFont_wght.ttf")
+font_add("Mulish Semibold", regular = "/Users/cguirao/Library/Fonts/Mulish-VariableFont_wght.ttf")
 showtext_auto()
 
 #DATA IMPORT
-improvdata <- read_excel("~/Desktop/datavizu/_projects/2025/100453622/ImprovementDataBase.xlsx", 
+improvdata <- read_excel("~/Desktop/Data Visualization/datavizu/_projects/2025/100453622/ImprovementDataBase.xlsx", 
                    sheet = "TABLA 1-3-7",
                    skip = 1) # skipping the title
 
@@ -724,13 +714,8 @@ datos_graphs <- datos_graphs |> left_join(national_average, by = "Motivo")
 datos_graphs <- datos_graphs |>
   mutate(Divergencia = Porcentaje - Media_Nacional_pct,
          CCAA_ordenada = reorder_within(`Autonomous Communities`, Divergencia, Motivo))
-                          # ¿Qué hace reorder_within()?\n")
-                          # 1. Toma cada CCAA (ej: 'Aragón')\n")
-                          # 2. Le añade el motivo: 'Aragón___Education'\n")
-                          # 3. Ordena por Divergencia DENTRO de cada motivo\n")
-                          # 4. Resultado: orden correcto en cada faceta\n\n")
 
-# Changing names (ABREVIATURAS?)
+# Changing names
 datos_graphs <- datos_graphs |>
   mutate(
     `Autonomous Communities` = recode(
@@ -764,16 +749,26 @@ colores_CCAA <- c(
     "Murcia" = "#112250")
 
 # Creating text labels with national average value for each motive
-datos_graphs <- datos_graphs %>%
+datos_graphs <- datos_graphs |>
   mutate(
     Motivo_label = paste0(Motivo, "\n(avg: ", 
       round(Media_Nacional_pct, 1), 
-      "%)"))
+      "%)")) # |> arrange(desc(Motivo_label))
+
+# Ordering graphs from highest to lowest national average
+datos_graphs <- datos_graphs |>
+  mutate(
+    Motivo_label = factor(
+      Motivo_label,
+      levels = unique(Motivo_label[order(-Media_Nacional_pct)])
+    )
+  )
+
 ```
 
 ## Plotting the graph
 
-```{r Plotting the final version, fig.width=16, fig.height=10, fig.showtext=TRUE}
+```{r Plotting the final version, fig.width=16, fig.height=10, dpi=150, fig.showtext=TRUE, preview=TRUE}
 g <- ggplot(datos_graphs, aes(x = Divergencia, y = CCAA_ordenada))
 
 # Creating color-filled bars with CCAA categories
@@ -792,7 +787,11 @@ g <- g + scale_fill_manual(values = colores_CCAA) +
   scale_y_reordered()
 
 # Labs 
-g <- g + labs(title = "Divergences in Protest Activity and Motives Across Spanish Autonomous Communities, 2024", x = NULL, y = NULL)
+g <- g + labs(
+  title = "Divergences in Protest Activity and Motives Across Spanish Autonomous Communities, 2024", 
+  x = NULL, 
+  y = NULL, 
+  caption = "*Other motives includes housing, agriculture, transport, energy\nAnalysis covers 15 autonomous communities -excludes Catalonia, Basque Country, Ceuta, and Melilla-")
 
 # Text
 g <- g + geom_text(
@@ -801,10 +800,11 @@ g <- g + geom_text(
     x = Divergencia,  # Posición X = final de la barra
     hjust = if_else(Divergencia >= 0, -0.05, 1.05)  # Ajustar según lado
   ),
-  size = 2.6, # 1.5  html         # Tamaño nombres CCAA
-  family = "Mulish",
-  fontface = "plain"   
-)
+  size = 2.6,
+  family = "Mulish Semibold",
+  # color = "#000000",
+  fontface = "plain"
+) 
  
 # Themes 
 g <- g + theme_void() +
@@ -812,22 +812,29 @@ g <- g + theme_void() +
     panel.spacing = unit(0.25, "cm"),
     plot.background = element_rect(fill = "#EFE7DA"),
     panel.background = element_rect(fill = "#EFE7DA" ),
-    plot.margin = margin(10, 10, 30, 10),
+    plot.margin = margin(10, 10, 15, 10),
     aspect.ratio = 1.5,
     plot.title = element_text(
-      size = 15, # 7.5 para html, # Tamaño título principal
+      size = 15, 
       fontface = "plain",
       family = "Gravitas",
-      hjust = 0.5,         # Centrado (0 = izq, 0.5 = centro, 1 = der)
-      margin = margin(b = 17)  # Espacio abajo
+      hjust = 0.5,        
+      margin = margin(b = 20)  
     ),
     strip.text = element_text(
-      size = 9.3, # 5 para html --> 5.7 
+      size = 9.3,  
       fontface = "regular",
       family = "Sans Code Extrabold",
-      hjust = 0,
+      hjust = 0.5,
+      margin = margin(b = 10),
       color = "#3D211A",
       ),
+    plot.caption = element_text(
+      hjust = 0,              
+      size = 10,              
+      family = "Mulish",
+      margin = margin(t = 18) 
+    ),
     legend.position = "none"
   )
 
