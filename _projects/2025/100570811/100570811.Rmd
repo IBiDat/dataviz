@@ -8,7 +8,7 @@ date: "`r Sys.Date()`"
 output:
   distill::distill_article:
     self_contained: false
-    toc: TRUE
+    toc: true
 ---
 
 ```{r setup, include=FALSE}
@@ -45,7 +45,7 @@ The cowplot package was used to help with the composition of the different parts
 
 Finally, the patchwork package was used to complete the final graph by combining the five separate part, the title, legend, death plot, civil war plot, and footer together.
 
-```{r loading_libraries, warning = FALSE, message = FALSE}
+```{r loading-libraries, warning = FALSE, message = FALSE}
 
 
 library(tidyverse)
@@ -68,7 +68,7 @@ The resulting yearly death totals from both sources were saved as processed CSV 
 
 It is important to note that the resulting death totals differ from those shown in the original Economist graph, in some years by up to approximately 150,000 deaths. These discrepancies likely stem from differences in aggregation methods, such as how overlapping or long-running conflicts are combined, how deaths are allocated across years, and how uncertainty in casualty estimates is handled. The original authors may also have relied on different versions of the datasets or applied additional editorial adjustments that are not publicly documented. This highlights the challenges of reproducing complex visualizations when methodological decisions are not fully transparent.
 
-```{r loading_data}
+```{r loading-data}
 
 uppsaladeaths <- read.csv("clean_data/uppsaladeaths.csv")
 priodeaths <- read.csv("clean_data/priodeaths.csv")
@@ -80,11 +80,11 @@ deathtotal <- uppsaladeaths |>
 
 ### Creating new data set
 
-For the data on the civil wars the original plot used data from the UCDP/PRIO Armed Conflict data set. I started of with cleaning the data set and joining it with the data sets on battle deaths. I quickly realized that their methods for defining a civil war in terms of duration and deaths were difficult to grasp, and even though i tried several times to replicate the same data as in the graph, I failed.
+For the data on the civil wars, the original plot used data from the UCDP/PRIO Armed Conflict data set. I started of with cleaning the data set and joining it with the data sets on battle deaths. I quickly realized that their methods for defining a civil war in terms of duration and deaths were difficult to grasp, and even though i tried several times to replicate the same data as in the graph, I failed.
 
 In the end, I decided on reading directly of the original graph and manually making a data set with the location, region, start year, end year, and number of deaths for the 100 deadliest conflicts from 1946-2012.
 
-```{r creating_data}
+```{r creating-data}
 
 civil_wars_data <- data.frame(
   location = c(
@@ -253,9 +253,9 @@ civil_wars_data <- data.frame(
 
 ### Preparing the data
 
-After getting all the data i needed I prepared it to be plotted. First of all i created a new variable containing the label for each civil war with the location and number of deaths per thousand.
+After getting all the necessary data, I prepared it to be plotted. I began with creating a new variable containing the label for each civil war with the location and number of deaths per thousand.
 
-```{r plot_prep}
+```{r plot-prep}
 
 plot_data <- civil_wars_data |>
   mutate(
@@ -265,9 +265,9 @@ plot_data <- civil_wars_data |>
 
 ```
 
-For the colors of the regions I used a color identificator on the original graph to get the right code. I then made a data frame with the colors to be used later in the plot and the legend.
+For the colors of the regions I used a color identificator to find the correct hex color code for each region which matched the original graph. I then made a vector with these colors to be used later for the plot and the legend.
 
-```{r region_colors}
+```{r region-colors}
 
 region_colors <- c(
   "East Asia, South-East Asia & Oceania" = "#cd2f39",
@@ -279,9 +279,9 @@ region_colors <- c(
 )
 ```
 
-Then it was time for the grey background line indicating every 5th year. I started of with blablabla
+Next, I added a light grey background shading to visually separate every 5th year. I defined the start with xmin and the end with xmax. These values were then stored in a function that would add these grey rectangles to the background of the plots with geom_rect.
 
-```{r grey_lines}
+```{r grey-lines}
 
 grey_xmin <- c(1950, 1960, 1970, 1980, 1990, 2000, 2010)
 grey_xmax <- c(1955, 1965, 1975, 1985, 1995, 2005, 2012)
@@ -305,9 +305,13 @@ add_decade_shading <- function() {
 
 ## Graph replication
 
+After retrieving and preparing the data it was time for the replication of the original graph, which consisted of two different plots patched together into one. I therefore had to recreate the plot on total deaths first, then the one on the civil wars before I combined them together and added a separate legend, footer, and title.
+
 ### Death plot
 
-```{r deathplot_cords&axes, fig.width=6, fig.height=2}
+I started off with the plot on the total number of battle deaths from civil wars each year from 1946-2012. The year is mapped to the x-axis and the total number of deaths to the y-axis. The y-axis is scaled with breaks at 100-death intervals to improve readability, while the x-axis includes all years in the range but omits labels to avoid clutter. Finally, the coordinate limits are set to slightly extend beyond the data range, with axis expansion disabled for a cleaner appearance.
+
+```{r deathplot-cords&axes, fig.width=6, fig.height=2}
 
 deathplot <- ggplot(deathtotal) +
   aes(x = year, y = totaldeaths) +
@@ -319,12 +323,14 @@ deathplot <- ggplot(deathtotal) +
     breaks = 1946:2012,
     labels = NULL,
   )  +
-  coord_cartesian(xlim=c(1944,2014), expand=FALSE)
+  coord_cartesian(xlim=c(1942,2014), expand=FALSE)
 
-print(deathplot)
+deathplot
 ```
 
-```{r deathplot_data, fig.width=6, fig.height=2}
+I then built upon the base plot by adding light grey background shading to indicate five-year intervals using the custom add_decade_shading() function. The total number of deaths per year is displayed using geom_col with a dark grey fill. Finally, I added a text annotation to label the y-axis units and clarify that the values are shown in thousands.
+
+```{r deathplot-data, fig.width=6, fig.height=2}
 
 deathplot <- deathplot +
   add_decade_shading() +
@@ -343,11 +349,13 @@ deathplot <- deathplot +
     family = "sans"  
   )
 
-print(deathplot)
+deathplot
 
 ```
 
-```{r deathplot_themes, fig.width=6, fig.height=2}
+Lastly, I applied a customized minimal theme to simplify the plot, removing unnecessary x-axis elements, refining grid lines, and adjusting spacing for a cleaner visual presentation.
+
+```{r deathplot-themes, fig.width=6, fig.height=2}
 
 deathplot <- deathplot +
    theme_minimal() +
@@ -377,20 +385,34 @@ theme(
   plot.margin = margin(t = 5, b = 5)
 )
 
-print(deathplot)
+deathplot
 
 ```
 
 ### Civil war plot
 
-```{r civilwars_cords&axes, fig.width=8, fig.height=8}
+I then created a civil war timeline plot in which each conflict is positioned by its start year on the x-axis and ranked on the y-axis. The x-axis is displayed at the top of the plot and labeled selectively to highlight key years while avoiding overcrowding. The y-axis is reversed so that higher-ranked conflicts appear closer to the top, and axis labels are removed to maintain a clean layout. The coordinate limits are manually set to provide consistent spacing around the data and to allow annotations to extend beyond the plotting area. Finally, regions are distinguished using a manual color scale, ensuring consistent region colors across all figures.
+
+```{r civilwars-cords&axes, fig.width=8, fig.height=10}
 
 civilwar_plot <- ggplot(plot_data, 
                         aes(x = start_year, y = rank, colour = region)) +
   scale_x_continuous(
     breaks = 1946:2012,
-    labels = c("1946","", "", "", "50", "", "", "", "", "55","","","","", "60", "","","","", "65","","","","", "70","","","","", "75","","","","", "80","","","","", "85",
-               "","","","","90","","","","", "95","","","","", "2000","","","","", "05","","","","", "10", "", "12"),
+    labels = c("1946","", "", "",
+               "50", "", "", "", "", 
+               "55","","","","", 
+               "60", "","","","",
+               "65","","","","", 
+               "70","","","","", 
+               "75","","","","",
+               "80","","","","",
+               "85", "","","","",
+               "90","","","","", 
+               "95","","","","", 
+               "2000","","","","", 
+               "05","","","","", 
+               "10", "", "12"),
     position = "top",  
 
   ) +
@@ -406,10 +428,12 @@ civilwar_plot <- ggplot(plot_data,
   ) +
   scale_color_manual(values = region_colors, name = NULL) 
 
-print(civilwar_plot)
+civilwar_plot
 ```
 
-```{r civilwar_annotation, fig.width=8, fig.height= 10}
+Further, I extended the civil war timeline by adding background shading to visually separate time periods, again using the add_decade_shading() function. An additional shaded rectangle was placed before 1946 to create space for explanatory annotations. Vertical text annotations were added along the left side of the plot to describe the ranking scale, clarify the deaths as thousands, and indicate the highest and lowest ranks. Subtle grey rectangles were also added at the top to connect it with the death plot. Finally, text labels were placed at the end year of each conflict to identify individual civil wars directly within the plot.
+
+```{r civilwar-annotation, fig.width=8, fig.height= 10}
 
  civilwar_plot <- civilwar_plot +
    add_decade_shading() +
@@ -467,10 +491,12 @@ print(civilwar_plot)
     show.legend = FALSE
   )
  
- print(civilwar_plot)
+civilwar_plot
 ```
 
-```{r civilwar_data, fig.width=8, fig.height= 8}
+It was then time to plot the data segments with start year and end year placed along the y-axis depending on their rank. Conflicts that had year coded as 2012 were still ongoing and was therefore visualised with an arrow at the end, because of this I had to plot that data i its own segment.
+
+```{r civilwar-data, fig.width=8, fig.height= 10}
 
 
  civilwar_plot <- civilwar_plot +
@@ -486,10 +512,13 @@ print(civilwar_plot)
                              ends = "last",
                              type = "closed"),
                show.legend = FALSE)
-print(civilwar_plot)
+
+civilwar_plot
 ```
 
-```{r civilwar_themes, fig.width=8, fig.height= 10}
+Lastly I applied a minimal theme similar to the one in the deathplot. Major and minor grid lines were removed. The y-axis text was formatted in bold, and the x-axis was displayed at the top with bold tick labels. Plot margins were slightly adjusted to improve spacing, and the legend was removed as I was later gonna create a separate legend to match the original graph.
+
+```{r civilwar-themes, fig.width=8, fig.height= 10}
 
   civilwar_plot <- civilwar_plot +
    theme_minimal() +
@@ -504,18 +533,28 @@ print(civilwar_plot)
         axis.line.x.top = element_line(color = "black", linewidth = 0.5),
         plot.margin = margin(t = 5, r = 5, l = 8),
         legend.position = "none") 
- print(civilwar_plot)
+
+civilwar_plot
  
 ```
 
 ## Combining the plots
 
+The final visualization was made by combining the different components of the graph into one. The title, custom legend, death plot, civil war plot, and the footer was created as separate objects to better recreate the original layout and alignments.
+
 ### Footer
+
+The footer was created using ggdraw with two captions added by using draw_label. The data source caption is left aligned at the bottom of the graph, while the methodological note is right-aligned. The text has a small sans-serif font size and grey color.
 
 ```{r footer}
 
 left_caption <- "Source: PRIO, Uppsala University"
-right_caption <- "* Based on over 250 conflicts, 1946-2012  † Deaths in battle of government troops and troops of\npolitically organised groups: conflicts related within 10 years counted as one"
+right_caption <- paste(
+  "* Based on over 250 conflicts, 1946-2012",
+  "† Deaths in battle of government troops and troops of\n",
+  "politically organised groups: conflicts related within",
+  "10 years counted as one"
+)
 
 footer <- ggdraw() + 
   draw_label(left_caption, x = 0.01, hjust = 0, size = 8, color = "gray30", fontfamily = "sans") +
@@ -523,6 +562,8 @@ footer <- ggdraw() +
 ```
 
 ### Legend
+
+The legend was manually constructed in three rows using get_legend() in order to more accurately replicate the original legend. Each row was generated by creating a dummy object with region mapped to colour and displayed using geom_line(). A manual color scale was applied to match the original plot. The three legend rows were combined vertically using plot_grid() to create a single custom legend.
 
 ```{r legend, warning = FALSE, message = FALSE}
 
@@ -597,6 +638,8 @@ custom_legend <- plot_grid(
 
 ### Title
 
+The title was created as a separate ggplot object to allow precise control over layout and typography. The main title and subtitle were added using labs(), with a bold, left-aligned headline and a smaller, grey subtitle to establish visual hierarchy. A void theme removed all non-text elements, ensuring the title functions purely as a typographic component. Custom margins were applied to align the title cleanly with the legend and plots below in the final stacked layout.
+
 ```{r title}
 
 title_plot <- ggplot() + 
@@ -612,9 +655,13 @@ title_plot <- ggplot() +
    
 ```
 
-## Final plot 
+## Final plot
 
-```{r combined_plot, fig.width=8, fig.height= 10}
+Finally, I combined all components into a single plot. The title and custom legend were placed side by side at the top, followed by the annual battle deaths plot, the civil war duration plot, and a footer containing sources and notes. Relative heights were manually adjusted using plot_layout() to emphasize the main civil war panel while keeping contextual elements compact.
+
+Consequently, while the overall layout and information hierarchy resemble the original, the final figure differs in certain details. Label placement was automated to avoid overlaps, which means they are not positioned exactly as in the original; the font is not identical, and the total deaths values are slightly different because of variations in data sources, preprocessing decisions, and aggregation methods. Additionally, the grey background shading does not replicate the original gradient, where the top was darker and gradually became lighter toward the bottom These factors together make the visualization a faithful but not exact reproduction.
+
+```{r combined-plot, fig.width=8, fig.height= 10, preview=TRUE}
 
  finishedplot <- (wrap_elements(title_plot) | wrap_elements(custom_legend)) /
    deathplot /
@@ -625,19 +672,18 @@ title_plot <- ggplot() +
     widths = c(1.5, 1)
    )
  
-print(finishedplot)
-
+finishedplot
 ```
 
 ## Graph improvement
 
-I am still working on the graph improvement. My most important thoughts on it is that the original graph tries to visualize too much information, so an improvement would be to limit the data visualized while still keeping it informative. I want the improved version to keep the death plot as contextual framing, but simplify the lower panel to reduce cognitive overload.
-
-I will still need to work with the grey lines here, get all the data points right and then find a good way to visualize the deaths per conflict as well. Have to fix it so all facets work with the same scale for y-axis so the data is not misleading. I have been trying to get deaths as size but looks like the geom_smooth is causing some trouble there. Maybe the solution is to not work with region colors but with a color scale for deaths and then label the deadliest ones.
+Moreover, after replicating the original graph it was time for the improvement. The original graph conveys several dimensions simultaneously, including conflict duration, total yearly deaths, ranking of deaths in each civil war, and regional distribution. While this is informative, it also makes it more challenging to interpret because of the overload of informaton.The primary goal of the improved version is therefore to reduce cognitive load while retaining the most analytically relevant information.
 
 ### Adjusting the data
 
-```{r data_improvement}
+This code calculates each conflict’s duration, identifies the deadliest and longest conflicts within each region, and creates a conflict_label that assigns labels only to these key conflicts. This highlights the most analytically relevant conflicts in the plot, reducing clutter and cognitive load. ungroup() ensures subsequent operations are not restricted by region.
+
+```{r data-improvement}
 
  duration_data <- plot_data |> 
   mutate(
@@ -658,11 +704,11 @@ I will still need to work with the grey lines here, get all the data points righ
   ungroup()
 ```
 
-Here is another suggestion for improvement. I think this can look good when the deadliest conflicts get labels as well as the longest ones, can also label the peaks for the total deaths.
+### Improved graph
 
-```{r second_improvement, fig.width=11, fig.height= 10}
+In the improved graph, conflicts are no longer shown as lines ranked by deadliness. Instead, each conflict is represented as a point, with the point size indicating the duration of the conflict in years and the color reflecting the number of deaths using a red color scale. The y-axis shows deaths on a logarithmic scale to accommodate the wide range of values, while the x-axis represents time. Vertical gray lines separate each decade, providing temporal reference. In the background, the total annual deaths worldwide are displayed as a gray area and line, giving contextual framing for individual conflicts. Regions are separated using facet_wrap(), allowing easier comparison across regions while reducing visual clutter. Labels are added only to the deadliest or longest conflicts in each region to highlight the most analytically relevant events without overloading the plot. This approach balances information richness with clarity, retaining key insights while improving interpretability.
 
-
+```{r final-improvement, fig.width=11, fig.height= 10}
 
 Second_improvement <- ggplot() +
   geom_vline(
@@ -790,12 +836,13 @@ second_improved <- Second_improvement / footer +
     heights = c(2, 0.1)
   )
 
-print(second_improved)
-
+second_improved
 ```
 
 ## Conclusion
 
-Distill is a publication format for scientific and technical writing, native to the web.
+This project aimed to replicate and improve an Economist visualization of civil war duration and deadliness from 1946 to 2012. The original graph conveys a large amount of information, but overlapping elements make interpretation difficult, especially in the lower panel.
 
-Learn more about using Distill at <https://rstudio.github.io/distill>.
+Reproducing the graph was challenging due to limited transparency in the original data processing, including conflict definitions, overlapping conflicts, and battle death aggregation. These methodological uncertainties led to differences between my reconstructed totals and the original figures, highlighting how sensitive conflict data are to analytical choices.
+
+The improved visualization emphasizes clarity and interpretability. Key conflicts are selectively labeled based on deadliness and duration, total annual deaths provide context without overwhelming the plot, and consistent scales across regions prevent misleading comparisons. Conflict duration and deadliness are encoded through point size and color, while faceting reduces visual clutter. Although some temporal and regional details are de-emphasized, this approach makes patterns easier to detect.

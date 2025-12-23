@@ -6,8 +6,8 @@ library(readxl)
 library(dplyr)
 
 # Load raw data
-battledeaths <- read.csv("BattleDeaths_v25_1_conf.csv")
-battledeaths_b <- read_excel("PRIO Battle Deaths Dataset 3.0.xls")
+battledeaths <- read.csv("raw_data/BattleDeaths_v25_1_conf.csv")
+battledeaths_b <- read_excel("raw_data/PRIO Battle Deaths Dataset 3.0.xls")
 
 # Uppsala (UCDP) deaths
 uppsaladeaths <- battledeaths |>
