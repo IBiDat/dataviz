@@ -41,9 +41,7 @@ To start of I began with loading the necessary packages for data processing and 
 
 The tidyverse package provides the foundations for essential packages like dplyr and ggplot2. I used dplyr to clean, filter, and manipulate my data. For creating my visualizations i used ggplot2.
 
-The cowplot package was used to help with the composition of the different parts of the plot. Two key function were used, get_legend() extracted individual legend components to create a custom three-row legend, and ggdraw() combined with draw_label() constructed the footer containing citations and explanatory notes.
-
-The readxl package enabled loading of Excel-formatted data from the PRIO Battle Deaths Data set. While, the ggrepel helped with positioning the lables so they would not overlap in the improvement of the plot.
+The cowplot package was used to help with the composition of the different parts of the plot. Two key function were used, get_legend() extracted individual legend components to create a custom three-row legend, and ggdraw() combined with draw_label() constructed the footer containing citations and explanatory notes. The ggrepel helped with positioning the lables so they would not overlap in the improvement of the plot.
 
 Finally, the patchwork package was used to complete the final graph by combining the five separate part, the title, legend, death plot, civil war plot, and footer together.
 
@@ -53,7 +51,6 @@ Finally, the patchwork package was used to complete the final graph by combining
 library(tidyverse)
 library(cowplot) 
 library(patchwork)
-library(readxl)
 library(ggrepel)
 
 
@@ -61,31 +58,20 @@ library(ggrepel)
 
 ### Getting the data
 
-To replicate the original visualization's battle death statistics from 1946-2012, I integrated two data sets, the PRIO Battle Deaths Dataset covering 1946-1988 and the Uppsala Conflict Data Program (UCDP) data set extending through 2012. I loaded both datasets using read.csv() and read_excel() respectively, then filtered each to include only civil wars, which was coded as type 3 and 4. For Uppsala data, I grouped by year and summed best death estimates across all conflicts, converting to thousands. The PRIO data required additional preprocessing to handle potential duplicate conflict-year entries, so I first grouped by conflict ID and year to extract maximum death estimates, then aggregated by year. I merged both datasets using full_join() and arranged chronologically to create a complete data set with PRIO data providing historical coverage from 1946-1988 and Uppsala data covering recent decades through 2012.
+To replicate the original visualization’s battle death statistics for the period 1946–2012, I relied on two primary sources, the Uppsala Conflict Data Program (UCDP) Battle-Related Deaths dataset and the PRIO Battle Deaths dataset. To improve reproducibility and keep the main analysis script concise, all data cleaning and aggregation steps were handled in a separate wrangling script.
 
-It has to be noted that my calculations of battle deaths differ from the original graph, with some years by about 150,000 deaths. The differences likely come from how the original authors grouped related conflicts within a 10-year period, how overlapping or long-lasting conflicts were combined to avoid double-counting, and possible use of different data versions or additional sources. They may also have used their own methods to handle uncertainty in death estimates.
+In the wrangling stage, I first filtered both datasets to include only civil wars, defined as conflicts coded as type 3 or 4. For the UCDP data, which provides yearly best estimates of battle-related deaths, I aggregated deaths by year across all qualifying conflicts and converted the totals to thousands to match the scale used in the original visualization.
+
+The PRIO dataset required additional preprocessing due to potential duplicate conflict–year observations. To address this, I first grouped the data by conflict identifier and year and extracted the maximum reported death estimate for each conflict-year combination. These values were then summed by year and converted to thousands. The PRIO data was restricted to the period 1946–1988, where it provides historical coverage that complements the UCDP data.
+
+The resulting yearly death totals from both sources were saved as processed CSV files and later merged in the main analysis script. The two datasets were combined using a full join and arranged chronologically, producing a continuous time series of total battle deaths from 1946 to 2012, with PRIO data covering earlier years and UCDP data covering later decades.
+
+It is important to note that the resulting death totals differ from those shown in the original Economist graph, in some years by up to approximately 150,000 deaths. These discrepancies likely stem from differences in aggregation methods, such as how overlapping or long-running conflicts are combined, how deaths are allocated across years, and how uncertainty in casualty estimates is handled. The original authors may also have relied on different versions of the datasets or applied additional editorial adjustments that are not publicly documented. This highlights the challenges of reproducing complex visualizations when methodological decisions are not fully transparent.
 
 ```{r loading_data}
 
-battledeaths <- read.csv("BattleDeaths_v25_1_conf.csv")
-battledeaths_b <- read_excel("PRIO Battle Deaths Dataset 3.0.xls")
-
-uppsaladeaths <- battledeaths |> 
-  filter(type_of_conflict %in% c(3, 4), year <= 2012) |> 
-  group_by(year) |> 
-  summarise(totaldeaths = sum(bd_best, na.rm = TRUE) /1000)
-
-priodeaths <- battledeaths_b |>
-  filter(type %in% c(3,4), between(year, 1946, 1988)) |>
-  group_by(id, year) |>
-  summarise(
-    conflict_deaths = max(bdeadbes, na.rm = TRUE),
-    .groups = "drop"
-  ) |>
-  group_by(year) |>
-  summarise(
-    totaldeaths = sum(ifelse(conflict_deaths > 0, conflict_deaths, 0)) / 1000
-  )
+uppsaladeaths <- read.csv("clean_data/uppsaladeaths.csv")
+priodeaths <- read.csv("clean_data/priodeaths.csv")
 
 deathtotal <- uppsaladeaths |> 
   full_join(priodeaths) |> 
