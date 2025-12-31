@@ -19,7 +19,7 @@ knitr::opts_chunk$set(out.width="100%", fig.align="center", fig.showtext=TRUE)
 
 ### Background
 
-The Economist introduced this graph on civil wars in an article on the duration and deadliness of civil wars. The graph visualizes the length of the 100 deadliest civil wars and internal armed conflicts from 1946-2012, as well as the battle death in total each year and for each of the 100 conflicts. It is based on data from the UCDP/PRIO Armed Conflict data set.
+The Economist introduced this graph in an article on the duration and deadliness of civil wars. The graph visualizes the length of the 100 deadliest civil wars and internal armed conflicts from 1946-2012, as well as the total number of battle deaths for each year and each of the 100 conflicts. It is based on data from the UCDP/PRIO Armed Conflict data set.
 
 Most recently this data was used in another Economist article on the deadliest conflicts of the year in 2023, where the main takeaway was that the most documented conflicts might not always be the deadliest.
 
@@ -29,7 +29,7 @@ The original graph consists of two plots. One plot on the top showing total deat
 
 The graph is trying to convey the deadliness and duration of civil wars from post-war times to modern times. By combining information on total deaths over time with details about individual conflicts, it allows the reader to see both broad trends and specific examples. In this way, the graph tries to connect changes in global conflict over time with the severity and duration of individual civil wars.
 
-The main reason for deciding on this graph is because it tries to show a lot of interesting information in a visual way. However, the original version includes so much data that it becomes cluttered and hard to interpret. The goal of this project was therefore to recreate the graph and then improve it, to show that one can still communicate the main information by reducing and simplifying, and in fact make the visualization easier to read.
+The main reason for deciding on this graph is because it tries to show a lot of interesting information in a visual way. However, the original version includes so much data that it becomes cluttered and hard to interpret. The goal of this project was therefore to recreate the graph and then improve it, to show that one can still communicate the main information by reducing and simplifying it, and in fact make the visualization easier to read.
 
 ![Original chart. Source:"<https://www.economist.com/international/2023/04/17/the-worlds-deadliest-war-last-year-wasnt-in-ukraine>"](original_graph.png){.external width="100%"}
 
@@ -37,11 +37,11 @@ The main reason for deciding on this graph is because it tries to show a lot of 
 
 ### Loading packages
 
-To start of I began with loading the necessary packages for data processing and visualization.
+To start off I began with loading the necessary packages for data processing and visualization.
 
-The tidyverse package provides the foundations for essential packages like dplyr and ggplot2. I used dplyr to clean, filter, and manipulate my data. For creating my visualizations i used ggplot2.
+The tidyverse package provides the foundations for essential packages like dplyr and ggplot2. I used dplyr to clean, filter, and manipulate my data. For creating my visualizations I used ggplot2.
 
-The cowplot package was used to help with the composition of the different parts of the plot. Two key function were used, get_legend() extracted individual legend components to create a custom three-row legend, and ggdraw() combined with draw_label() constructed the footer containing citations and explanatory notes. The ggrepel helped with positioning the lables so they would not overlap in the improvement of the plot.
+The cowplot package was used to help with the composition of the different parts of the plot. Two key function were used, get_legend() extracted individual legend components to create a custom three-row legend, and ggdraw() combined with draw_label() constructed the footer containing citations and explanatory notes. The ggrepel package helped with positioning the labels so they would not overlap in the improvement of the plot.
 
 Finally, the patchwork package was used to complete the final graph by combining the five separate part, the title, legend, death plot, civil war plot, and footer together.
 
@@ -58,7 +58,7 @@ library(ggrepel)
 
 ### Getting the data
 
-To replicate the original visualization’s battle death statistics for the period 1946–2012, I relied on two primary sources, the Uppsala Conflict Data Program (UCDP) Battle-Related Deaths dataset and the PRIO Battle Deaths dataset. To improve reproducibility and keep the main analysis script concise, all data cleaning and aggregation steps were handled in a separate wrangling script.
+To replicate the original visualizations battle death statistics for the period 1946–2012, I relied on two primary sources, the Uppsala Conflict Data Program (UCDP) Battle-Related Deaths dataset and the PRIO Battle Deaths dataset. To improve reproducibility and keep the main analysis script concise, all data cleaning and aggregation steps were handled in a separate wrangling script.
 
 In the wrangling stage, I first filtered both datasets to include only civil wars, defined as conflicts coded as type 3 or 4. For the UCDP data, which provides yearly best estimates of battle-related deaths, I aggregated deaths by year across all qualifying conflicts and converted the totals to thousands to match the scale used in the original visualization.
 
@@ -66,7 +66,7 @@ The PRIO dataset required additional preprocessing due to potential duplicate co
 
 The resulting yearly death totals from both sources were saved as processed CSV files and later merged in the main analysis script. The two datasets were combined using a full join and arranged chronologically, producing a continuous time series of total battle deaths from 1946 to 2012, with PRIO data covering earlier years and UCDP data covering later decades.
 
-It is important to note that the resulting death totals differ from those shown in the original Economist graph, in some years by up to approximately 150,000 deaths. These discrepancies likely stem from differences in aggregation methods, such as how overlapping or long-running conflicts are combined, how deaths are allocated across years, and how uncertainty in casualty estimates is handled. The original authors may also have relied on different versions of the datasets or applied additional editorial adjustments that are not publicly documented. This highlights the challenges of reproducing complex visualizations when methodological decisions are not fully transparent.
+It is important to note that the resulting death totals differ from those shown in the original Economist graph, in some years by up to approximately 150,000 deaths. These deviations likely stem from differences in aggregation methods, such as how overlapping or long-running conflicts are combined, how deaths are divided across years, and how uncertainty in casualty estimates is handled. The original authors may also have relied on different versions of the data sets or applied additional editorial adjustments that are not publicly documented. This highlights the challenges of reproducing complex visualizations when methodological decisions are not fully transparent.
 
 ```{r loading-data}
 
@@ -78,176 +78,13 @@ deathtotal <- uppsaladeaths |>
   arrange(year) 
 ```
 
-### Creating new data set
+For the civil wars, the original plot used data from the UCDP/PRIO Armed Conflict data set. I started of with cleaning the data set and joining it with the data sets on battle deaths. I quickly realized that their methods for defining a civil war in terms of duration and deaths were difficult to grasp, and even though i tried several times to replicate the same data as in the graph, I failed and kept on getting different results for the 100 deadliest civil wars.
 
-For the data on the civil wars, the original plot used data from the UCDP/PRIO Armed Conflict data set. I started of with cleaning the data set and joining it with the data sets on battle deaths. I quickly realized that their methods for defining a civil war in terms of duration and deaths were difficult to grasp, and even though i tried several times to replicate the same data as in the graph, I failed.
-
-In the end, I decided on reading directly of the original graph and manually making a data set with the location, region, start year, end year, and number of deaths for the 100 deadliest conflicts from 1946-2012.
+In the end, I decided on reading directly off the original graph and manually making a data set with the location, region, start year, end year, and number of deaths for the 100 deadliest conflicts from 1946-2012. This was done on a separate script to limit the amount of code in the report, and the resulting data was saved as a CSV.
 
 ```{r creating-data}
 
-civil_wars_data <- data.frame(
-  location = c(
-    # East Asia, South-East Asia & Oceania (21 conflicts)
-    "China", "China (Tibet)", "Vietnam", "South Vietnam", "Cambodia", 
-    "Indonesia", "Indonesia", "Indonesia (East-Timor)", "Indonesia (West-Papua)", 
-    "Indonesia (Aceh)", "Myanmar", "Myanmar (Kachin)", "Myanmar (Karen)", 
-    "Myanmar (Shan)", "Myanmar (Arakan)", "Philippines", "Philippines", 
-    "Philippines (Mindanao)", "Laos", "Malaysia", "Thailand",
-    
-    # South & Central Asia (17 conflicts)
-    "Afghanistan", "Sri Lanka", "Pakistan (East)", "Pakistan", 
-    "Pakistan (Balochistan)", "India (Kashmir)", "India (Punjab/Khalistan)", 
-    "India", "India", "India (Nagaland)", "Nepal", "Tajikistan", 
-    "Azerbaijan", "Iran", "Iran (Kurdistan)", "Hyderabad", "Georgia",
-    
-    # Sub-Saharan Africa (31 conflicts)
-    "Ethiopia (Eritrea)", "Ethiopia", "Ethiopia (Ogaden)", "Ethiopia (Oromia)", 
-    "Cameroon", "Cameroon", "Angola", "Angola", "Uganda", "Mozambique", 
-    "Mozambique", "Sudan", "Sudan (South)", "Nigeria", "Somalia", "Chad", 
-    "Congo", "Congo", "Congo-Brazzaville", "Madagascar", "Zimbabwe", 
-    "Sierra Leone", "Liberia", "Rwanda", "Burundi", "Guinea-Bissau", 
-    "Kenya", "South Africa", "South Africa (Namibia)",
-    
-    # Middle East & North Africa (15 conflicts)
-    "Algeria", "Algeria", "Lebanon", "Iraq", "Iraq (Kurdistan)", 
-    "Yemen (North)", "Yemen (North)", "Yemen (South)", "Yemen", 
-    "Syria", "Syria", "Israel (Palestinian Territories)", 
-    "Morocco (Western Sahara)", "Libya",
-    
-    # Europe (11 conflicts)
-    "Greece", "Turkey (Kurdistan)", "Russia (Chechnya)", 
-    "Russia (Caucasus Emirate)", "Bosnia (Serbia)", "Bosnia (Croatia)", 
-    "Soviet Union (Ukraine)", "Soviet Union (Lithuania)", "Serbia (Croatia)", 
-    "Serbia (Kosovo)", "United Kingdom (Northern Ireland)",
-    
-    # Americas (7 conflicts)
-    "El Salvador", "Guatemala", "Nicaragua", "Colombia", "Peru", 
-    "Argentina", "Paraguay", "Dominican Republic"
-  ),
-  
-  start_year = c(
-    # East Asia, South-East Asia & Oceania
-    1946, 1950, 1946, 1955, 1967,
-    1954, 1946, 1975, 1965, 1990,
-    1948, 1961, 1949, 1959, 1949,
-    1947, 1969, 1970, 1959, 1949, 1974,
-    
-    # South & Central Asia
-    1978, 1984, 1971, 2007,
-    1974, 1989, 1983, 1983, 1952,
-    1948, 1956, 1996, 1993, 1979,
-    1979, 1948, 1992,
-    
-    # Sub-Saharan Africa
-    1964, 1976, 1977, 1978,
-    1960, 1958, 1961, 1975, 1975,
-    1977, 1964, 1971, 1964, 1967,
-   1988, 1967, 1997, 1964, 1993,
-    1948, 1968, 1992, 2000, 1990,
-    1991, 1963, 1953, 1982, 1966,
-    
-    # Middle East & North Africa
-    1954, 1991, 1975, 1982, 1961,
-    1962, 1948, 1986, 2009,
-   2011, 1979, 1948,
-    1975, 2011,
-    
-    # Europe
-    1946, 1984, 1994, 2007,
-    1992, 1993, 1946, 1946,
-    1991, 1998, 1971,
-    
-    # Americas
-    1972, 1965, 1978, 1964,
-    1982, 1974, 1947, 1965
-  ),
-  
-  end_year = c(
-    # East Asia, South-East Asia & Oceania
-    1949, 1958, 1954, 1964, 1998,
-    1961, 1946, 1998, 1978, 2005,
-    1993, 1992, 2011, 2011, 1993,
-    1953, 2012, 2012, 1973, 1957, 1982,
-    
-    # South & Central Asia
-    2012, 2009, 1971, 2012,
-    1977, 2012, 1993, 2012, 1990,
-    1968, 2006, 1998, 1994,
-    2011, 1997, 1949, 1993,
-    
-    # Sub-Saharan Africa
-    1991, 1991, 1984, 2012,
-    1961, 1959, 1974, 2002, 2011,
-    1992, 1974, 2012, 1973, 1970,
-    2012, 2010, 2012, 1967, 2002,
-    1948, 1979, 2002, 2003, 2012,
-   2008, 1974, 1957, 1989, 1988,
-    
-    # Middle East & North Africa
-    1962, 2012, 1990, 2012, 1996,
-    1970, 1948, 1986, 2012,
-    2012, 1982, 2012,
-    1989, 2012,
-    
-    # Europe
-    1949, 2012, 2008, 2012,
-    1995, 1994, 1950, 1948,
-    1991, 1999, 1998,
-    
-    # Americas
-    1991, 1990, 1990, 2012,
-    2010, 1978, 1958, 1965
-  ),
-  
-  deaths_thousands = c(
-    # East Asia, South-East Asia & Oceania
-    600.0, 10.0, 188.6, 82.5, 186.8, 17.1, 1.8, 37.7, 4.8, 2.3, 
-    25.2, 18.0, 17.4, 15.0, 3.4, 19.5, 4.8, 22.1, 14.0, 5.4, 2.5,
-    
-    # South & Central Asia
-    334.4, 62.2, 55.9, 19.2, 4.3, 19.3, 7.6, 4.8, 6.3, 2.2, 
-    9.9, 6.8, 4.6, 3.7, 3.3, 3.2, 2.2,
-    
-    # Sub-Saharan Africa
-    122.7, 48.4, 10.8, 2.8, 77.5, 5.9, 39.5, 71.3, 67.4, 62.9, 
-    11.7, 57.3, 11.7, 37.5, 31.6, 22.3, 15.3, 3.6, 14.2, 4.6, 
-    13.6, 10.6, 2.6, 9.2, 8.6, 7.5, 6.5, 2.2, 6.7,
-    
-    # Middle East & North Africa
-    91.3, 18.3, 66.3, 18.4, 34.6, 15.9, 2.0, 5.7, 3.7, 15.9, 
-    3.8, 9.3, 6.4, 2.3,
-    
-    # Europe
-    77.0, 27.0, 17.6, 2.4, 11.6, 3.6, 8.9, 4.3, 3.9, 2.6, 1.5,
-    
-    # Americas
-    28.7, 21.8, 20.3, 19.3, 11.4, 2.3, 2.0, 2.0
-  ),
-  
-  region = c(
-    # East Asia, South-East Asia & Oceania (21)
-    rep("East Asia, South-East Asia & Oceania", 21),
-    
-    # South & Central Asia (17)
-    rep("South & Central Asia", 17),
-    
-    # Sub-Saharan Africa (29)
-    rep("Sub-Saharan Africa", 29),
-    
-    # Middle East & North Africa (14)
-    rep("Middle East & North Africa", 14),
-    
-    # Europe (11)
-    rep("Europe", 11),
-    
-    # Americas (8)
-    rep("Americas", 8)
-  ),
-  
-  stringsAsFactors = FALSE
-) |> 
-  arrange(desc(deaths_thousands))
+civil_wars_data <- read.csv("clean_data/civil_wars_data.csv")
 
 ```
 
@@ -311,7 +148,7 @@ After retrieving and preparing the data it was time for the replication of the o
 
 I started off with the plot on the total number of battle deaths from civil wars each year from 1946-2012. The year is mapped to the x-axis and the total number of deaths to the y-axis. The y-axis is scaled with breaks at 100-death intervals to improve readability, while the x-axis includes all years in the range but omits labels to avoid clutter. Finally, the coordinate limits are set to slightly extend beyond the data range, with axis expansion disabled for a cleaner appearance.
 
-```{r deathplot-cords&axes, fig.width=6, fig.height=2}
+```{r deathplot-cords-axes, fig.width=6, fig.height=2}
 
 deathplot <- ggplot(deathtotal) +
   aes(x = year, y = totaldeaths) +
@@ -391,9 +228,9 @@ deathplot
 
 ### Civil war plot
 
-I then created a civil war timeline plot in which each conflict is positioned by its start year on the x-axis and ranked on the y-axis. The x-axis is displayed at the top of the plot and labeled selectively to highlight key years while avoiding overcrowding. The y-axis is reversed so that higher-ranked conflicts appear closer to the top, and axis labels are removed to maintain a clean layout. The coordinate limits are manually set to provide consistent spacing around the data and to allow annotations to extend beyond the plotting area. Finally, regions are distinguished using a manual color scale, ensuring consistent region colors across all figures.
+Furthermore, I created a civil war timeline plot in which each conflict is positioned by its start year on the x-axis and rank on the y-axis. The x-axis is displayed at the top of the plot and labeled at 1946 and 2012, as well as every 5th year to avoid overcrowding. The y-axis is reversed so that higher-ranked conflicts appear closer to the top. The coordinate limits are manually set to provide consistent spacing around the data and to allow annotations to extend beyond the plotting area. Finally, regions are distinguished using a manual color scale.
 
-```{r civilwars-cords&axes, fig.width=8, fig.height=10}
+```{r civilwars-cords-axes, fig.width=8, fig.height=10}
 
 civilwar_plot <- ggplot(plot_data, 
                         aes(x = start_year, y = rank, colour = region)) +
@@ -431,7 +268,7 @@ civilwar_plot <- ggplot(plot_data,
 civilwar_plot
 ```
 
-Further, I extended the civil war timeline by adding background shading to visually separate time periods, again using the add_decade_shading() function. An additional shaded rectangle was placed before 1946 to create space for explanatory annotations. Vertical text annotations were added along the left side of the plot to describe the ranking scale, clarify the deaths as thousands, and indicate the highest and lowest ranks. Subtle grey rectangles were also added at the top to connect it with the death plot. Finally, text labels were placed at the end year of each conflict to identify individual civil wars directly within the plot.
+Additionally, I extended the civil war timeline by adding background shading to visually separate time periods, again using the add_decade_shading() function. An additional shaded rectangle was placed before 1946 to create space for explanatory annotations. Vertical text annotations were added along the left side of the plot to describe the ranking scale, clarify the deaths as thousands, and indicate the highest and lowest ranks. Subtle grey rectangles were also added at the top to connect it with the death plot. Finally, text labels were placed at the end year of each conflict to identify individual civil wars directly within the plot.
 
 ```{r civilwar-annotation, fig.width=8, fig.height= 10}
 
@@ -494,7 +331,7 @@ Further, I extended the civil war timeline by adding background shading to visua
 civilwar_plot
 ```
 
-It was then time to plot the data segments with start year and end year placed along the y-axis depending on their rank. Conflicts that had year coded as 2012 were still ongoing and was therefore visualised with an arrow at the end, because of this I had to plot that data i its own segment.
+It was then time to plot the data segments with start year and end year placed along the y-axis depending on their rank. Conflicts that had year coded as 2012 were still ongoing and was therefore visualized with an arrow at the end, because of this I had to plot that data in its own segment.
 
 ```{r civilwar-data, fig.width=8, fig.height= 10}
 
@@ -659,7 +496,7 @@ title_plot <- ggplot() +
 
 Finally, I combined all components into a single plot. The title and custom legend were placed side by side at the top, followed by the annual battle deaths plot, the civil war duration plot, and a footer containing sources and notes. Relative heights were manually adjusted using plot_layout() to emphasize the main civil war panel while keeping contextual elements compact.
 
-Consequently, while the overall layout and information hierarchy resemble the original, the final figure differs in certain details. Label placement was automated to avoid overlaps, which means they are not positioned exactly as in the original; the font is not identical, and the total deaths values are slightly different because of variations in data sources, preprocessing decisions, and aggregation methods. Additionally, the grey background shading does not replicate the original gradient, where the top was darker and gradually became lighter toward the bottom These factors together make the visualization a faithful but not exact reproduction.
+Consequently, while the overall layout and information hierarchy resemble the original, the final figure differs in certain details. Label placement was automated to avoid overlaps, which means they are not positioned exactly as in the original.The font is not identical, and the total deaths values are slightly different because of variations in data sources, preprocessing decisions, and aggregation methods. Additionally, the grey background shading does not replicate the original gradient, where the top was darker and gradually became lighter toward the bottom.
 
 ```{r combined-plot, fig.width=8, fig.height= 10, preview=TRUE}
 
@@ -677,11 +514,11 @@ finishedplot
 
 ## Graph improvement
 
-Moreover, after replicating the original graph it was time for the improvement. The original graph conveys several dimensions simultaneously, including conflict duration, total yearly deaths, ranking of deaths in each civil war, and regional distribution. While this is informative, it also makes it more challenging to interpret because of the overload of informaton.The primary goal of the improved version is therefore to reduce cognitive load while retaining the most analytically relevant information.
+Moreover, after replicating the original graph it was time for the improvement. The original graph conveys several dimensions simultaneously, including conflict duration, total yearly deaths, ranking of deaths in each civil war, and regional distribution. While this is informative, it also makes it more challenging to interpret because of the overload of information. The primary goal of the improved version is therefore to reduce cognitive load while keeping the most analytically relevant information.
 
 ### Adjusting the data
 
-This code calculates each conflict’s duration, identifies the deadliest and longest conflicts within each region, and creates a conflict_label that assigns labels only to these key conflicts. This highlights the most analytically relevant conflicts in the plot, reducing clutter and cognitive load. ungroup() ensures subsequent operations are not restricted by region.
+In order to make an improved version of the plot, I had to adjust the data. This code calculates each conflict’s duration, identifies the deadliest and longest conflicts within each region, and creates a conflict_label that assigns labels only to these key conflicts. This highlights the most analytically relevant conflicts in the plot, reducing clutter and cognitive load. ungroup() ensures subsequent operations are not restricted by region.
 
 ```{r data-improvement}
 
@@ -843,6 +680,6 @@ second_improved
 
 This project aimed to replicate and improve an Economist visualization of civil war duration and deadliness from 1946 to 2012. The original graph conveys a large amount of information, but overlapping elements make interpretation difficult, especially in the lower panel.
 
-Reproducing the graph was challenging due to limited transparency in the original data processing, including conflict definitions, overlapping conflicts, and battle death aggregation. These methodological uncertainties led to differences between my reconstructed totals and the original figures, highlighting how sensitive conflict data are to analytical choices.
+Reproducing the graph was challenging due to limited transparency in the original data processing, including conflict definitions, overlapping conflicts, and battle death aggregation. These methodological uncertainties led to differences between my reconstructed totals and the original figures, highlighting how sensitive data can be to analytic choices.
 
 The improved visualization emphasizes clarity and interpretability. Key conflicts are selectively labeled based on deadliness and duration, total annual deaths provide context without overwhelming the plot, and consistent scales across regions prevent misleading comparisons. Conflict duration and deadliness are encoded through point size and color, while faceting reduces visual clutter. Although some temporal and regional details are de-emphasized, this approach makes patterns easier to detect.
