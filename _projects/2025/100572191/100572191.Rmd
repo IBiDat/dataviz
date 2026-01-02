@@ -1,7 +1,8 @@
 ---
-title: "Longevity graph: reproduction"
+title: "Evidence-Based Guide to Longevity"
 description: |
- An exploration of the factors that extend or shorten human lifespan, ranked by the strength of scientific evidence, recreated and refined from an original Information is Beautiful graphic.
+ This project analyzes factors that extend or shorten human lifespan, ranked by scientific evidence. The visualization ranks factors that extend or shorten human lifespan based on the strength of scientific evidence.
+ 
 categories: "2025"
 author: Gaia Leuzzi
 date: "`r Sys.Date()`"
@@ -11,12 +12,30 @@ output:
     toc: true
 ---
 
+## Introduction
+
+This project provides an insightful look into the factors that extend or shorten human lifespan, ranked by the strength of scientific evidence. Recreated from an original Information is Beautiful graphic, the data synthesizes findings from academic studies (e.g., Khaw KT, 2008) and major reports (BBC, NYT) alongside landmark research like The Okinawa Program, which investigates the habits of the world's longest-lived populations. By integrating clinical data with real-world longevity studies, the visualization offers a comparative view that separates well-supported health advice from less substantiated claims.
+
 ![Original chart. Source: Information is Beautiful (2019),  
 https://informationisbeautiful.net](IIB-LiveLong-2552-Oct19-1.png){.external width=100%}
 
-## Setup and libraries
+## Limitations of the original graph
+
+One of the most notable strengths of the graph is its high aesthetic appeal, which immediately engages the viewer. It effectively communicates its objective, making an extremely interesting and complex topic—human longevity—accessible and intriguing to a broad audience. Overall, the visualization succeeds in sparking curiosity and encouraging readers to explore the factors that influence lifespan.
+
+While the graph is visually striking, it presents several limitations regarding data precision. The use of irregular, polygonal bars can be misleading, as it is not clear which part of the shape represents the effective value. Additionally, there is a discrepancy between the legend and the plot: the legend defines discrete color categories, yet the graph applies a continuous gradient, making exact values hard to interpret. Furthermore, while the factors are grouped by the strength of scientific evidence, they are not ordered by impact within those groups, which makes it difficult to compare them directly. Lastly, the icons used to distinguish between men and women are not immediately intuitive, potentially delaying the user's understanding of the demographic breakdowns.
+
+## Graph Replication
+
+### Setup and libraries
+
+We begin by setting up the R environment and loading the essential packages. We use "ggplot2" and "dplyr" for the core data manipulation and visualization tasks. To achieve the complex, non-standard layout of the original infographic, we rely on "cowplot" and "grid", which allow us to manipulate graphic objects directly. 
+
+Since the visualization requires external PNG images for gender icons, we include "magick" for image processing. Lastly, we import the "Nunito" font family using showtext to replicate the specific typography of the original design.
 
 ```{r setup}
+knitr::opts_chunk$set(out.width="100%", fig.align="center", fig.showtext=TRUE)
+
 library(ggplot2)
 library(forcats)
 library(dplyr)
@@ -33,7 +52,12 @@ showtext_auto()
 my_data <- read.csv("KIB_longevity data.csv")
 ```
 
-## Data preparation
+
+### Data preparation
+
+We clean the dataset and prepare specific variables required for the custom geometry. First, we ensure the Years column is numeric and append a specific row for the "Ultimate Recipe," a humorous outlier that requires manual insertion. We also override the Science_strength values for specific interventions; this is a crucial step to ensure they map correctly to our custom color palette later, as the raw data does not perfectly align with the visual groups we want to create.
+
+To control the exact vertical ordering of the plot, we define levels_vec, a vector containing the interventions in the desired top-to-bottom order. We then calculate bar_offset and id_adj. These variables are mathematically derived to manage the vertical spacing between bars, allowing us to introduce gaps (e.g., separating "Keep smoking" from the rest) and shift specific bars like the "Ultimate Recipe" to avoid overlap.
 
 ```{r data}
 my_data_filtered <- my_data |>
@@ -99,7 +123,11 @@ my_data_filtered <- my_data_filtered |>
   )
 ```
 
-## Visual geometry construction
+### Visual geometry construction
+
+This is the most technically complex section where we manually construct the polygon shapes instead of using standard bars. We use rowwise() to calculate coordinates for every single intervention. The logic defines horiz (the rectangular part of the bar) and diag_end (the angled tip), distinguishing between positive and negative years.
+
+For specific entries like "Have a long-lived maternal grandfather," we implement a loop that generates multiple small polygons with decreasing alpha values. This creates a custom "fading" visual effect that standard ggplot functions cannot produce. Finally, we initialize the ggplot object, adding geom_polygon for the bars and geom_text for the labels, ensuring the "Ultimate Recipe" gets unique styling.
 
 ```{r plot, fig.width=7, fig.height=6.5, fig.showtext=TRUE}
 poly_df <- my_data_filtered |>
@@ -211,7 +239,7 @@ longevity_dt <- ggplot() +
       hjust = if_else(Years_Capped < 0, 1, 0)
     ),
     family = "nunito",
-    size = 2.2,
+    size = 2.1,
     color = "black"
   ) +
   geom_text(
@@ -224,7 +252,7 @@ longevity_dt <- ggplot() +
       hjust = 0
     ),
     family = "nunito_bold",
-    size = 2.2,
+    size = 2.1,
     color = "white",
     fontface = "plain"
   ) +
@@ -241,7 +269,7 @@ longevity_dt <- ggplot() +
     family = "nunito",
     fontface = "bold",
     hjust = 1,
-    size = 2.6
+    size = 2.4
   ) +
   scale_fill_identity() +
   scale_y_continuous(NULL, breaks = NULL, labels = NULL) +
@@ -253,7 +281,11 @@ longevity_dt <- ggplot() +
 longevity_dt
 ```
 
-## Axis and scale design
+### Axis and scale design
+
+We customize the X-axis to replicate the ruler-like aesthetic of the original graphic. We use scale_x_continuous with dup_axis() to display the years on both the top and bottom scales. To add precise tick marks that match the design, we overlay geom_point and geom_segment elements manually rather than relying on default ggplot ticks. 
+
+Crucially, we set coord_cartesian(clip = "off"), which allows text labels and annotations to extend beyond the plotting area boundaries without being cut off.
 
 ```{r axis, fig.width=7, fig.height=6.5, fig.showtext=TRUE}
 longevity_dt <- longevity_dt +
@@ -290,7 +322,11 @@ longevity_dt <- longevity_dt +
 longevity_dt
 ```
 
-## Theme and typographic styling
+### Theme and typographic styling
+
+We apply a minimalist theme to strictly control the visual output. We explicitly set the panel and plot backgrounds to white using element_rect. We remove all standard background grids, borders, and default axis titles using element_blank() to leave only the necessary data ink. 
+
+Furthermore, we fine-tune the plot.margin and reduce the size of the axis text to ensure the layout remains compact and legible.
 
 ```{r theme, fig.width=7, fig.height=6.5, fig.showtext=TRUE}
 longevity_dt <- longevity_dt +
@@ -314,7 +350,11 @@ longevity_dt <- longevity_dt +
 longevity_dt
 ```
 
-## Gender-specific icons
+### Gender-specific icons
+
+We process the external PNG images for the gender icons here. Using magick, we read the files and scale the female icon to exactly match the dimensions of the male icon. Moreover, we use rasterGrob to convert these images into graphical objects compatible with the grid system. 
+
+Finally, we filter the dataset to identify exactly which interventions require specific gender icons and calculate their coordinates to prepare them for placement.
 
 ```{r icons, fig.width=7, fig.height=6.5, fig.showtext=TRUE}
 male_icon <- image_read("man.png")
@@ -344,7 +384,11 @@ gender_icons <- my_data_filtered |>
 ```
 
 
-## Custom legend construction
+### Custom legend construction
+
+Because the standard ggplot legend cannot accommodate the specific layout of colored blocks and embedded images we need, we construct a custom legend from scratch using ggplot. We manually draw rectangles (annotate("rect")) for the "Strength of Science" categories to match the fill colors used in the main plot. 
+
+We place the gender icon grobs directly into this legend object using annotation_custom to ensure the legend is fully self-contained.
 
 ```{r legend, fig.width=7, fig.height=6.5, fig.showtext=TRUE}
 legend_plot <- ggplot() +
@@ -372,7 +416,11 @@ legend_plot <- legend_plot +
   )
 ```
 
-## Annotations and explanatory notes
+### Annotations and explanatory notes
+
+We finalize the main plot by looping through the gender_icons dataframe and placing the grobs at the calculated coordinates. We then calculate dynamic positions for the explanatory text notes (notes_df); we use conditional logic to decide whether a note should be forced to the left or right to avoid overlapping with the bars. 
+
+Additionally, we construct a specific, multi-segment annotation for "Mental Illness" to handle its unique positioning.
 
 ```{r annotations, fig.width=7, fig.height=6.5, fig.showtext=TRUE}
 icon_size <- 0.7
@@ -487,9 +535,11 @@ longevity_dt <- longevity_dt +
 longevity_dt
 ```
 
-## Final plot composition
+### Final plot composition
 
-```{r final, fig.width=7, fig.height=6.5, fig.showtext=TRUE}
+We use ggdraw from the cowplot package to combine the separate components. We treat the main plot and the legend as separate graphical objects, arranging them on a single canvas and adding the main title and subtitle text layers.
+
+```{r final, fig.width=7, fig.height=6.5, fig.showtext=TRUE, preview=TRUE}
 final_plot <- ggdraw() +
   draw_plot(longevity_dt, x = 0, y = 0, width = 1, height = 0.88) +
   draw_plot(legend_plot, x = 0.58, y = 0.88, width = 0.38, height = 0.11) +
@@ -513,8 +563,15 @@ final_plot <- ggdraw() +
 final_plot
 ```
 
+We acknowledge that some details in our replica differ from the original graphic. First, regarding typography, we use the "Nunito" font family; since the original design uses a paid commercial font, we selected this as the closest open-source alternative. 
 
-## Improved version - Data Preparation 
+Furthermore, we notice that the footer text regarding the "Ultimate Recipe" is not fully legible in our final output. Although the structure is accurate, the positioning of certain text annotations and lines could be more precise compared to the original's manual layout.
+
+## Graph Improvement
+
+### Data Preparation 
+
+In this first step, we prepare again the data for the improved visualization by filtering out the decorative elements and focusing on valid scientific strengths. We create a new factor variable, Strength_Label, to facilitate faceting, and we rescale the years for better visual impact. We also reorder the interventions based on the number of years gained or lost to ensure the bar chart is sorted logically.
 
 ```{r data-preparation, fig.width=7.5, fig.height=6.5, fig.showtext=TRUE}
 data_prep <- my_data |>
@@ -538,9 +595,15 @@ data_prep <- my_data |>
   )
 ```
 
-## Plot Creation Function
+### Plot Creation Function
 
-```{r improved-plot, fig.width=7.5, fig.height=6.5, fig.showtext=TRUE}
+To resolve the ambiguity caused by the original irregular polygons, we switch to a standard column chart structure, which ensures the effective values are immediately readable. 
+
+Simultaneously, we employ facet_wrap(~ Strength_Label) to segregate the interventions by evidence level; this approach rectifies the previous comparison difficulties, enabling a clear ranking of factors that share equivalent scientific backing. Regarding the color scheme, we implement a continuous gradient via scale_fill_gradientn. Unlike the confusing original palette, this transition from red to green explicitly highlights the contrast between life-shortening and life-extending habits. 
+
+Additionally, we discard the non-essential gender icons to reduce visual clutter and refine the legend with descriptive text. To conclude the layout, we still generate a distinct "footer" plot for the "Ultimate Recipe" outlier, merging it with the main visualization using plot_grid.
+
+```{r improved-plot, fig.width=7.5, fig.height=6.5, fig.showtext=TRUE, preview=TRUE}
 fill_scale <- scale_fill_gradientn(
   colors = c("#EF9A9A", "#FFCC80", "#FFF59D", "#A5D6A7", "#66BB6A"),
   limits = c(-75, 75), 
