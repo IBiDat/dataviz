@@ -14,20 +14,24 @@ output:
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(out.width = "100%", fig.align = "center",
-  fig.showtext = TRUE, fig.width = 26.5625, fig.height = 34.375)
-# We've set the dimensions to match the size of the original plot.
+  fig.showtext = TRUE, fig.width = 10.03909, fig.height = 13.5)
 ```
 
-```{r set_options, include = FALSE}
-# Increase the amount of memory available to Java (this is necessary for large
-# r5r queries).
-options(java.parameters = "-Xmx2G") # I can change "2G" to other value if needed
+```{r setup_scaling_factor}
+# We did all the work with the same dimensions as the original map, which,
+# given a default dpi of 72, were: width = 25.5625 and height = 34.375 inches.
+# However, after receiving feedback informing about storage constraints,
+# we changed those values to create a smaller image. This means we need to 
+# adjust many values (like linewidth, text size, etc.) to fit the new (smaller)
+# dimensions. Instead of doing it manually, we will create an object with
+# the ratio we need to multiply by to mantain the original look. This will
+# also allow us to do faster changes in the future if we need to.
 
-# Increase timeout to be able to download large files (necessary to download
-# large file with osmextract).
-options(timeout = 600) # Timeout 600 seconds (10 minutes)
+# Size ratio:
+sr <- 13.5/34.375
 
 ```
+
 
 ## Original
 
@@ -35,19 +39,16 @@ options(timeout = 600) # Timeout 600 seconds (10 minutes)
 
 Here's the map we are replicating. It was created by Willem Klumpenhouwer:
 
-![Original map](original_calgary.png)
+![Original map by Willem Klumpenhouwer](original_calgary.png){.external width="100%"}
 
 
 ## Libraries:
 
 ```{r load_libraries}
 library(tidyverse)
-# library(osmdata) Didn't use in the end (got data from author)
 library(geojsonsf) # Used function geojson_sf to convert geojson into sf
-# library(glossa) # Used function invert_polygon (didn't use, idea didn't work)
 library(sf) # Used function st_intersection
 library(funkyheatmap) # Used function geom_rounded_rect
-# library(ggspatial) # Didn't use (no fitting arrows or scales)
 library(ggnewscale) # To reset scale colors
 library(geosphere) # To calculate distance for the scale
 library(r5r) # To calculate travel times by car
@@ -57,8 +58,6 @@ library(nngeo) # To remove wholes in isochrones
 library(smoothr) # To smoothen out the borders of the isochrones
 library(scales) # To be able to define alpha in certain arguments where it is
                 # not possible by default
-# library(shadowtext) # To add shadows in the isochrone legend (didn't plot as a
-                    # a line with shadow in the end, not using it).
 ```
 
 ## Replica
@@ -132,7 +131,7 @@ calgary_replica <- ggplot() +
   geom_sf( 
     data = hexroads_intersection,
     aes(color = time_color),
-    linewidth = 1.1,
+    linewidth = 1.1 * sr, # We multiply by the size ratio, as explained above
     show.legend = FALSE
   ) +
   scale_color_manual(
@@ -150,7 +149,7 @@ calgary_replica <- ggplot() +
     data = water,
     fill = "#a6b0b9",
     color = "#a6b0b9",
-    linewidth =1.1 
+    linewidth = 1.1 * sr,
     ) +
   theme_void()
 
@@ -165,8 +164,10 @@ We will now add the paragraph that explains what the map represents, and identif
 
 ```{r plot_paragraph}
 # We add the font used in the original plot:
-sysfonts::font_add_google("Atkinson Hyperlegible", family = "atkinson")
+sysfonts::font_add_google("Atkinson Hyperlegible Next", family = "atkinson",
+                          regular.wt = 300, db_cache = FALSE)
 showtext::showtext_auto()
+
 
 # And then plot the paragraph:
 calgary_replica <- calgary_replica + 
@@ -183,7 +184,7 @@ calgary_replica <- calgary_replica +
                   sep="\n"),
     hjust = 0,
     family = "atkinson",
-    size = 12.9,
+    size = 12.9 * sr,
     lineheight = 1.05,
     color = "#000000"
   ) + 
@@ -191,12 +192,12 @@ calgary_replica <- calgary_replica +
   # The blue point in the legend
    annotate(
     "point",
-    x = -114.2450,
+    x = -114.2440, #+10
     y = 50.97495,  
     shape = 21,
-    size = 8.25,
+    size = 8.25 * sr,
     color = "#000000",
-    stroke = 4.75,
+    stroke = 4.75 * sr,
     fill = "#69eafe"
   ) +
   
@@ -206,9 +207,9 @@ calgary_replica <- calgary_replica +
     x = -114.0631,
     y = 51.04465,
     shape = 21,
-    size = 8.25,
+    size = 8.25 * sr,
     color = "#000000",
-    stroke = 4.75,
+    stroke = 4.75 * sr,
     fill = "#69eafe"
   )
   
@@ -224,7 +225,6 @@ Since there is a lot of elements here, and we need to manually adjust everything
 **Note for Iñaki.** When I did this, I had doubts on whether it is an adequate approach. It was REALLY helpful to do it like this while plotting because this way I didn't have to navigate through the code to find the values i needed to slightly change, everything is together and clearly named at the top.
 
 ```{r plot_color_legend}
-
 # Settings:
 # =========
 
@@ -238,13 +238,13 @@ rectangle_fill <- c("#d26716", "#f8ad58", "#e3cdd5", "#ca8aba", "#8359a6")
 
 # Minutes:
 minute_separation <- 1.66 # Relative to rectangle_height
-minute_size <- 9 # For geom_text(size =
+minute_size <- (7 * sr) # For geom_text(size = minute_size)
 minute_color <- "#000000"
 minute_font <- "atkinson"
 
 # Faster by:
-faster_separation <- 0.7 # Relative to rectangle_height
-faster_size <- 11 # For geom_text(size = 
+faster_separation <- 0.7 * sr # Relative to rectangle_height
+faster_size <- (11 * sr) # For geom_text(size = faster_size)
 faster_color <- "#000000"
 faster_font <- "atkinson"
 
@@ -284,7 +284,8 @@ legend_faster <- tibble(
 
 # Plotting color legend:
 # ======================
-calgary_replica <- calgary_replica +
+# calgary_replica <-
+  calgary_replica +
 
   # Rounded rectangles:
   geom_rounded_rect( # From package: funkyheatmap
@@ -303,7 +304,9 @@ calgary_replica <- calgary_replica +
     aes(x = x, y = y, hjust = hjust, label = label),
     size = minute_size,
     color = minute_color, 
-    family = minute_font) +
+    family = minute_font,
+    vjust = 1
+    ) +
   
   # Faster by:
   geom_text(
@@ -311,10 +314,20 @@ calgary_replica <- calgary_replica +
     aes(x = x, y = y, hjust = hjust, label = label),
     size = faster_size,
     color = faster_color,
-    family = faster_font
+    family = faster_font,
+    vjust = 0
   )
 
-calgary_replica
+# calgary_replica
+
+# SAVE
+ggsave(
+  filename = "/home/odradek/css_master/1c_data_visualization_inaki_ucar_marques/adjusting_smaller/adj.png",
+  width = 10.03909,       # Your calculated width
+  height = 13.5,       # Your desired height
+  dpi = 96,            # The DPI you are aiming for
+  units = "in",        # Explicitly state inches
+  bg = "white")
 ```
 #### North arrow
 
@@ -1906,3 +1919,11 @@ white <- ggplot() +
 
 white # To see it
 ```
+
+## Limitations
+
+- Lo de los tiempos de viaje en bici muy rápido
+
+- La letra de la réplica es ligeramente más gruesa que la oriignal
+
+- 
