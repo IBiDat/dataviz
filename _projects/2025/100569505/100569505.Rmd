@@ -11,66 +11,58 @@ output:
     toc: true
 ---
 
-
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(out.width = "100%", fig.align = "center",
   fig.showtext = TRUE, fig.width = 10.03909, fig.height = 13.5)
 ```
 
-```{r setup_scaling_factor}
-# We did all the work with the same dimensions as the original map, which,
-# given a default dpi of 72, were: width = 25.5625 and height = 34.375 inches.
-# However, after receiving feedback informing about storage constraints,
-# we changed those values to create a smaller image. This means we need to 
-# adjust many values (like linewidth, text size, etc.) to fit the new (smaller)
-# dimensions. Instead of doing it manually, we will create an object with
-# the ratio we need to multiply by to mantain the original look. This will
-# also allow us to do faster changes in the future if we need to.
+## Introduction
 
-# Size ratio:
-sr <- 13.5/34.375
+How do we decide how to move around a city? For many commuters using sustainable transport modes, the choice between cycling and public transit is highly influenced by a decisive factor: travel time.
 
-```
+Our project analyzes and replicates a data visualization created by Willem Klumpenhouwer, which compares travel times by bike and transit in the city of Calgary, the largest city in Alberta, Canada. The map shows the difference in the time it takes to get to Calgary Tower by bike and by transit from any point of the city.
 
-
-## Original
-
-[Escribir una introducción mejor]
-
-Here's the map we are replicating. It was created by Willem Klumpenhouwer:
+Beyond assisting individual commuters, this visualization serves as a diagnostic tool for policy makers. By mapping the relative competitiveness of sustainable transport modes across the entire city, it highlights spatial inequities in transit access and identifies neighborhoods where investments in infrastructure could more needed or effective.
 
 ![Original map by Willem Klumpenhouwer](original_calgary.png){.external width="100%"}
 
+The data for the map was obtained from Open Street Maps. For bike travel times, the data is purely based on distance to Calgary Tower, and does not account for elevation. Transit travel time computes the entire duration of the trip (walking to the station or stop, waiting, riding, transferring, and walking to destination). To ensure consistency, the transit travel time for each point of the map was calculated every minute between 8:00 and 9:00 AM, using the median travel time for the map; this helps avoid outliers caused by specific schedule alignments, such as the significant time penalty of just missing a connection.
+
+The goal of this project is, first, to replicate the original map as closely as possible, and second, to propose an alternative visualization of the same data.
+
+## Set up
 
 ## Libraries:
+
+We start by loading the necessary libraries. Beyond `tidyverse` and `sf` for data manipulation and spatial operations, we rely on specific packages like `geojsonsf` to manipulate the data, `funkyheatmap`, `geosphere`, or `scales` to create the custom geometric elements required for the replication, and other libraries that aided us in building the alternative visualization. The chunk below includes a brief mention of what each library was used for:
 
 ```{r load_libraries}
 library(tidyverse)
 library(geojsonsf) # Used function geojson_sf to convert geojson into sf
-library(sf) # Used function st_intersection
-library(funkyheatmap) # Used function geom_rounded_rect
+library(sf) # Used function st_intersection to manipulate the data
+library(funkyheatmap) # Used geom_rounded_rect to replicate rounded rectangles
+library(geosphere) # To be able to calculate distances to plot the map scale
+library(nngeo) # Used st_remove_holes to remove holes in the isochrones 
+library(smoothr) # To smoothen out the hexagonal borders of the isochrones
 library(ggnewscale) # To reset scale colors
-library(geosphere) # To calculate distance for the scale
-library(r5r) # To calculate travel times by car
-library(osmextract) # To download data necessary to use r5r
-library(ggtext) # To have more text options
-library(nngeo) # To remove wholes in isochrones 
-library(smoothr) # To smoothen out the borders of the isochrones
-library(scales) # To be able to define alpha in certain arguments where it is
-                # not possible by default
+library(scales) # To define alpha in arguments where defaults dont't allow it
+library(ggtext) # To plot some text elements more easily, using less code
+# library(r5r) # To calculate travel times by car
+# library(osmextract)   # To download data necessary to use r5r
 ```
+
 
 ## Replica
 
 ### Loading the data
 
-We reached Willem Klumpenhouwer, the author of the plot that we are replicating, and he kindly shared the data with which he built the original plot. This data consists of three .geojson files: 
+We reached Willem Klumpenhouwer, the author of the original plot, who kindly shared the data with which he built the original plot, helping us ensure an accurate replication. The data he provided consists of three .geojson files: 
 
 - **`hexagons`** includes for variables: `geometry` (which contains polygons that form a hexagon grid of the map), `id` (an identification number for each hexagon), `b_travel_time` (travel time by bike from the centroid of each hexagon to Calgary Tower, in minutes), and `travel_time` (travel time by transit from the centroid of each hexagon to Calgary Tower, in minutes).
 
-- **`all_roads_dissolved`**  with a multilinestring that represents all roads in Calgary.
+- **`all_roads_dissolved`**, a multilinestring feature that represents all roads in Calgary.
 
--- **`water`** which contains mulitpolygons with the geometry of the water bodies in Calgary.
+-- **`water`** contains mulitpolygons with the geometry of some of the most relevant water bodies in the city of Calgary.
 
 ```{r load_data}
 hexagons <- geojson_sf("original_data/hexagons.geojson")
@@ -80,9 +72,9 @@ water <- geojson_sf("original_data/water.geojson")
 
 ### Data transformation
 
-Given the structure of the provided data, we only need to do small transformations in order to be able able to plot the original map.
+The structure of the data allows for a relatively straightforward transformation process. The core task is to map the travel time data (stored in the hexagons) onto the road network (where it is visualized).
 
-We start by creating a simple feature collection that combines the ids and travel time data from `hexagons` with the geometry of the roads that correspond with each hexagon. To do so, we calculate the intersection of `hexagons` and `all_roads_dissolved`.
+We achieve this by creating a spatial intersection between the hexagonal grid and the road network. This operation splits the road lines at the hexagon boundaries and assigns the corresponding hexagon attributes (ID and travel times) to each road segment.
 
 ```{r create_hexagons_roads_intersection}
 # hexroads_intersection <- st_intersection(all_roads_dissolved, hexagons)
@@ -95,7 +87,7 @@ We start by creating a simple feature collection that combines the ids and trave
 load("hexroads_intersection.RData")
 ```
 
-Then we add a new variable containing the difference in travel time by bike and by transit from each point. We also add a second variable with the differences binned in the ranges used in the original map.
+Next, we compute the primary variable for the visualization: the difference in travel time. We bin these differences into five categorical levels to match the original map's legend.
 
 ```{r add_travel_time_difference}
 # We are computing time_difference as time by bike minus time by transit. That means that:
@@ -112,17 +104,28 @@ hexroads_intersection <- hexroads_intersection |>
       time_difference < 30 ~ "1", # Transit 10 or more minutes faster (<30)
       time_difference >= 30 ~ "2"), # Transit 30 or more minutes faster 
     "time_color" = fct( 
-                   time_color, levels = c("-2", "-1", "0", "1", "2"))
-    )
+                   time_color, levels = c("-2", "-1", "0", "1", "2")))
 ```
 
 With our data ready, we can start plotting.
 
 ### Plotting
 
+#### Scaling ratio
+
+Initially, we developed the replica using the exact dimensions of the original map (25.2565 x 34.374 inches using RMD's default of 96 dpi) in order to be able to replicate the sharpness in its elements. However, after receiving feedback informing about storage constraints, we changed those values to comply with a significantly smaller file size. This meant that we needed to adjust many values (like linewidth, text size, etc.). 
+
+Instead of manually recalculating everything, we introduced a scaling ratio (`sr`). This object captures the proportion between our new target height (13.5 inches) and the original height. By multiplying our aesthetic values by `sr`, we can dynamically scale the entire visualization while preserving the relative proportions of the original design. This method also allows for easier changes if we want to perform any size changes in the future.
+
+```{r setup_scaling_ratio}
+# Scaling ratio:
+sr <- 13.5/34.375
+```
+
+
 #### Roads and water
 
-We start by plotting the map with roads adequately colored according to travel time differences. Notice that in the original map the water is plotted on top of the roads (we see there are no bridges over the rivers), we will do the same in our replica.
+We start by plotting the map with the road network adequately colored according to travel time differences. Notice that in the original map the water is plotted on top of the roads (we see there are no bridges over the rivers), we do the same in our replica.
 
 ```{r plot_roads_water}
 calgary_replica <- ggplot() +
@@ -131,7 +134,7 @@ calgary_replica <- ggplot() +
   geom_sf( 
     data = hexroads_intersection,
     aes(color = time_color),
-    linewidth = 1.1 * sr, # We multiply by the size ratio, as explained above
+    linewidth = 1.1 * sr, # We multiply by the scaling ratio, as explained above
     show.legend = FALSE
   ) +
   scale_color_manual(
@@ -156,16 +159,20 @@ calgary_replica <- ggplot() +
 calgary_replica # To see it
 ```
 
-After some time manually adjusting the values and comparing to the original plot, we have managed to plot roads and water with the same size as the original map.
-
 #### Paragraph 
 
-We will now add the paragraph that explains what the map represents, and identifies the blue point in the middle of the map as Calgary Tower.
+We will now add the introductory paragraph. This text block acts effectively as both a title and a descriptive legend, explaining the map's purpose and identifying the central blue point as the Calgary Tower.
+
+To ensure a faithful replication, we used the online tool [*What the font?*](https://www.myfonts.com/pages/whatthefont) to identify the exact typography used in the original visualization: Atkinson Hyperlegible Next, which is available in [*Google Fonts*](https://fonts.google.com/specimen/Atkinson+Hyperlegible+Next).
 
 ```{r plot_paragraph}
 # We add the font used in the original plot:
-sysfonts::font_add_google("Atkinson Hyperlegible Next", family = "atkinson",
-                          regular.wt = 400, db_cache = FALSE)
+sysfonts::font_add_google(
+  "Atkinson Hyperlegible Next",
+  family = "atkinson",
+  regular.wt = 400, 
+  db_cache = FALSE) # Cache wasn't up to date, didn't include our typography,
+                    # with FALSE we use the official, slower, but updated API.
 showtext::showtext_auto()
 
 
@@ -218,11 +225,9 @@ calgary_replica # To see it
 
 #### Color legend
 
-Now that we have the paragraph, we will plot the color legend underneath it. It is a non-standard legend which isn't part of ggplot's defaults. So we need to create the geometries and text manually.
+Now that we have the paragraph, we plot the color legend underneath it. It is a non-standard legend which isn't part of ggplot's defaults. So we need to create the geometries and text manually.
 
-Since there is a lot of elements here, and we need to manually adjust everything to fit the original plot, we will write the code in a way that will make it more convenient to use in this process of trial and error, by dividing it in three parts: a) *settings* where we will define the needed values, b) *calculations* of coordinate values according to the values defined in settings (this will allows us to avoid manually defining every single value needed), and c) the *plotting* according to the previous calculations.
-
-**Note for Iñaki.** When I did this, I had doubts on whether it is an adequate approach. It was REALLY helpful to do it like this while plotting because this way I didn't have to navigate through the code to find the values i needed to slightly change, everything is together and clearly named at the top.
+Since there is a lot of elements here, and we need to manually adjust everything to fit the original plot, decided to write the code in a way that makes it more convenient to use in the process of trial and error, by dividing it in three parts: a) *settings* where we define the needed values, b) *calculations* of coordinate values according to the values defined in settings (this allows us to avoid manually defining every single value needed), and c) the *plotting* according to the previous calculations.
 
 ```{r plot_color_legend}
 # Settings:
@@ -247,7 +252,6 @@ minute_separation <- 1.5 # Relative to rectangle_height
 minute_size <- (8 * sr) # For geom_text(size = minute_size)
 minute_color <- "#000000"
 minute_font <- "atkinson"
-
 
 
 
@@ -282,6 +286,7 @@ legend_faster <- tibble(
   "y" = rectangle_top + rectangle_height * faster_separation,
   "hjust" = c(1, 0.5, 0) # Justified: right, center, left
 )
+
 
 
 # Plotting color legend:
@@ -325,13 +330,11 @@ calgary_replica
 
 Our map is only missing the spatial reference elements. We will start by plotting the arrow pointing North.
 
-Once again, it is a non standard element. This means that default arrows do not work if we want a perfect replica. For example, the function `arrow()` inside `geom_segment(arrow = )` does not allow us to create an arrow that is at the same time as big as needed and as sharp (not rounded) as needed. There are packages like `ggspatial` that include functions to plot cardinal directions, but again, those don't fit our needs. So we will need to create a custom arrow. An easy solution that will allow us to plot a big arrow with a sharp head and a rounded shaft is plotting a triangular polygon with a rounded rectangle on top.
+Once again, it is a non standard element. This means that default arrows do not work if we want a perfect replica. For example, the function `arrow()` inside `geom_segment(arrow = )` does not allow us to create an arrow that is at the same time as big as needed and as sharp (not rounded) as needed. There are packages like `ggspatial` that include functions to plot cardinal directions, but again, those do not fit our aesthetic needs. Thus, we need to create a custom arrow. An easy solution that will allow us to plot a big arrow with a sharp head and a rounded shaft is plotting a triangular polygon with a rounded rectangle on top.
 
-Another thing that we should not is that there is a weird behaviour in geom_rounded_rectangle(): when line width increases, it plots undesired lines that don't follow the rounded rectangle shape. Which means that we cannot use a single `geom_rounded_rectangle()` without fill but with a contour line to to plot the box around the arrow. To overcome this, we will plot a black `geom_rounded_rectangle()` with a smaller white one on top to get the desired effect.
+To understand the code below, we must note that there is a weird behavior in `geom_rounded_rectangle()`: when line width increases, it plots undesired lines that do not follow the rounded rectangle shape. Which means that we cannot use a single `geom_rounded_rectangle()` without fill but with a contour line to to plot the box around the arrow. To overcome this, we plotted a black `geom_rounded_rectangle()` with a smaller white one on top to get the desired effect.
 
-
-Since, once again, there are lots of elements we need to build manually, and we will need lots of trial and error comparing to the original map until we get the exact replica, we will code using the same settings -> calculations -> plotting structure that we used before, which makes the trial-and error process much more comfortable. And we will often use relative values (relative to already existing shapes), which are easier to understand, read, and modify than absolute coordinate values with many decimals.
-
+Again, since we're creating non-standard elements, we continue with our "Settings -> Calculations -> Plotting" workflow to facilitate the trial-and-error process. We also rely on relative values (defined in relation to existing shapes) rather than absolute coordinates, which makes the code significantly easier to read and modify compared to using absolute coordinates with many decimals.
 
 ```{r plot_north_arrow}
 # Settings:
@@ -483,11 +486,11 @@ calgary_replica # To see it
 
 #### Scale  
 
-As was the case with the north-pointing arrow, the scale is non standard element, even packages like `ggspatial` do no include scales like the one we need. Once again, we will build it manually by trying different values until we get the exact replica as we did before. 
+As was the case with the North arrow, the scale bar is a non-standard element. Even specialized packages like `ggspatial` do not offer the specific design required for a faithful replica. Consequently, we build it manually using the same approach described above.
 
-The only difference now is that there is one value which we do not have to find by trial and error: the scale must represent 3 kilometers. To make sure we get the proper length, we will use `destPoint()` from package `geosphere`, which, as it documentation states: "given a start point, initial bearing (direction), and distance, this function computes the destination point travelling along a the shortest path on an ellipsoid (the geodesic)".
+However, unlike the arbitrary positioning of the legend elements, the scale bar represents a physical reality: 3 kilometers. To make sure we get the proper length, we use `destPoint()` from package `geosphere`, which, as it documentation states: "given a start point, initial bearing (direction), and distance, this function computes the destination point travelling along a the shortest path on an ellipsoid (the geodesic)".
 
-Note that, even though it is an unusual choice, in the original map the ticks in the scale are plotted over the horizontal line. We will maintain that in our replica.
+A distinct visual detail of the original map is that the vertical ticks are plotted over the horizontal line. We maintain this layering in our replica.
 
 ```{r plot_scale}
 # Settings:
@@ -511,6 +514,7 @@ km_space <- 0.275 # Space between km and scale, proportion of box height
 km_size <- (8 * sr) # For geom_text(size = )
 km_font <- "atkinson"
 km_color <- "#000000"
+
 
 
 # Calculations:
@@ -601,37 +605,32 @@ calgary_replica <- calgary_replica +
     )
 
 calgary_replica # To see it
-
 ```
 
 
 ## Alternative
 
-[Todavía tengo que redactar esto bien]
+While the original visualization effectively highlights the relative competitiveness of each mode, we identified two key opportunities for improvement:
 
-I believe the map is already pretty good (at least compared to some of the maps that my colleagues chose).
 
-For the alternative version we will address two of the main issues with the original map:
+  - *Absolute travel times.* The original map does not include information on absolute travel times. This is a critical piece of context for any potential user: for example, it is unlikely that someone chooses to travel by bike just because it is ten minutes faster; they probably want to know how long they will have to cycle to reach the destination. We will address this by adding isochrones that show the time it takes to get to Calgary Tower if the fastest travel mode is chosen.
 
-    a) It doesn't include any informations on absolute travel times (which is an important piece of information for any possible users of the map: for example, it is unlikely that someone chooses to travel by bike just because it is ten minutes faster, they probably want information on how long they will have to cycle for to reach the destination). We will address this by adding isochrones that show the time it takes to get to Calgary Tower if the fastest travel mode is chosen.
+  - *Readability.* some of the people to whom we showed the original map struggled to read it quickly. This has mainly to do with the legend: although understandable, it is not very intuitive (requiring the user to read a long paragraph first). We will address this by simplifying the text and changing the legend's disposition. We believe that representing the colors vertically helps the user understand the data faster, since it mirrors the actual flow of the map (where the full scale of colors from orange to purple appears vertically from North to South). On top of that, we will add a small extra legend showing how to read an annotated example point.
+
+In addition, we will carry out several specific refinements
+  
+  - *Layering.* We will plot the roads on top of the water, to show where bridges are.
     
-    b) The ---let's be honest, few--- people to whom I have shown the original map have struggled to quickly read it. That mainly has to do with the legend: although perfectly understandable, it is not very intuitive (you first need to read a long para). We will address this by changing the text that accompanies the legend (also making it shorter), the text in the legend (to aid quickly understanding it), and its disposition (we believe that representing the colors vertically can also help understand faster, since it is only vertically that we find the full scale of color until purple). On top of that, we will add small extra legend showing how to read an example point of the map.
+  - *Theme.* We will create a high-contrast dark version of the map.
 
-On top of these changes, we will carry out some minor ones:
-
-
-    c) We will plot the roads on top of the water, to show where bridges are.
-    
-    d) We will create a dark version of the map.
-
-    e) We will plot only one color for for the roads when bike is faster. The original map includes a dark orange that represents points from where bike is supposedly faster by more than 30 minutes. However, many of these don't make sense (for example, when they are inmediately next to points from which transit is faster; something that shouldn't be possible, especially when they are large areas [there should be a middle area where bike is faster by 10-30 minutes, the transition should be progressive]). Or are just tiny parts in motorway knots. We believe this is probably the result of flaws in r5py (which the author used to obtain the data)). We have decided to consider all areas where bike faster the same (under one single label indicating it is faster by 10-30'). This is not a perfect solution, but we couldn't come up with one. How to discriminate which points are the result of flaws in r5py and which ones are legitimate? We don't have a way to answer that question with the available data. Plotting it as if it was faster by 10-30' seems like a sensible solution because it is most likely true in the dark orange parts of the center of the map. It might be the case that some areas are actually dark orange, like the ones on the outer part of the map, but those are probably less populated (and transited) areas, so a mistake would affect less people.
+  - *Data incosintencies.* We will plot only one color for roads where the bike is faster. The original map includes a dark orange category representing points where cycling is supposedly >30 minutes faster. However, many of these data points do not make sense—for example, when they appear immediately next to points from which transit is faster. This shouldn't be possible, especially over large areas; there should be a middle area where the bike is faster by 10–30 minutes, showing a progressive transition. We believe these inconsistencies are likely the result of flaws in r5py (which the author used to generate the data). Since we cannot discriminate between legitimate points and artifacts with the available data, we decided to merge all "bike is faster" areas under a single label. While not a perfect solution, it seems like a reasonable approach after visual inspection of the map.
 
 
 ### Data transformation:
 
-The first step is to carry out some data transformation in order to be able to compute the isochrones. For that, we will add a new variable to `hexagons`, containing binned data (in 20 minutes bins) on what the travel time is if the fastest mode is chosen. Why did we choose 20 minute bins? Why not 15? Or 30? With 20 minutes bins we achieve a nice equilibrium between the (whole) map being informative, and not overloading the it whith isochrones.
+The first step is to carry out some data transformation in order to compute the isochrones. For that, we add a new variable to hexagons containing binned data (in 20-minute intervals) representing the travel time if the fastest mode is chosen.
 
-We will create four areas: under 20', under 40', under 60', and equal or more than 60'.
+Why did we choose 20-minute bins? Why not 15 or 30? We found that this interval achieves a nice equilibrium between making the map informative and not overloading it with too many isochrone lines. We will create four areas: under 20', under 40', under 60', and 60' or more.
 
 ```{r calculate_isochrones}
 hexagons2 <- hexagons |> 
@@ -647,29 +646,22 @@ hexagons2 <- hexagons |>
   filter(isochrones != 1)
 ```
 
-We used the last filter in order not to get an area for the last "isochrone" (since it has an infinite maximum value, it would just represent the border of the map, which adds no information and would only create visual noise). 
+We used the last filter in order not to get an area for the last "isochrone". Since it has an infinite maximum value, it would just represent the border of the map, which adds no information and would only create visual noise. 
 
-The reason we gave the isochrones a decreasing order is because (If we are not mistaken), the lowest values are being plotted first (at least, this seems to be the case visually when we tried different options). And, given the transformations we perform in the next chunk, the larger areas include they areas inside them (they are not doughnuts). Since we want to color in a gradient from cyan to gray, we need the smaller areas to have the biggest number to be plotted last (thus on top), and appear more more vivid (which they would not be the case if we plot a gray layer on top).
+The reason we gave the isochrones a decreasing order is because the lowest values are plotted first (at the bottom) and, given the transformations we perform in the next chunk, the larger areas include the areas inside them ---they are not doughnuts---. Since we want to color in a gradient from cyan to gray, we need the smaller areas to have the biggest number to be plotted last (on top), and appear more more vivid (which would not be the case if we plot a gray layer on top).
 
-Having clarified these things, we can can continue with the data transformation. We have the areas for the isochrones, but there are a few problems we need to solve. First of all, the areas we have are sets of hexagons, which means they create a "hexagon grid" effect when we plot them:
+Having clarified this, we can can continue with the data transformation. We have the areas for the isochrones, but there are a few problems we need to solve. Firstly, because our areas are simply sets of individual hexagons, plotting them directly results in a "hexagon grid" effect:
 
 ```{r show_hexagon_grid_problem}
-#| echo: false
-
 ggplot() +
   geom_sf(
     data = hexagons2, 
     aes(fill = isochrones),
     alpha = 0.5
     )
-
 ```
 
-
-
-To avoid this hexagon_grid effect, we need to combine all the hexagons in each area. Using `group by` and `summarise` is an elegantly simple solution, [this is where I got the idea from](https://stackoverflow.com/questions/49354393/r-how-do-i-merge-polygon-features-in-a-shapefile-with-many-polygons-reproducib)
-
-**Note for Iñaki.** *I'm not sure whether I should include this kind of "reference" (the stackoverflow.com one). I've got many more of them written down for other parts of the code, I could include more if you think I should, or remove this one if you think I shouldn't include them. The reason I decided to put this reference is because I thought this solution is particularly original (but maybe that's just my inexperienced eyes).*
+To resolve this, we need to dissolve the internal boundaries between adjacent hexagons of the same class. Using group_by followed by summarise is an elegantly simple solution to merge these features into single geometries.
 
 ```{r transform_isochrones_hexagon_grid_problem}
 hexagons2 <- hexagons2 |>
@@ -677,7 +669,7 @@ hexagons2 <- hexagons2 |>
   summarise()
 ```
 
-We now have isochrones that we can plot without the "hexagon grid" effect. However, there are two other problems: first, there are lots of holes in our isochrones; second, the border of our isochrones follows straight lines with the shape of the hexagons, which would create visual noise when plotted on top of the roads. Let's remove the wholes and smooth out the isochrones:
+We now have isochrones that we can plot without the "hexagon grid" effect. However, there are two other problems: first, there are lots of holes in our isochrones. Second, the border of our isochrones follows straight lines with the shape of the hexagons, which would create visual noise if plotted on top of the roads.  Let's remove the wholes and smooth out the isochrones:
 
 ```{r transform_isochrones_holes_and_smooth, warning=FALSE}
 hexagons2 <- hexagons2 |>
@@ -691,7 +683,9 @@ hexagons2 <- hexagons2 |>
     smoothness = 4)
 ```
 
-Why did we use st_cast? I initially tried `st_remove_holes()` from package `nngeo` directly. But it didn't work (the code did run, but we didn't get the desired effect). The reason is that the geometry in our object `isochrones` is multipolygon, and `st_remove_holes()` removes the holes inside each of the "polygons" that form a multipolygon. Looking at an example from the function's documentation might help clarify what I am trying to convey:
+Why did we use st_cast? Initially, we attempted `st_remove_holes()` from package `nngeo` directly. But it didn't work (the code did run, but we did not get the desired effect). The reason was that the geometry in our object `isochrones` is multipolygon, and `st_remove_holes()` removes the holes inside each of the "polygons" that form a multipolygon. 
+
+Looking at an example from the function's documentation might help us convey what st_remove_holes() does:
 
 ```{r st_remove_holes_documentation_example, fig.width=10, fig.height=5}
 opar = par(mfrow = c(1, 2))
@@ -707,17 +701,18 @@ result = st_remove_holes(mpol)
 plot(mpol, col = "#FF000033", main = "Before")
 plot(result, col = "#FF000033", main = "After")
 ```
-However, this doesn't fix all of the holes in our isochrones because... they are not actually holes! Even if they visually look like that, they are actually small "islands", they are small "polygons" part of a multipolygon. When, for example, the small "islands" of isochrone 4 are plotted inside isochrone 3, they look like holes, but `st_remove_holes()` doesn't fix that. That's why we use `st_cast()`: it divides the multipolygons into the polygons ("islands") that form them. And once we have done that, we can then filter by size (removing the small ones that look like holes). This way we fix both the holes and the small "island" that look like holes.
+The issue is that st_remove_holes() alone does not solve our problem because many of the visual gaps in our isochrones are not technically "holes"—they are small, detached "islands" (separate polygons within a multipolygon). For example, small pockets of 60-minute travel time appearing inside a 40-minute zone look like holes, but strictly speaking, they are separate geometries.
 
-Ready to plot!
+That's why we use `st_cast()`: it divides the multipolygons into the polygons that form them. Once we have done that, we can filter by size ---removing the small polygons that look like holes---. This way we fix both the holes and the small "island" that look like holes. We are now ready to plot.
 
 
 ### Plotting
 
 #### Roads, water, and isochrones
 
-We begin plotting the roads, water, and isochrones. We will first plot the isochrones' areas, since they would alter the color of the roads if we plotted them on top of them. After that, the water, then the roads (unlike the original map, where water was on top of roads), and finally the isochrones' border.
+We begin plotting the roads, water, and isochrones. We will first plot the isochrones' areas, since they would alter the color of the roads if we plotted them on top of them. After that, the water, then the roads to make sure bridges are visible (unlike in the original map, where water was on top of roads), and finally the isochrones' border.
 
+We have decided to plot water bodies using a light, contrasting color. We believe that rivers and lakes serve as critical visual landmarks, helping inhabitants of the city intuitively orient themselves and locate key places (like home or work) relative to these geographic features.
 
 ```{r plot_roads_water_isochrones}
 alternative <- ggplot() +
@@ -780,7 +775,7 @@ alternative # To see it
 
 #### A dissmissed legend option: lollipops
 
-For a while I thought I would go with this legend. I ended up discarding it because the lollipop lines add unnecessary noise across the map, and the information they provide is redundant with the color of the dots.
+We spent quite some time trying various kind of legend for road colors. We will discuss only one of the dismissed alternatives: for a while, we considered using a "lollipop" style legend. We ultimately discarded it because the lollipop lines added unnecessary visual noise across the map, and the information they provided was redundant with the color of the dots themselves, as can be seen below:
 
 ```{r black_isochr_fastest_street_legend}
 # Settings:
@@ -935,19 +930,18 @@ text_dot_space <- 0.0125 # Space between the text and the dots
     family = text_family,
     size = text_size
   )
-
 ```
 
 
 #### Color legend (streets option) (I think I'll choose this one)
 
-[Debería redactar esto mejor].
+Instead of the lollipops, we decided to go with a legend that looks like the streets it represents.
 
 As we discussed, one of the main issues with the original plot was that it was hard to understand the legend quickly. 
 
-One aspect of our alternative proposal is to plot thin vertical squares. The idea behind this decision is that they look like the roads they represent. On top of that, the colors in the legend appear in the same direction and order in which they appear in the map if you look to the right at the same height as the legend (middle to south, yellow to purple). Which we think helps quickly reading and understanding the map.
+For our alternative proposal, we chose to plot thin vertical rectangles. The idea is that they visually resemble the roads they represent. Furthermore, the colors in the legend appear in the same direction and order as they do on the map itself (scanning from North to South reveals a gradient from Yellow to Purple). We believe this alignment allows for much faster cognitive processing of the map.
 
-Since, once again, there's lots of manual work to do until we find pleasing values, we will use the same "settings -> calculations -> plotting" approach we used above.
+Since, once again, there's lots of manual work to do until we find pleasing values, we will use the same "Settings -> Calculations -> Plotting" approach we used above.
 
 ```{r plot_thin_vertical_squares}
 # Settings:
@@ -990,67 +984,62 @@ alternative <- alternative +
 alternative # To see it
 ```
 
-Next, we add an extra detail: "street arrows" (an arrow made out of actual streets from our map). These "street arrows" come out of the thin rectangles (which act as "main streets"), and point towards the meaning of that color. This makes the legend more visible, helps identify what each color means, and we think it adds a nice aesthetic touch.
+Next, we add a distinctive detail: "street arrows". These are pointers constructed from actual road geometries extracted from our map data. These arrows emerge from the thin rectangles (which act as "main streets") and point towards the descriptive text. This makes the legend more visible, reinforces the connection between the color and the road network, and adds a coherent aesthetic touch.
 
-```{r create_street_arrow_template}
+I used this code to find an adequate area of streets to use as arrow:
 
-# I used this to find an adequate area:
-# OPTION A) 
-# alternative + annotate(
-#     "polygon",
-#     x = c(c(-114.082, -114.082, -114.0633, -114.0633) # The sums allow me to
-#           + (-0.150)),                                # move fast around the
-#     y = c(c(51.044, 51.0465, 51.047, 51.0375)         # map looking for an
-#           + (-0.0259)),                               # area that i like.
-#     color = "green",
-#     fill = NA,
-#     linewidth = 1)
+```{r find_streets_for_legend}
+alternative + annotate(
+    "polygon",
+    x = c(c(-114.078, -114.078, -114.0631, -114.0631) # The sums allowed us to
+          + (-0.054)),                                # quickly move around
+    y = c(c(51.0445, 51.0455, 51.051, 51.039)         # the map looking for an
+          + (-0.08385)),                              # area that we liked.
+    color = "green",
+    fill = NA,
+    linewidth = 0.4)
+```
 
-# OPTION C) I'M USING THIS ONE
-# alternative + annotate(
-#     "polygon",
-#     x = c(c(-114.078, -114.078, -114.0631, -114.0631) # The sums allow me to
-#           + (-0.054)),                                # move fast around the
-#     y = c(c(51.0445, 51.0455, 51.051, 51.039)         # map looking for an
-#           + (-0.08385)),                              # area that i like.
-#     color = "green",
-#     fill = NA,
-#     linewidth = 0.4)
+Once we found the coordinates, we save them as a matrix, because that is the object later required by `st_polygon` 
 
-# Now that we found the coordinates, we save them as a matrix, 
-# because that's the object required by st_polygon:
+```{r save_street_arrow_coordinates}
 selected_coordinates <- as.matrix(
   tibble(
    "x" = c(c(-114.078, -114.078, -114.0631, -114.0631) + (-0.054)),
    "y" = c(c(51.0445, 51.0455, 51.051, 51.039) + (-0.08385))
    ) |> 
-  slice(1:4, 1)) # We need to repeat the first row in fifth place to close the
-                 # polygon
+  slice(1:4, 1)) # We need to repeat the first row in fifth
+                 # place to close the polygon
+```
 
- 
-# We create a polygon with those coordinates:
+We can now create a polygon with those coordinates:
+
+```{r create_polygon}
 selected_polygon <- st_polygon(x = list(selected_coordinates))
+```
 
-# Then select the corresponding area from 'hexagons by intersection'.
-# But before, we need to specify that our object uses the same coordinate
+
+Then select the corresponding area from 'hexagons by intersection':
+
+```{r create_street_arrow_polygon}
+# We need to specify that our object uses the same coordinate 
 # reference system (crs), otherwise st_intersection doesn't work.
 selected_polygon <- st_sfc(
   selected_polygon,
   crs = st_crs(all_roads_dissolved))
 
-
 # We can now get the intersection:
 selected_street <- st_intersection(all_roads_dissolved, selected_polygon)
+```
 
-# We create a new object with this sf object substracting from its
-# coordinates the coordinates of its centroid. This way, it will be easier to 
-# move (plot) repeatedly (we can put it wherever we want just by summing the
-# coordinates that we want to make the centroid).
+Finally, we create a new object with this sf object substracting from its coordinates the coordinates of its centroid. This way, it will be easier to move (plot) repeatedly (we can put it wherever we want just by summing the coordinates that we want to make the centroid).
+
+```{r create_street_arrow_polygon_template}
 centroid <- st_centroid(st_union(selected_street))
 street_arrow <- st_geometry(selected_street) - centroid
 ```
 
-We now have our "street arrow" template, we just need to plot it next to the squares:
+We now have our "street arrow" template, we are ready to plot it next to the vertical squares that act as "main roads":
 
 ```{r plot_street_arrows}
 # Settings:
@@ -1124,7 +1113,7 @@ alternative <- alternative +
 alternative # To see it
 ```
 
-We just need to add the text to finish the color legend. Even if we use more words than the original, we believe this makes it faster to read (also, using more words here allows us to save words in formulating the paragraph from the original plot as a shorter question, as we will see).
+We just need to add the text to finish the color legend. Even though we use more words than the original legend, we believe this format is faster to read (and allows us to simplify the main introductory paragraph into a concise question, which works better as a title for the plot).
 
 ```{r plot_color_legend_text}
 # Settings:
@@ -1162,7 +1151,7 @@ alternative <- alternative +
 alternative # To see it
 ```
 
-Finally, we plot a short question that both acts as a title saying what the map represents, and gives us information on where Calgary Tower is.
+Finally, we plot the short question that acts as a title explaining what the map represents, while also identifying central point as Calgary Tower.
 
 ```{r plot_question}
 # Settings:
@@ -1239,13 +1228,9 @@ alternative <- alternative +
 alternative # To see it
 ```
 
-
-
 #### Isochrones' legend
 
-We still need a legend explaining what the transparent cyan areas are. Since isochrones are widely used, and most people already understand them without much explanation, we can be very concise, and use very few words. Our legend will include the minutes "within" the isochrone border (we achieve this effect by plotting a number inside a black point with a border of the same color as the isochrone border), and a small annotation explaining what the numbers are next to the outer isochrone minutes dot-
-
-This last part (the small annotation) might even be unnecessary, we showed the map without the text explaining what the numbers are to a few people, and they correctly guessed what the numbers where. But we will keep so that there cannot be any doubts what the numbers "inside" the isochrones mean.
+We still need a legend explaining what the transparent cyan areas are. Since isochrones are widely used, and most people already understand them without much explanation, we can be very concise, and use very few words. Our legend will include the minutes "within" the isochrone border. We achieve this effect by plotting a number inside a black point with a border of the same color as the isochrone border. We also include a small annotation explaining that these numbers represent minutes. While our informal testing suggested people guess the meaning of the numbers correctly without the text, we included it to remove any potential ambiguity.
 
 ```{r plot_isochrones_legend}
 # Settings
@@ -1260,7 +1245,6 @@ iso_point_stroke_color <- alpha("#e5fcff", 0.7)
 # Text
 iso_text_size <- 6.5 * sr
 iso_text_color <- "white"
-
 
 # Point and text position
 x_20 <- -114.045
@@ -1379,9 +1363,9 @@ alternative # To see it
 
 #### Example point
 
-As mentioned earlier, we will include a point with an example of how to read the map. We will make use of the big black empty space between the streets northwest of Calgary Tower to integrate it organically.
+As mentioned earlier, we will include a point with an example of how to read the map (street color and isochrone). We made use of the large empty space between the streets northwest of Calgary Tower to integrate this annotation organically.
 
-```{r}
+```{r plot_example_point}
 alternative <- alternative +
   
   # Text:
@@ -1397,6 +1381,7 @@ alternative <- alternative +
     fill = NA,
     label.color = NA
   ) +
+  
   # Arrow:
   annotate(
     "curve",
@@ -1426,22 +1411,13 @@ alternative <- alternative +
   ) 
 
 alternative
-
-# SAVE
-ggsave(
-  filename = "/home/odradek/css_master/1c_data_visualization_inaki_ucar_marques/adjusting_smaller/adjalt.png",
-  width = 10.03909,    
-  height = 13.5,       
-  dpi = 96,          
-  units = "in",       
-  bg = "black")
 ```
 
 #### Isochrone islands explanation
 
-As mentioned earlier, we will include a point with an example of how to read the map. We will make use of the big black empty space between the streets northwest of Calgary Tower to integrate it organically.
+We also added an annotation to explain a phenomenon visible in the map, which may confuse some users: "islands" of faster travel time disconnected from the main isochrones. These are caused by the presence of transit stations.
 
-```{r}
+```{r plot_isochrone_island_explanation}
 alternative <- alternative +
   
   # Text:
@@ -1459,6 +1435,7 @@ alternative <- alternative +
     fill = NA,
     label.color = NA
   ) +
+  
   # Arrow:
   annotate(
     "curve",
@@ -1480,7 +1457,9 @@ alternative # To see it
 
 #### North arrow
 
-We believe that the north arrow maybe had a too prominent role in the original map. Users of the map probably can situate where the north is just because they are familiar with the city (and the river might be the most important visual reference for inhabitants of the city). Furthermore, cardinal directions are not too relevant to understand the map or use it for practical purposes (nobody moves around a city by bike or transit thinking of cardinal directions). That is why we decided to change its size, position, and color to be more discrete. We think that in the bottom right corner it organically fits the distribution of "visual weight" in the map (which kind of comes down from the top left corner to the bottom right), also, put it in here would make it the last thing we look to, since we are also used to read in that order (left to right, top to bottom). This way we achieve the secondary role we want the arrow to have.
+We felt the North arrow had a too prominent role in the original map. Most local users can orient themselves via the river or major roads, and cardinal directions are rarely the primary mental model for navigating a city by bike or transit.
+
+To give it a more appropriate secondary role, we reduced its size, moved it to the bottom right (following the natural "top-left to bottom-right" reading flow), and changed the color scheme to a subtle white-on-black to match the dark theme.
 
 ```{r plot_north_arrow_alternative}
 # Settings:
@@ -1574,7 +1553,9 @@ inner_box <- tibble(
 # Plotting:
 # =========
 alternative <- alternative +
-  geom_rounded_rect( #### Plot outer box (for border) ####
+  
+  # Outer box (for border effect):
+  geom_rounded_rect(
     data = arrow_box,
     aes(xmin = xmin, xmax = xmax,
         ymin = ymin, ymax = ymax),
@@ -1582,7 +1563,9 @@ alternative <- alternative +
     fill = box_color,
     color = NA
     ) +
-  geom_rounded_rect( ####Plot inner box (for border)
+  
+  # Inner box (for border effect):
+  geom_rounded_rect(
     data = inner_box,
     aes(xmin = xmin, xmax = xmax,
         ymin = ymin, ymax = ymax),
@@ -1590,13 +1573,17 @@ alternative <- alternative +
     fill = inner_box_color,
     color = NA
     )+
-  geom_polygon( #### Plot the arrow triangle ####
+  
+  # Arrow triangle:
+  geom_polygon(
     data = triangle_polygon,
     aes(x = x, y = y),
     fill = arrow_color,
-    color = NA # No border
+    color = NA 
     ) + 
-  geom_rounded_rect( #### Plot the arrow "body" ####
+  
+  # Arrow body:
+  geom_rounded_rect(
     data = arrow_rectangle,
     aes(xmin = xmin, xmax = xmax,
         ymin = ymin, ymax = ymax),
@@ -1604,7 +1591,9 @@ alternative <- alternative +
     fill = arrow_color,
     color= NA # No border
     ) + 
-  geom_text( #### Plot "North" text ####
+  
+  # "North" text:
+  geom_text(
     data = north,
     aes(x = x, y = y, label = label),
     size = north_size,
@@ -1618,7 +1607,7 @@ alternative # To see it
 
 #### Scale
 
-Finally, we add the scale. Since we made the north arrow smaller, we should also make it smaller for it not to stand out. Since it is a scale, changing its size affects the information it provides, so we should also change the information it represents to a shorter distance.
+Finally, we add the scale. Since the North arrow is now smaller, the scale must also be reduced to maintain visual balance. We adjusted the represented distance to 2km (from 3km) to fit these new dimensions.
 
 ```{r plot_alternative_final, preview=TRUE}
 # Settings:
@@ -1729,250 +1718,4 @@ ggsave(
   bg = "black")
 ```
 
-This is my alternative visualization proposal. What follows are dismissed ideas. Let's be honest
-
-
-## Dismissed ideas
-
-
-### From where is it faster by car
-
-[OpenRouteService API](https://api.openrouteservice.org/) allows me to calculate travel times by car from my hexagons, but the API Limit is 2000 routes per day, 40 per minute, which means it would take me 4 days to get data for all the hexagons in `intersection_hexagons` (which are the map hexagons that intersect with roads, thus the only one that i need data for). If I needed to recurrently update the plot with up-to-date data this would probably be the best option.
-
-But since I don't, I will use another option: `r5r` [(intro to r5r)](https://cran.r-project.org/web//packages/r5r/vignettes/r5r.html)
-
-#### Collecting car data with r5r
-
-In order to use r5r we need a network dataset from OSM in .pbf format. As the intro to r5r mentions, we can do this using the package `osmextract` [(more about it here)](https://docs.ropensci.org/osmextract/).
-
-```{r}
-oe_match("Calgary") # There's a direct match
-
-calgary_oe <- oe_get( # We extract the OSM data and get our .pbf file
-  place = "Calgary",
-  download_directory = "oe_osm_data/") 
-```
-
-Now that we have the .pbf file we can calculate car travel times with `r5r`:
-
-```{r}
-# We build the network that we will need to pass into travel_time_matrix() 
-r5r_network <- build_network("oe_osm_data/")
-
-# travel_time_matrix needs points with longitudes and latitudes in both
-# origins and destinations argument. But our hexagons are not points, so we
-# will compute the center of the hexagons and create a tibble. We can compute
-# only hexagons with roads to avoid unnecessary computation.
-hexagons_center <- as_tibble(
-  st_coordinates(st_centroid(hexroads_intersection$geometry)))
-
-origins_tibble <- tibble(
-  id = hexroads_intersection$id,
-  lon = hexagons_center$X,
-  lat = hexagons_center$Y,
-)
-
-# We get the coordinates for calgary tower on a data frame to be able to
-# pass it into travel_time_matrix:
-calgary_tower <- tibble(
-  id = "tower",
-  lon = -114.0631,
-  lat = 51.04465)
-
-# This takes long to compute (45') so I'll save the object so as to avoid
-# running it again.
-# ttm <- travel_time_matrix(
-#   r5r_network = r5r_network, # We pass the network we just created
-#   origins = origins_tibble,
-#   destination = calgary_tower,
-#   mode = "CAR",
-#   departure_datetime = as.POSIXct("2024-11-29 08:00:00"),
-# )
-# save(ttm, file = "ttm.RData")
-load("ttm.RData")
-```
-
-
-We now have the car travel times, now we can add them to to `hexroads_intersection`.
-
-```{r}
-# Car faster by more than xx minutes:
-cf <- 15 # Minutes
-
-# Less than xx minutes by bike or transit shows bike or transit (and not car).
-min <- 30 # Minutes
-
-hexroads_intersection2 <- hexroads_intersection |>
-  mutate("id" = as.character(id)) |> 
-  left_join(ttm, by = c("id" = "from_id")) |> # Join car travel times
-  mutate( # Rename travel_time_p50 to car travel time (car_tt)
-    "car_tt" =  travel_time_p50,
-    "time_color_car" = case_when( # When car more than 10 minutes faster: "9"
-      b_travel_time <= min | travel_time <= min ~ time_color,
-      car_tt - b_travel_time < -cf & car_tt - travel_time < -cf ~ "9",
-      car_tt - b_travel_time >= -cf | car_tt - travel_time >= -cf ~ time_color))
-```
-
-#### Plotting map with car data
-
-```{r plot_map_car}
-calgary_car <- ggplot() +
-  geom_sf( # We plot the roads:
-    data = hexroads_intersection2,
-    aes(color = time_color_car),
-    linewidth = 1.1,  # To make roads thicker
-    show.legend = FALSE
-  ) +
-  scale_color_manual(
-    values = c(
-      "-2" = "#aa5312",   # bike >30 min faster
-      "-1" = "#c88c47",   # bike 10–30 min faster
-      "0"  = "#b7a6ac",   # similar travel time
-      "1"  = "#a36f96",   # transit 10–30 min faster
-      "2"  = "#6a4886",   # transit >30 min faster
-      "9" = "#000000"     # car more than 10 minutes faster than both
-    )
-  )
-
-calgary_car
-```
-  
-
-### Isochrones by bike travel time (Iñaki's suggestion)
-
-#### Calculating bike isochrones
-
-- Mergin polygons idea from [here](https://stackoverflow.com/questions/49354393/r-how-do-i-merge-polygon-features-in-a-shapefile-with-many-polygons-reproducib)
-
-```{r compute_isochrones}
-# After quite some time of trial and error, 20' is the right balance between 
-# making the map informative, and a total line mess.
-
-# Calculating hexagons under each isochrone:
-hexagons2 <- hexagons |> 
-  mutate("iso_b_travel_time" = case_when(
-      b_travel_time < 20 ~ 1,
-      b_travel_time < 40 ~ 2,
-      b_travel_time < 60 ~ 3,
-      b_travel_time < 80 ~ 4,
-      b_travel_time >= 80 ~ 5)) |> 
-  filter(iso_b_travel_time != 5) # So that we don't get an area for the 
-                                 # last isohrone (which is the bb limit)
-
-
-# To avoid "hexagon grid" effect, I need to merge adjacent hexagons where
-# travel time by bike is the same.
-iso_bike <- hexagons2 |>
-  group_by(iso_b_travel_time) |> # We group hexagons with the same travel time
-  summarise() # We could use st_union, but this is simpler
-
-##### A problem to fix: holes.
-# ============================
-# When plotting iso_bike small holes appear. I need to get those removed.
-
-# I initially tried function st_remove_holes()  from package nngeo directly,
-# like this:
-# hexzones <- hexzones |> 
-#   st_remove_holes()
-# But it doesn't work. I think the problem is that our geometry is a
-# multipolygon. Annd st_remove_holes remove the holes inside each "polygon"
-# of the multipolygon (see the documentation of the function for a more
-# visual explanation of what i mean).
-
-# So I tried a new approach: first splitting the multipolygons into single 
-# polygons, selecting only the biggest ones (thus removing the small "holes"),
-# and then running st_remove_holes.
-iso_bike <- iso_bike |>
-  st_cast("POLYGON") |>  # We separate multipolygons into polygons
-  mutate("area" = st_area(geometry)) |>  # We calculate area of each polygon
-  group_by(iso_b_travel_time) |> # We group them by the same travel times
-  slice_max(area, n = 1) |>  # We keep only the polygons with the biggest area
-  st_remove_holes()
-
-# We see some warnings. Documentation says "If information gets lost while type
-# casting, a warning is raised". I'm not sure what information is lost, but
-# everything seems to work fine, so it isn't a problem.
-
-
-
-### Making area less sharp ("rounding" hexagons): 
-#================================================
-# I tried st_buffer (needed st_transform first for the function to work 
-# properly, but it didn't look good).
-iso_bike <- iso_bike |> 
-  smooth(method = "ksmooth", smoothness = 4) # smooth(method = chaikin) also
-                                             # looks good (more detailed though)  
-```
-
-#### Plotting bike isochrones
-
-```{r improved_white}
-## Plotting in white background:
-
-white <- ggplot() +
-  
-# A) We first plot the isochrone's areas (no borders yet)
-  geom_sf(
-    data = iso_bike, 
-    aes(fill = iso_b_travel_time), 
-    color = NA, 
-    alpha = 0.1,
-    show.legend = FALSE
-  ) + 
-  scale_fill_gradient(
-    low = "black", # Central isochrone
-    high = "white" # Outer isochrone
-  ) +
-
-# We plot the water first (so that roads appear on top)
-    geom_sf( # We plot the water:
-    data = water,
-    fill = "#a6b0b9",
-    color = "#a6b0b9",
-    linewidth = 1.1 # To make water thicker
-    ) +
-
-# Then we plot the roads:
-  geom_sf(
-    data = hexroads_intersection,
-    aes(color = time_color),
-    linewidth = 1.1,  # To make roads thicker
-    show.legend = FALSE
-  ) +
-  scale_color_manual(
-    values = c(
-      "-2" = "#aa5312",   # bike >30 min faster
-      "-1" = "#c88c47",   # bike 10–30 min faster
-      "0"  = "#b7a6ac",   # similar travel time
-      "1"  = "#a36f96",   # transit 10–30 min faster
-      "2"  = "#6a4886"   # transit >30 min faster
-    )
-  ) +
-
-# Anf finally the isochrone's borders (so that they appear on top of roads)
-  geom_sf(
-    data = iso_bike, 
-    aes(fill = NA),
-    color = "black", # I tried a gradient instead, but didn't look good.
-    fill = NA,
-    alpha = 1,
-    linewidth = 0.6
-  ) +
-  
-# Finally, theming to make the background white:
-  theme_void() +
-  theme(
-    plot.background = element_rect(fill = "white", color = NA),
-    panel.background = element_rect(fill = "white", color = NA)
-  )
-
-white # To see it
-```
-
-## Limitations
-
-- Lo de los tiempos de viaje en bici muy rápido
-
-- La letra de la réplica es ligeramente más gruesa que la oriignal
-
-- 
+This is our final alternative visualization. It combines the best parts of the original map ---the use of the road network to represent time differences, a strong color scheme, and water bodies as visual hints--- with absolute travel times via isochrones, giving users a complete picture of their commute. We also redesigned the legend to be more intuitive and faster to read, cleaned up the noise in the bike data, and added helpful annotations. Now, any user can quickly answer the question: "What's the fastest way to get to Calgary Tower?"
