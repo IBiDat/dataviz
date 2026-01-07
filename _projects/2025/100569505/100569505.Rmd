@@ -22,7 +22,7 @@ How do we decide how to move around a city? For many commuters using sustainable
 
 Our project analyzes and replicates a data visualization created by Willem Klumpenhouwer, which compares travel times by bike and transit in the city of Calgary, the largest city in Alberta, Canada. The map shows the difference in the time it takes to get to Calgary Tower by bike and by transit from any point of the city.
 
-Beyond assisting individual commuters, this visualization serves as a diagnostic tool for policy makers. By mapping the relative competitiveness of sustainable transport modes across the entire city, it highlights spatial inequities in transit access and identifies neighborhoods where investments in infrastructure could more needed or effective.
+Beyond assisting individual commuters, this visualization serves as a diagnostic tool for policy makers. By mapping the relative competitiveness of sustainable transport modes across the entire city, it highlights spatial inequities in transit access and identifies neighborhoods where investments in infrastructure could be more needed or effective.
 
 ![Original map by Willem Klumpenhouwer](original_calgary.png){.external width="100%"}
 
@@ -30,11 +30,11 @@ The data for the map was obtained from Open Street Maps. For bike travel times, 
 
 The goal of this project is, first, to replicate the original map as closely as possible, and second, to propose an alternative visualization of the same data.
 
-## Set up libraries:
+## Set up libraries
 
-We start by loading the necessary libraries. Beyond `tidyverse` and `sf` for data manipulation and spatial operations, we rely on specific packages like `geojsonsf` to manipulate the data, `funkyheatmap`, `geosphere`, or `scales` to create the custom geometric elements required for the replication, and other libraries that aided us in building the alternative visualization. The chunk below includes a brief mention of what each library was used for:
+We start by setting up the necessary libraries. Beyond `tidyverse` and `sf` for data manipulation and spatial operations, we rely on specific packages like `geojsonsf` to manipulate the data, `funkyheatmap`, `geosphere`, or `scales` to create the custom geometric elements required for the replication, and other libraries that aided us in building the alternative visualization. The chunk below includes a brief mention of what each library was used for:
 
-```{r load_libraries}
+```{r set_up_libraries}
 library(tidyverse)
 library(geojsonsf) # Used function geojson_sf to convert geojson into sf
 library(sf) # Used function st_intersection to manipulate the data
@@ -47,7 +47,6 @@ library(scales) # To define alpha in arguments where defaults don't allow it
 library(ggtext) # To plot some text elements more easily, using less code
 ```
 
-
 ## Replica
 
 ### Loading the data
@@ -58,12 +57,23 @@ We reached Willem Klumpenhouwer, the author of the original plot, who kindly sha
 
 - **`all_roads_dissolved`**, a multilinestring feature that represents all roads in Calgary.
 
--- **`water`** contains mulitpolygons with the geometry of some of the most relevant water bodies in the city of Calgary.
+- **`water`** contains mulitpolygons with the geometry of some of the most relevant water bodies in the city of Calgary.
 
 ```{r load_data}
-hexagons <- geojson_sf("original_data/hexagons.geojson")
-all_roads_dissolved <- geojson_sf("original_data/all_roads_dissolved.geojson")
-water <- geojson_sf("original_data/water.geojson")
+# Load the data:
+# We converted the .geojson files into .csv to upload it following the
+# guidelines in order. These were originally the .geojson the author provided.
+hexagons <- read_csv("hexagons.csv")
+roads <- read_csv("roads.csv")
+water <- read_csv("water.csv")
+
+# We restore the spatial geometry, specifying coordinate reference system: 
+hexagons <- st_as_sf(hexagons, wkt = "WKT", crs = 4326) |> 
+  rename(geometry = WKT) 
+all_roads_dissolved <- st_as_sf(roads, wkt = "WKT", crs = 4326) |>
+  rename(geometry = WKT)
+water <- st_as_sf(water, wkt = "WKT", crs = 4326) |> 
+  rename(geometry = WKT)
 ```
 
 ### Data transformation
@@ -73,14 +83,7 @@ The structure of the data allows for a relatively straightforward transformation
 We achieve this by creating a spatial intersection between the hexagonal grid and the road network. This operation splits the road lines at the hexagon boundaries and assigns the corresponding hexagon attributes (ID and travel times) to each road segment.
 
 ```{r create_hexagons_roads_intersection}
-# hexroads_intersection <- st_intersection(all_roads_dissolved, hexagons)
-
-# This line takes minutes to run, so we save the object to avoid running it
-# again. From now on, we can just load it.
-
-# save(hexroads_intersection, file = "hexroads_intersection.RData")
-
-load("hexroads_intersection.RData")
+hexroads_intersection <- st_intersection(all_roads_dissolved, hexagons)
 ```
 
 Next, we compute the primary variable for the visualization: the difference in travel time. We bin these differences into five categorical levels to match the original map's legend.
@@ -117,7 +120,6 @@ Instead of manually recalculating everything, we introduced a scaling ratio (`sr
 # Scaling ratio:
 sr <- 13.5/34.375
 ```
-
 
 #### Roads and water
 
@@ -320,8 +322,9 @@ calgary_replica <- calgary_replica +
     vjust = 0
   )
 
-calgary_replica
+calgary_replica # To see it
 ```
+
 #### North arrow
 
 Our map is only missing the spatial reference elements. We will start by plotting the arrow pointing North.
@@ -603,6 +606,7 @@ calgary_replica <- calgary_replica +
 calgary_replica # To see it
 ```
 
+With the replica finished, we can move on to the alternative visualization.
 
 ## Alternative
 
@@ -620,7 +624,6 @@ In addition, we will carry out several specific refinements:
   - We will create a high-contrast dark version of the map.
 
   - To address data inconsistencies, we will plot only one color for roads where the bike is faster. The original map includes a dark orange category representing points where cycling is supposedly >30 minutes faster. However, many of these data points do not make sense—for example, when they appear immediately next to points from which transit is faster. This shouldn't be possible, especially over large areas; there should be a middle area where the bike is faster by 10–30 minutes, showing a progressive transition. We believe these inconsistencies are likely the result of flaws in r5py (which the author used to generate the data). Since we cannot discriminate between legitimate points and artifacts with the available data, we decided to merge all "bike is faster" areas under a single label. While not a perfect solution, it seems like a reasonable approach after visual inspection of the map.
-
 
 ### Data transformation:
 
@@ -701,7 +704,6 @@ The issue is that `st_remove_holes()` alone does not solve our problem because m
 
 That's why we use `st_cast()`: it divides the multipolygons into the polygons that form them. Once we have done that, we can filter by size ---removing the small polygons that look like holes---. This way we fix both the holes and the small "island" that look like holes. We are now ready to plot.
 
-
 ### Plotting
 
 #### Roads, water, and isochrones
@@ -767,7 +769,6 @@ alternative <- ggplot() +
 alternative # To see it
 
 ```
-
 
 #### A dissmissed legend option: lollipops
 
@@ -927,7 +928,6 @@ alternative +
     size = text_size
   )
 ```
-
 
 #### Color legend
 
@@ -1707,7 +1707,7 @@ alternative <- alternative +
     color = km_color, 
     family = km_font)
 
-# alternative # To see it
+alternative # To see it
 ```
 
 This is our final alternative visualization. It combines the best parts of the original map ---the use of the road network to represent time differences, a strong color scheme, and water bodies as visual hints--- with absolute travel times via isochrones, giving users a complete picture of their commute. We also redesigned the legend to be more intuitive and faster to read, cleaned up the noise in the bike data, and added helpful annotations. Now, any user can quickly answer the question: "What's the fastest way to get to Calgary Tower?"
