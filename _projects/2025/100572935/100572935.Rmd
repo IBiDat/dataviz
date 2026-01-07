@@ -6,6 +6,7 @@ date: "`r Sys.Date()`"
 categories: "2025"
 output:
   distill::distill_article:
+    self_contained: false
     toc: true
 ---
 
@@ -13,7 +14,7 @@ output:
 knitr::opts_chunk$set(
   out.width   = "100%",
   fig.align   = "center",
-  fig.showtext = FALSE,
+  fig.showtext = TRUE,
   echo        = TRUE,
   message     = FALSE,
   warning     = FALSE
@@ -165,7 +166,6 @@ make_country_plot <- function(ctry) {
         family = "sans"
       ),
       plot.tag.position  = c(0.03, 1.10),
-      # a bit more top margin to give room above the panel
       plot.margin        = margin(t = 30, r = 5, b = 10, l = 45)
     )
 }
@@ -286,7 +286,6 @@ The resulting data frame `labels_df` is later used in `geom_text()` to
 write country names directly next to the lines instead of using a legend.
 
 ```{r improved-labels}
-# Labels at the end of each line
 labels_raw <- ms_clean %>%
   dplyr::group_by(country) %>%
   dplyr::filter(Year == max(Year)) %>%
@@ -328,7 +327,6 @@ These events provide context and help explain some of the changes in
 military spending over time.
 
 ```{r improved-events}
-# Some key events for reference
 events_df <- tibble::tibble(
   year  = c(1990, 2001, 2017),
   label = c(
@@ -357,17 +355,18 @@ The final chunk builds the actual chart:
   bold title.
 
 ```{r improved-all-countries, fig.width=10, fig.height=6, preview=TRUE}
+y_lim <- y_max * 1.08
+
 ggplot(
   ms_clean,
   aes(x = Year, y = spending_billion, colour = country)
 ) +
   geom_line(linewidth = 0.9) +
-  # event lines
   geom_segment(
     data = events_df,
     aes(
       x = year, xend = year,
-      y = 0,    yend = y_max * 0.96
+      y = 0,    yend = y_lim * 0.96
     ),
     inherit.aes = FALSE,
     linetype = "dashed",
@@ -377,17 +376,16 @@ ggplot(
     data = events_df,
     aes(
       x = year,
-      y = y_max * 0.99,
+      y = y_lim * 0.985,
       label = label
     ),
     inherit.aes = FALSE,
-    vjust = 1.0,
+    vjust = 0, 
     size = 3.4,
     family = "sans",
     fontface = "bold",
     colour = "grey40"
   ) +
-  # line-end labels
   geom_text(
     data = labels_df,
     aes(
@@ -406,7 +404,7 @@ ggplot(
     expand = expansion(mult = c(0, 0))
   ) +
   scale_y_continuous(
-    limits = c(0, y_max),
+    limits = c(0, y_lim),
     breaks = seq(0, y_max, by = 200),
     labels = format_spend,
     expand = expansion(mult = c(0, 0.05))
@@ -436,7 +434,7 @@ ggplot(
     panel.grid.minor.y = element_blank(),
     axis.text          = element_text(colour = "grey30"),
     legend.position    = "none",
-    plot.margin        = margin(t = 10, r = 60, b = 10, l = 10),
+    plot.margin        = margin(t = 15, r = 60, b = 10, l = 10),
     plot.title = element_text(
       hjust  = 0,
       colour = "grey20",
@@ -474,27 +472,26 @@ across countries, at the cost of making absolute differences in levels
 less intuitive.
 
 ```{r log-scale-plot, fig.width=10, fig.height=6}
-# smallest positive value for log scale
 min_pos <- min(
   ms_clean$spending_billion[ms_clean$spending_billion > 0],
   na.rm = TRUE
 )
 
-# nice log breaks in billions
+y_lim_log <- y_max * 1.20
+
 log_breaks <- c(10, 20, 50, 100, 200, 500, 1000)
-log_breaks <- log_breaks[log_breaks >= min_pos & log_breaks <= y_max]
+log_breaks <- log_breaks[log_breaks >= min_pos & log_breaks <= y_lim_log]
 
 ggplot(
   ms_clean,
   aes(x = Year, y = spending_billion, colour = country)
 ) +
   geom_line(linewidth = 0.9) +
-  # event lines (reuse events_df from the absolute plot)
   geom_segment(
     data = events_df,
     aes(
       x = year, xend = year,
-      y = min_pos, yend = y_max * 0.96
+      y = min_pos, yend = y_lim_log * 0.96
     ),
     inherit.aes = FALSE,
     linetype = "dashed",
@@ -504,17 +501,16 @@ ggplot(
     data = events_df,
     aes(
       x = year,
-      y = y_max * 0.99,
+      y = y_lim_log * 0.985,
       label = label
     ),
     inherit.aes = FALSE,
-    vjust = 1.0,
+    vjust = 0,
     size = 3.4,
     family = "sans",
     fontface = "bold",
     colour = "grey40"
   ) +
-  # line-end labels (reuse labels_df)
   geom_text(
     data = labels_df,
     aes(x = Year, y = label_y, label = label_text),
@@ -529,7 +525,7 @@ ggplot(
     expand  = expansion(mult = c(0, 0))
   ) +
   scale_y_log10(
-    limits = c(min_pos, y_max),
+    limits = c(min_pos, y_lim_log),
     breaks = log_breaks,
     labels = format_spend,
     expand = expansion(mult = c(0, 0.05))
@@ -558,7 +554,7 @@ ggplot(
     panel.grid.minor.y = element_blank(),
     axis.text          = element_text(colour = "grey30"),
     legend.position    = "none",
-    plot.margin        = margin(t = 10, r = 60, b = 10, l = 10),
+    plot.margin        = margin(t = 15, r = 60, b = 10, l = 10),
     plot.title = element_text(
       hjust  = 0,
       colour = "grey20",
@@ -590,7 +586,6 @@ It highlights that countries like China and India have experienced
 much faster proportional increases than more established military powers.
 
 ```{r index-1979-plot, fig.width=10, fig.height=6}
-# build index data: 1979 value = 100 for each country
 ms_index <- ms_clean %>%
   dplyr::filter(!is.na(spending_billion)) %>%
   dplyr::group_by(country) %>%
@@ -604,12 +599,12 @@ ms_index <- ms_clean %>%
   dplyr::ungroup() %>%
   dplyr::filter(!is.na(spending_index))
 
-# y-axis max for the index plot (rounded up nicely)
 y_max_idx <- ceiling(
   max(ms_index$spending_index, na.rm = TRUE) / 50
 ) * 50
 
-# line-end labels for the index plot
+y_lim_idx <- y_max_idx * 1.08
+
 labels_idx <- ms_index %>%
   dplyr::group_by(country) %>%
   dplyr::filter(Year == max(Year)) %>%
@@ -622,7 +617,6 @@ labels_idx <- ms_index %>%
     )
   )
 
-# key events (redefined here so the chunk is self-contained)
 events_idx <- tibble::tibble(
   year  = c(1990, 2001, 2017),
   label = c(
@@ -637,12 +631,11 @@ ggplot(
   aes(x = Year, y = spending_index, colour = country)
 ) +
   geom_line(linewidth = 0.9) +
-  # event lines
   geom_segment(
     data = events_idx,
     aes(
       x = year, xend = year,
-      y = 0,    yend = y_max_idx * 0.96
+      y = 0,    yend = y_lim_idx * 0.96
     ),
     inherit.aes = FALSE,
     linetype = "dashed",
@@ -652,17 +645,16 @@ ggplot(
     data = events_idx,
     aes(
       x = year,
-      y = y_max_idx * 0.99,
+      y = y_lim_idx * 0.985,
       label = label
     ),
     inherit.aes = FALSE,
-    vjust = 1.0,
+    vjust = 0,
     size = 3.4,
     family = "sans",
     fontface = "bold",
     colour = "grey40"
   ) +
-  # line-end labels
   geom_text(
     data = labels_idx,
     aes(
@@ -681,7 +673,7 @@ ggplot(
     expand  = expansion(mult = c(0, 0))
   ) +
   scale_y_continuous(
-    limits  = c(0, y_max_idx),
+    limits  = c(0, y_lim_idx),
     breaks  = seq(0, y_max_idx, by = 50),
     labels  = function(x) paste0(round(x), " (1979 = 100)"),
     expand  = expansion(mult = c(0, 0.05))
@@ -710,7 +702,7 @@ ggplot(
     panel.grid.minor.y = element_blank(),
     axis.text          = element_text(colour = "grey30"),
     legend.position    = "none",
-    plot.margin        = margin(t = 10, r = 60, b = 10, l = 10),
+    plot.margin        = margin(t = 15, r = 60, b = 10, l = 10),
     plot.title = element_text(
       hjust  = 0,
       colour = "grey20",
