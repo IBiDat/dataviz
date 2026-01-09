@@ -1,33 +1,46 @@
 ---
-title: "Track National Unemployment"
+title: "Track National Unemployment: Job Gains and Job Losses"
 description: |
   National Unemployment, Job Gains and Job Losses.
 categories: "2025"
-author: Miriam Lim Leal
+author: Miriam Lim
 date: "`r Sys.Date()`"
 output:
   distill::distill_article:
     self_contained: false
     toc: true
 ---
-## Libraries
 
-```{r}
+## Original Graph
+
+The graph titled "Track National Unemployment" was published in The Wall Street Journal, as an interactive tool to monitor changes in the U.S. job market over time. It aims to illustrate how employment levels vary across different industries, allowing readers to compare sector-specific trends and identify which areas of the economy are growing or declining. By presenting employment data in a visual format, the tracker highlights broader labor market patterns while facilitating users to explore industry-level differences in more detail.
+
+![Original chart. Source: National Bureau of Economic Research](original-chart.png){.external width="100%"}
+
+## Graph replication
+
+### Download libraries
+
+In order to replicate the graph the first step is to download the required libraries.
+
+```{r libraries}
 library(tidyverse)
 library(cowplot)
 library(colorspace)
 library(patchwork)
 ```
 
-## 1. Import data
+### Import data
 
-```{r}
+```{r import data}
 payrol_unemployment <- read.csv(file = "./monthly.csv")
 ```
 
-## 2. Add names to variables and convert "date" variable into date
+### Organise data for clarity
 
-```{r}
+Add the names to the variables and convert the "date" variable into date type.
+
+```{r sector lables}
 new_payrol_unemployement <- 
   payrol_unemployment |> 
   rename(date = "observation_date",
@@ -55,9 +68,11 @@ new_payrol_unemployement <-
   mutate(date = as.Date(date, format = "%Y-%m-%d"))
 ```
 
-## 3. Calculate month-over-month % change
+### Calculate month-over-month % change
 
-```{r}
+The original data set only provides the raw data, however to replicate the data it is necessary to make the calculation of the month-over-month percent change.
+
+```{r month-over-month % change}
 percentage_payroles <- new_payrol_unemployement |> 
   arrange(date) |> 
   mutate(across(
@@ -85,26 +100,19 @@ percentage_payroles <- new_payrol_unemployement |>
   ))
 ```
 
-order data from january-feb to check
+It is important to mention that the data is slightly different than original because the BLS(Bureau of Labor Statistics) constantly revises employment numbers after they are first released, so data downloaded at different times will have slightly different values.
 
-```{r}
-percentage_payroles |>
-  filter(date == "2008-02-01") |>
-  select(-date) |>  # temporarily remove date
-  pivot_longer(everything(), names_to = "industry", values_to = "pct_change") |>
-  arrange(desc(pct_change)) |>
-  select(industry, pct_change)
-```
+### Main plot
 
-Data is slightly different than original because the BLS(Bureau of Labor Statistics) constantly revises employment numbers after they're first released, so data downloaded at different times will have slightly different values.
+The main part of the plot has data divides into two: main part which has the percentage change (colourful) and a grey plot at the bottom with the percentage change values that are close to 0 (values between -0.01 and 0.01), very or little change.
 
-## 4. Split data into 2: stacked data and data_cero (values between -0.01 and 0.01)
+#### Tidy and divide data
 
-### 4.1 plot_data (only values that are not between -0.01 and 0.01)
+We divide the data into two: "plot_data" (colourful plot) and "data_zero" (grey plot), in order to create two plots for the main part of the data. Additionally we tidy the data using "pivot_longer" so that the information is organised in columns by date.
 
-Reorganise data, dates as columns rest of info as rows
+##### plot_data (values not between -0.01 and 0.01)
 
-```{r}
+```{r plot data}
 plot_data <- percentage_payroles |> 
   pivot_longer(
     cols = -date,
@@ -115,11 +123,9 @@ plot_data <- percentage_payroles |>
   filter(percentage_change <= -0.01 | percentage_change >= 0.01)
 ```
 
-### 4.2 data_cero (only values between -0.01 and 0.01)
+##### data_cero (values between -0.01 and 0.01)
 
-Reorganise data, dates as columns rest of info as rows
-
-```{r}
+```{r data zero}
 data_zero <- percentage_payroles |> 
   pivot_longer(
     cols = -date,
@@ -130,11 +136,13 @@ data_zero <- percentage_payroles |>
   filter(percentage_change > -0.01 & percentage_change < 0.01)
 ```
 
-## 5. Sort and stacked data
+#### Sort and stack data
 
-### 5.1 plot_data
+Since it is a stacked plot we have to order the data around the value zero so that positive values go from 0 to +Infinity and negative values from 0 to -Infinity. This has to be done to both datsets.
 
-```{r}
+##### plot_data
+
+```{r stacked data}
 stacked_data <- plot_data |> 
   group_by(date) |>  
   arrange(date, desc(percentage_change)) |> 
@@ -153,23 +161,23 @@ stacked_data <- plot_data |>
                "(-0.5,-0.25]", "(-0.25,0]", "(0,0.25]", 
                "(0.25,0.5]", "(0.5,0.75]", "(0.75,Inf]")
   ))
-
 ```
 
-### 5.2 data_cero
+##### data_cero
 
-```{r}
+```{r zero data}
 zero_stacked <- data_zero |> 
   group_by(date) |> 
   arrange(date, percentage_change) |> 
   mutate(stacked_position = row_number()) |> 
   ungroup()
-  
 ```
 
-## 6. Join data
+#### Combine data into the same dataset
 
-```{r}
+After we have divided the data into two we need to join them back again to create the main plot.
+
+```{r combine data mainplot}
 combined_data <- bind_rows(
   stacked_data |> 
     mutate(category = "main") |> 
@@ -184,11 +192,11 @@ combined_data <- bind_rows(
     select(date, order, pc_bin, category))
 ```
 
-## 7. Plotting the data
+#### Plotting
 
-### 7.1 Create main plot (two tile plots joined)
+Both two tile plots are plotted and saved as p1.
 
-```{r}
+```{r p1 main plot}
 p1 <- ggplot(combined_data, aes(x = date, y = order)) +
   annotate("rect", 
            xmin = as.Date(-Inf), 
@@ -266,10 +274,13 @@ p1 <- ggplot(combined_data, aes(x = date, y = order)) +
 p1
 ```
 
-### 7.2 Create colour scale plot
-Create a data for the legend of the colour scale
+### Colour scale plot
 
-```{r}
+The third part of this data visualization is a colour scale that goes from red to blue, representing the percentages in a scale that starts at below -1% to above 0.75%.
+
+#### Create the legend of the colour scale
+
+```{r ledgend colour scale}
 legend_data <- data.frame(
   x = 1:9,
   y = 1,
@@ -278,9 +289,11 @@ legend_data <- data.frame(
 )
 ```
 
+#### Plotting
 
-Create the plot
-```{r}
+In this case the color scale is plotted and saved as p2. It is also important to note that the size of the numbers and ticks are adjusted manually so that they fit when all of the plots are joined together in the next section.
+
+```{r p2 colour scale plot}
 p2 <- ggplot(legend_data, aes(x = x, y = y, fill = color_bin)) +
   geom_tile(width = 1, height = 1, color = NA) +
   scale_fill_manual(values = c(
@@ -317,18 +330,31 @@ p2 <- ggplot(legend_data, aes(x = x, y = y, fill = color_bin)) +
 p2
 ```
 
-## 8. Join plots
+### Join plots
 
-```{r}
+Plot p1 and p2 are joined together and their size is adjusted to properly replicate the original data visualization.
+
+```{r joined plots}
 ggdraw() +
-  draw_plot(p1) +
-  draw_plot(p2, x = 0.65, y = 0.75, width = 0.25, height = 0.20)
+  draw_plot(p1, x = 0.01, y = 0, width = 0.99, height = 0.90) +
+  draw_plot(p2, x = 0.65, y = 0.70, width = 0.25, height = 0.20) +
+  draw_label("Winners and Losers: Job Gains and Losses", x = 0.35, y = 0.96, size = 10, fontface = "bold", hjust = 0.5) +
+  draw_label("Track the number of sectors gaining or losing jobs each month. Boxes are shaded based on percentage change\nfrom the previous month in each sector's payrolls.", x = 0.16, y = 0.90, size = 8, hjust = 0)
 ```
 
+## Alternative graph
 
-## 9. Improvement
-### 9.1 new_plot dataset
-```{r}
+After doing the replication of the selected data visualization, several issues emerged that lead to a misrepresentation of the data. First, the original tile plot is interactive; therefore, by recreating it as a static visualization causes a loss of information. In the static version viewers can only infer the percentage range using the colour scale, not the exact value. More importantly, we can not see what sector each square is representing. Therefore, the previous plot is only helpful in reflecting the the overall tendency of the job market.
+
+![Interactive chart. Source: National Bureau of Economic Research](interactive_chart.png){.external width="100%"}
+
+Secondly, when checking the values, the y-axis only represents number of squares and squares on the same horizontal line vary highly in their values. This is because the tiles are ordered vertically, therefor making it difficult to compare for one column to the next.
+
+### New plot dataset
+
+We create a new data set with values only from the desired dates.
+
+```{r alternative graph data}
 bar_plot_new <- percentage_payroles |> 
   pivot_longer(
     cols = -date,
@@ -339,10 +365,11 @@ bar_plot_new <- percentage_payroles |>
 
 ```
 
+### Plotting data (main plot)
 
-### 9.2 Plotting data (main plot)
-sectors labels
-```{r}
+We assign to each variable the correct label name for each sector.
+
+```{r labels sector 2}
 names_sectors <- c(
   "construction" = "Construction",
   "durable_goods_manufacturing" = "Durable Goods Manufact.",
@@ -371,9 +398,11 @@ names_sectors <- c(
 )
 ```
 
+### Main plot
 
-Main plot
-```{r}
+The previous data is used to create an overlapping bar plot of all job sectors, usign zero as the reference value.
+
+```{r main barplot}
 p3 <- ggplot(bar_plot_new, aes(x = date, y = percentage_change, fill = sector)) +
   geom_col(position = "identity", width = 30, color = "white", linewidth = 0.3) +
   geom_vline(xintercept = as.numeric(as.Date(paste0(2009:2017, "-01-01"))), 
@@ -408,10 +437,13 @@ p3 <- ggplot(bar_plot_new, aes(x = date, y = percentage_change, fill = sector)) 
 p3  
 ```
 
+### Small plots
 
-### 9.3 Small plots
-Create a named vector with shaded colors for each sector
-```{r}
+Additionally in order to better view each sector, I created five smaller bar plots divided by sectors.
+
+#### Create a named vector with shaded colors for each sector
+
+```{r colour scale by sector}
 sector_colors <- c(
   # Goods-producing (GREEN  shades)
   "construction" = "#aad576",                     
@@ -443,13 +475,11 @@ sector_colors <- c(
    "local_government"= "#e01e37",                 
   "state_government" =  "#8B0000"                 
 )
-
 ```
 
+#### Goods producing industries
 
-
-Goods producing industries
-```{r}
+```{r Goods producing industries}
 goods_plot <- bar_plot_new|> 
   filter(sector %in% c("mining_and_logging", "construction", 
                         "durable_goods_manufacturing", "nondurable_goods_manufacturing")
@@ -478,9 +508,9 @@ goods_plot <- bar_plot_new|>
 goods_plot
 ```
 
+#### Trade & Transportation
 
-Trade & Transportation
-```{r}
+```{r Trade & Transportation}
 trade_trans_plot <- bar_plot_new|> 
   filter(sector %in% c("wholesale_trade", "retail_trade", "transportation_and_warehousing", "utilities")
          )|> 
@@ -508,9 +538,9 @@ trade_trans_plot <- bar_plot_new|>
 trade_trans_plot
 ```
 
+#### Business & Financial Services
 
-Business & Financial Services
-```{r}
+```{r Business & Financial Services}
 business_finan_plot <- bar_plot_new|> 
   filter(sector %in% c("information", "financial_activities", "professional_and_business_services")
          )|> 
@@ -538,9 +568,9 @@ business_finan_plot <- bar_plot_new|>
 business_finan_plot
 ```
 
+#### Consumer & Social Services
 
-Consumer & Social Services
-```{r}
+```{r Consumer & Social Services}
 consum_social_plot <- bar_plot_new|> 
   filter(sector %in% c("education", "health_care_and_social_assistance", "accommodation",
                        "restaurants_and_bars", "arts_entertainment_and_rec", "other_services")
@@ -569,9 +599,9 @@ consum_social_plot <- bar_plot_new|>
 consum_social_plot
 ```
 
+#### Government
 
-Government
-```{r}
+```{r Government}
 gov_plot <- bar_plot_new|> 
   filter(sector %in% c("federal_government", "state_government", "local_government")
          )|> 
@@ -599,9 +629,11 @@ gov_plot <- bar_plot_new|>
 gov_plot
 ```
 
+### Joining plots
 
-## 9.4 Joining plots
-```{r myplot, fig.width = 15, fig.height = 20}
+Lastly all plots are joined together to have a general view of the distribution of the data.
+
+```{r join multiple barplots, fig.width = 15, fig.height = 20}
 
 layout <-
   p3 /
@@ -613,10 +645,6 @@ layout <-
 layout
 ```
 
+This alternative graph provides a more detailed and clear view of the evolution of the number of jobs for each sector. The smaller plots allow for comparison between all sector of the most significant months where there were job gains or losses. Even though each type of job sector follows the general market trend, not all we affected the same way through out the years as a consequence of economic factors such as crises during 2008. 
 
-
-Distill is a publication format for scientific and technical writing, native to the web.
-
-Learn more about using Distill at <https://rstudio.github.io/distill>.
-
-
+In conclusion, this article outlines the process of recreating a graph that tracks national unemployment. This exercise emphasizes the importance of critically evaluating data visualizations, as although a graph may appear visually appealing, it can still lack clear structure and an easy-to-understand representation of the data. Additionally, it highlights the significant amount of effort involved in producing a graph that appears simple, requiring careful attention to detail to improve both its interpretability and overall usefulness.
