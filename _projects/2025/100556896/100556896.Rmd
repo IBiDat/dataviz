@@ -1,7 +1,7 @@
 ---
-title: "Dani's Project"
+title: "Replica of Russian Hybrid Warfare Activity"
 description: |
-  My project is a Russian hybrid warfare activity.
+  My project is a replication of the Russian hybrid warfare activity chart from the International Institute of Strategic Studies.
 categories: "2025"
 author: Danielle Marie Rivas
 date: "`r Sys.Date()`"
@@ -11,20 +11,38 @@ output:
     toc: true
 ---
 
-```{r setup, include=TRUE}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(out.width="100%", fig.align="center", fig.height = 8, fig.width = 15)
 ```
 
-## Original Graph Chosen
+## Original Graph Chosen and Introduction
 
-<img src="Russian hybrid warfare activity.png" width="500"/>
+I chose to focus my replication project on this graph because it shows patterns of Russian hybrid-warfare activity across different countries and sectors over time, which is a topic I find both relevant and timely. The chart highlights how these activities are spread across areas like energy, communications, military, and undersea infrastructure, and how the intensity changes from year to year. I selected this figure in part because, while it presents a lot of information, it is also somewhat difficult to read, especially due to the number of categories and overlapping bars. My goal in replicating the graph is not only to recreate it using code, but also to explore ways to improve its clarity and presentation, such as simplifying the layout or making trends over time easier to see. Working with this chart allows me to practice data manipulation and visualization techniques while also thinking critically about how complex political and security data can be communicated more effectively.
 
-## Replication
+![Original chart. Source: International Institute of Strategic Studies](Russian%20hybrid%20warfare%20activity.png){.external width="100%"}
+
+As we can see, the chart's x-axis gives country and year of occurance while the y-axis is total number of incidents. 
+
+## Libraries Used
+
+Library: tidyverse
+
+Reason: Provides a set of tools for data manipulation and visualization that are consistent and easy to use.
+
+Explanation: I used tidyverse to clean and organize the dataset (dplyr), create new calculated columns like cumulative counts (mutate), arrange and group the data by year and country (group_by, arrange), and make factors for plotting.
+
+Visualization: ggplot2 from tidyverse allowed me to create a stacked bar chart, customize colors for each sector, add text labels, and annotate the plot with year positions and boundaries. This made the patterns of Russian hybrid-warfare activity across countries and years clear and visually appealing.
 
 ```{r}
 library(tidyverse)
-library(scales)
+```
 
+
+## Getting the Data 
+
+So getting the data for this was a bit difficult on my end because when I go to the original source which was found on the Facebook page of the IISS that I got the graph from, didn't include 2025 data points and was missing some of the variables used in their Facebook chart. So, I had to create my own tribble manually pulling data by referencing the Facebook chart.
+
+```{r}
 df_recon1 <- tribble(
   ~year, ~country, ~sector, ~count,
   # 2018
@@ -86,7 +104,13 @@ df_recon1 <- tribble(
   2025, "Sweden", "Undersea", 1,
   2025, "Sweden", "Water", 1
 )
+```
 
+## Data Preperation and Ordering
+
+When I first tried plotting the data directly from the tribble, the countries on the x-axis were not appearing in the order I had listed them, and the stacked bars were also displaying incorrectly because the cumulative counts were calculated in the wrong order. To fix this, I first arranged the data by year and country and grouped it by these variables. I then calculated ymin and ymax for each row so that the stacked bar segments would start and end in the correct positions. After that, I created a combined label of country and year for the x-axis and converted it into a factor with a specific order based on the arrangement I wanted. This ensured that the bars stacked correctly and the x-axis displayed the countries in the intended order for each year.
+
+```{r}
 df <- df_recon1 |>
   arrange(year, country, row_number()) |>
   group_by(year, country) |>
@@ -103,7 +127,11 @@ desired_order <- df |>
   pull(xlabel)
 
 df$xlabel <- factor(df$xlabel, levels = desired_order)
+```
 
+When I first plotted the data, the legend for the sectors did not appear in the same order as the original graph, which was inconsistent with how the bars were stacked. To fix this, I converted the sector column into a factor and explicitly set the levels to match the order I wanted for the legend. I then aligned these factor levels with the sector_colors vector, which assigns a specific color to each sector. This ensured that the legend now matches the order of the stacked bars in the plot, keeping the visual representation consistent with the original design.
+
+```{r}
 sector_colors <- c(
   "Communications" = "#9CCCA6",
   "Energy" = "#EAA65A",
@@ -130,7 +158,13 @@ df$sector <- factor(
     "Water"))
 
 df$sector <- factor(df$sector, levels = names(sector_colors))
+```
 
+## Visualization
+
+To make the plot clearer, I calculated positions for the year labels and boundaries between years. Using year_positions, I found the center of each year’s group of countries to place the year labels above the bars. With year_boundaries, I identified where each year ends and added a small gap to draw vertical separators between years. Then, I used geom_rect() to create the stacked bars, geom_text() to add the year labels and boundaries, and customized the colors, axis labels, and legend so that the chart clearly shows sector activity by country and year.
+
+```{r}
 year_positions <- df |>
   distinct(country, year, xlabel) |>
   arrange(year, xlabel) |>
@@ -221,299 +255,21 @@ ggplot(df) +
     panel.spacing = unit(2, "lines")
   ) +
   coord_cartesian(clip = "off")
-
 ```
 
-<img src="rep.png" width="500"/>
 
-## Improvement Version One
+## Improvement and Reasoning
 
-```{}
-```
+I chose this final chart design to improve overall readability and clarity. By switching to a horizontal layout and placing the year directly next to each country, I avoided overcrowding on the axis and removed the need to group countries by year, which made the labels easier to interpret. The x-axis is explicitly labeled as the total number of incidents so the reader can immediately understand what the bar lengths represent. I also considered using a facet heatmap to help reduce the amount of times a country is repeated on the y-axis, but this approach did not work well for countries that experienced multiple sector incidents within the same year, as those incidents would overlap or be visually collapsed into a single value. This horizontal stacked layout allows each sector incident to be shown clearly while still making comparisons across countries and years straightforward.
 
 ```{r}
-library(tidyverse)
-library(scales)
-
-df <- tribble(
-  ~year, ~country, ~sector, ~count,
-  2018, "Greece", "Government", 1,
-  2019, "Bulgaria", "Government", 1,
-  2020, "Finland", "Energy", 1,
-  2020, "Finland", "Transport", 1,
-
-  2022, "Albania", "Military", 1,
-  2022, "Bosnia - Herzegovina", "Government", 2,
-  2022, "Bulgaria", "Military", 2,
-  2022, "Bulgaria", "Transport", 1,
-  2022, "Denmark", "Energy", 1,
-  2022, "Finland", "Government", 1,
-  2022, "Germany", "Military", 1,
-  2022, "Italy", "Communications", 1,
-  2022, "Norway", "Energy", 3,
-  2022, "Poland", "Government", 1,
-
-  2023, "Bulgaria", "Military", 2,
-  2023, "Estonia", "Undersea", 1,
-  2023, "Czech Republic", "Government", 1,
-  2023, "Germany", "Energy", 1,
-  2023, "Poland", "Transport", 4,
-
-  2024, "Czech Republic", "Transport", 1,
-  2024, "Denmark", "Water", 1,
-  2024, "Finland", "Undersea", 1,
-  2024, "Finland", "Water", 6,
-  2024, "France", "Transport", 3,
-  2024, "France", "Water", 1,
-  2024, "Germany", "Military", 5,
-  2024, "Germany", "Water", 2,
-  2024, "Norway", "Communications", 1,
-  2024, "Norway", "Military", 1,
-  2024, "Poland", "Military", 1,
-  2024, "Poland", "Undersea", 1,
-  2024, "Poland", "Water", 1,
-  2024, "Romania", "Health", 1,
-  2024, "Slovakia", "Military", 1,
-  2024, "Spain", "Industry", 1,
-  2024, "Sweden", "Communications", 1,
-  2024, "Sweden", "Undersea", 1,
-  2024, "Sweden", "Water", 1,
-  2024, "UK", "Health", 1,
-  2024, "UK", "Industry", 1,
-
-  2025, "Baltic Sea", "Undersea", 1,
-  2025, "Czech Republic", "Military", 1,
-  2025, "Germany", "Military", 1,
-  2025, "Germany", "Transport", 1,
-  2025, "Germany", "Undersea", 1,
-  2025, "Greece", "Energy", 1,
-  2025, "Netherlands", "Transport", 1,
-  2025, "Norway", "Energy", 1,
-  2025, "Serbia", "Military", 1,
-  2025, "Sweden", "Undersea", 1,
-  2025, "Sweden", "Water", 1
-)
-
-df <- df |>
-  mutate(
-    xlabel = paste0(country, "\n", year)
-  )
-
-desired_order <- df |>
-  distinct(year, country, xlabel) |>
-  arrange(year, country) |>
-  pull(xlabel)
-
-df$xlabel <- factor(df$xlabel, levels = desired_order)
-
-sector_colors <- c(
-  "Communications" = "#9CCCA6",
-  "Energy" = "#EAA65A",
-  "Government" = "#264A7A",
-  "Health" = "#DCECCB",
-  "Industry" = "#BFC0C1",
-  "Military" = "#5B6B4F",
-  "Transport" = "#D98E80",
-  "Undersea" = "#6E83B3",
-  "Water" = "#90C6F6"
-)
-
-df$sector <- factor(df$sector, levels = names(sector_colors))
-
-df <- df |>
-  group_by(year, country) |>
-  arrange(sector, .by_group = TRUE) |>
-  mutate(
-    ymin = c(0, cumsum(count)[-n()]),
-    ymax = cumsum(count)
-  ) |>
-  ungroup()
-
-year_positions <- df |>
-  distinct(year, xlabel) |>
-  mutate(x = as.numeric(xlabel)) |>
-  group_by(year) |>
-  summarise(x = mean(x))
-
-year_boundaries <- df |>
-  distinct(year, xlabel) |>
-  mutate(x = as.numeric(xlabel)) |>
-  group_by(year) |>
-  summarise(min_x = min(x), max_x = max(x)) |>
-  mutate(boundary_x = lag(max_x) + 0.5) |>
-  filter(!is.na(boundary_x))
-
-ggplot(df) +
-  geom_text(
-    data = year_positions,
-    aes(x = x, y = 8.1, label = year),
-    vjust = 0, fontface = "bold", size = 3
-  ) +
-  geom_vline(
-    data = year_boundaries,
-    aes(xintercept = boundary_x),
-    linetype = "dashed",
-    color = "grey70",
-    linewidth = 0.4
-  ) +
-  geom_rect(
-    aes(
-      xmin = as.numeric(xlabel) - 0.45,
-      xmax = as.numeric(xlabel) + 0.45,
-      ymin = ymin,
-      ymax = ymax,
-      fill = sector
-    ),
-    color = "white", linewidth = 0.3
-  ) +
-  scale_x_continuous(
-    breaks = seq_along(levels(df$xlabel)),
-    labels = df |> distinct(xlabel, country) |> pull(country)
-  ) +
-  scale_fill_manual(values = sector_colors) +
-  scale_y_continuous(expand = c(0,0), limits = c(0,8.5), breaks = 0:8) +
-  labs(
-    title = "Russian hybrid-warfare activity by country and year (2018–2025)",
-    subtitle = "Stacked counts by sector; each bar represents total confirmed incidents",
-    x = NULL, y = NULL, fill = NULL
-  ) +
-  theme_minimal(base_size = 13) +
-  theme(
-    plot.title = element_text(face = "bold", size = 18, hjust = 0.5),
-    plot.subtitle = element_text(size = 12, hjust = 0.5, margin = margin(b = 12)),
-    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor = element_blank(),
-    legend.position = "bottom",
-    plot.margin = margin(30, 20, 40, 20)
-  )
-```
-
-<img src="vers1.png" width="500"/>
-
-## Improvement Version Two
-
-```{r}
-library(tidyverse)
-library(scales)
-
-df <- tribble(
-  ~year, ~country, ~sector, ~count,
-  2018, "Greece", "Government", 1,
-  2019, "Bulgaria", "Government", 1,
-  2020, "Finland", "Energy", 1,
-  2020, "Finland", "Transport", 1,
-
-  2022, "Albania", "Military", 1,
-  2022, "Bosnia - Herzegovina", "Government", 2,
-  2022, "Bulgaria", "Military", 2,
-  2022, "Bulgaria", "Transport", 1,
-  2022, "Denmark", "Energy", 1,
-  2022, "Finland", "Government", 1,
-  2022, "Germany", "Military", 1,
-  2022, "Italy", "Communications", 1,
-  2022, "Norway", "Energy", 3,
-  2022, "Poland", "Government", 1,
-
-  2023, "Bulgaria", "Military", 2,
-  2023, "Estonia", "Undersea", 1,
-  2023, "Czech Republic", "Government", 1,
-  2023, "Germany", "Energy", 1,
-  2023, "Poland", "Transport", 4,
-
-  2024, "Czech Republic", "Transport", 1,
-  2024, "Denmark", "Water", 1,
-  2024, "Finland", "Undersea", 1,
-  2024, "Finland", "Water", 6,
-  2024, "France", "Transport", 3,
-  2024, "France", "Water", 1,
-  2024, "Germany", "Military", 5,
-  2024, "Germany", "Water", 2,
-  2024, "Norway", "Communications", 1,
-  2024, "Norway", "Military", 1,
-  2024, "Poland", "Military", 1,
-  2024, "Poland", "Undersea", 1,
-  2024, "Poland", "Water", 1,
-  2024, "Romania", "Health", 1,
-  2024, "Slovakia", "Military", 1,
-  2024, "Spain", "Industry", 1,
-  2024, "Sweden", "Communications", 1,
-  2024, "Sweden", "Undersea", 1,
-  2024, "Sweden", "Water", 1,
-  2024, "UK", "Health", 1,
-  2024, "UK", "Industry", 1,
-
-  2025, "Baltic Sea", "Undersea", 1,
-  2025, "Czech Republic", "Military", 1,
-  2025, "Germany", "Military", 1,
-  2025, "Germany", "Transport", 1,
-  2025, "Germany", "Undersea", 1,
-  2025, "Greece", "Energy", 1,
-  2025, "Netherlands", "Transport", 1,
-  2025, "Norway", "Energy", 1,
-  2025, "Serbia", "Military", 1,
-  2025, "Sweden", "Undersea", 1,
-  2025, "Sweden", "Water", 1
-)
-
-df <- df |>
-  mutate(
-    xlabel = paste0(country, "\n", year)
-  )
-
-desired_order <- df |>
-  distinct(year, country, xlabel) |>
-  arrange(year, country) |>
-  pull(xlabel)
-
-df$xlabel <- factor(df$xlabel, levels = desired_order)
-
-sector_colors <- c(
-  "Communications" = "#9CCCA6",
-  "Energy" = "#EAA65A",
-  "Government" = "#264A7A",
-  "Health" = "#DCECCB",
-  "Industry" = "#BFC0C1",
-  "Military" = "#5B6B4F",
-  "Transport" = "#D98E80",
-  "Undersea" = "#6E83B3",
-  "Water" = "#90C6F6"
-)
-
-df$sector <- factor(df$sector, levels = names(sector_colors))
-
-df <- df |>
-  group_by(year, country) |>
-  arrange(sector, .by_group = TRUE) |>
-  mutate(
-    ymin = c(0, cumsum(count)[-n()]),
-    ymax = cumsum(count)
-  ) |>
-  ungroup()
-
-year_positions <- df |>
-  distinct(year, xlabel) |>
-  mutate(x = as.numeric(xlabel)) |>
-  group_by(year) |>
-  summarise(x = mean(x))
-
-year_boundaries <- df |>
-  distinct(year, xlabel) |>
-  mutate(x = as.numeric(xlabel)) |>
-  group_by(year) |>
-  summarise(min_x = min(x), max_x = max(x)) |>
-  mutate(boundary_x = lag(max_x) + 0.5) |>
-  filter(!is.na(boundary_x))
-
-# horiztonal one
-
-df <- df |>
+df1 <- df |>
   mutate(
     xlabel2 = paste0(country, " (", year, ")"),
     xlabel2 = factor(xlabel2, levels = unique(xlabel2[order(year, country)]))
   )
 
-ggplot(df) +
+ggplot(df1) +
   geom_rect(
     aes(
       xmin = ymin,
@@ -525,8 +281,8 @@ ggplot(df) +
     color = "white", linewidth = 0.3
   ) +
   scale_y_continuous(
-    breaks = seq_along(levels(df$xlabel2)),
-    labels = levels(df$xlabel2)
+    breaks = seq_along(levels(df1$xlabel2)),
+    labels = levels(df1$xlabel2)
   ) +
   scale_x_continuous(expand = c(0,0), limits = c(0,8)) +
   scale_fill_manual(values = sector_colors) +
@@ -545,4 +301,3 @@ ggplot(df) +
   coord_cartesian(clip = "off")
 ```
 
-<img src="vers2.png" width="500"/>
