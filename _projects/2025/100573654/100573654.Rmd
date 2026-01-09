@@ -1,9 +1,9 @@
 ---
-title: "My Data Visualization Project"
+title: "The Evolution of TV Genres Over Time"
 description: |
   A stacked area chart displaying the evolution of TV over time
 categories: "2025"
-author: Anita Di Gennaro
+author: Anita Di-Gennaro
 date: "`r Sys.Date()`"
 output:
   distill::distill_article:
@@ -11,95 +11,115 @@ output:
     toc: TRUE
 ---
 
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(ggplot2)
 library(dplyr)
 library(RColorBrewer)
+library(here)
 
+library(gganimate)
+library(gifski)
+library(MetBrewer)
 ```
 
-##PART 1 - REPLICATION
+### PART 1 - REPLICATION
+
 ## Data gathering and preprocessing
-These files where gathered from the blog this plot was taken from.
+
+The data was gathered from the blog this plot was taken from. The blog is called 'Flowing Data' and it is managed by one person who shares different graphs he enjoys making, on a multitude of different topics. 
+The one I chose is a stacked area chart regarding the distribution of TV genres over time. The reason I chose it is because I like the colors and the shape, which then - in a funny turn of events - were the steps I had the most difficulty in. 
+To gather the data, I emailed the blog owner asking him for the dataset, and he was very kind in providing me with the section on the IMdb website where tsv files containing the data were available.
+
+In order to create the graph, I will try to first pre process the data to clean it and to make sure that all the information I need are available and ready to use. 
 
 The y axis in the original visualization is in percentages, so I will turn each value in the distribution of genres over time as a percentage.
-```{r}
-genres_time <- read_tsv("./export_data/genrecnts_time.tsv") #genres over time - not tidy data
 
-#percentages and cleaning the column names
+```{r first-preprocessing}
+
+#genres_time <- read_tsv("./export_data/genrecnts_time.tsv") 
+genres_time <- read_tsv(here::here("export_data", "genrecnts_time.tsv"))
+
+
 genres_time <- genres_time |> 
   mutate(across(where(is.numeric), ~ 100 * .x / sum(.x))) |> 
   rename_with(~ str_remove(.x, "^y"), starts_with("y"))
 
-#pivot the dataset to add more rows
+
 genres_time <- genres_time |> 
   pivot_longer(cols = -genre,
                names_to = "year",
                values_to = "percentage") 
 
-#turn year into a numeric variable, not character 
 genres_time <- genres_time |>
   mutate(year = as.integer(year))
 ```
 
-Now I need to order the data according to the latest peaks, which will be used to recreate the graph.
-For my area plot to follow the peaks' order, I will create a data set with each year's peaks and their percentages. Finally, I will add 'other' as the category with the highest peak, as it is portrayed in the graph.
+After this first cleaning and pre processing step, I need to order the data according to the latest peaks, which will be used to recreate the graph.
+
+For my area plot to follow the peaks' order, I will create a data set with each year's peaks and their percentages. Finally, I will add 'other' as the category with the highest peak, so that it will be plotted as the top layer as it is portrayed in the original visualization.
  
-```{r}
-#peak year for each genre
+```{r peaks}
+
 peaks <- genres_time |>
   group_by(genre) |>
   slice_max(percentage, n = 1, with_ties = FALSE) |>
   ungroup() |>
   select(genre, peak_year = year)
 
-#order genres by peak year and add Other at the end
 peaks <- peaks |>
   mutate(peak_year = if_else(genre == "Other", 0, peak_year)) |>
-  arrange(desc(peak_year))  #decreasing order
+  arrange(desc(peak_year))
 
 ordered_genres <- peaks$genre
 
-#reverse the order for ggplot to rightfully plot it
+
 genres_time <- genres_time |>
   mutate(genre = factor(genre, levels = rev(ordered_genres)))
 ```
 
 
 ## Replication of the graph
-Skeleton of the graph. 
+
+Now I can actually start to work on the graph'reproduction. I will start with a simple stacked area chart to see if the data is well pre processed, if the peaks are well developed and correspond to the original visualization. 
+Although this is an initial simple graph, some simple specificities were added in order to already gain a somewhat well rounded version of Flowdata's graph. 
+For example, the white lines between each layer were implemented from this very first rendition, and the graph's extension was manually implemented. 
+
 ```{r initial-replication}
+
 ggplot(genres_time, aes(x = year, y = percentage, fill = genre, group = genre)) +
-  geom_area(position = "stack", alpha = 0.8, color = "white", size = 0.1) +  #white lines between each layer
+  geom_area(position = "stack", alpha = 0.8, color = "white", size = 0.1) +  
   scale_y_continuous(
     labels = function(x) paste0(x, "%"),
     breaks = seq(0, 100, 20),
     expand = c(0, 0) 
   ) +
   scale_x_continuous(
-    breaks = seq(1945, 2020, 10), #sequence of the years, jump each decade - will then need to be adjusted
-    expand = c(0, 0) #extend the graph through the whole line
+    breaks = seq(1945, 2020, 10), 
+    expand = c(0, 0)
   ) +
-  theme_void() + #remove all the default R theme features to then add the ones I want
+  theme_void() +
   theme(       
     axis.text.x = element_text(size = 10),
     axis.text.y = element_text(size = 10),
-    legend.position = "none", #no legend
+    legend.position = "none", 
     plot.margin = margin(10, 10, 10, 10)
   )
 ```
 
-To smooth the lines determining each area, I will try to directly smooth the data since smoothing the lines did not work. I first tried to adjust it through type="ridge" through ggstream but it was not as smooth as the original graph.
-I then tried to apply a local polynomial regression adjusting the span to the highest possible value - I tried up to span = 0.3, but it was not working.
+From this first rudimental version of the area chart, what comes to mind is the sharp lines that define each layer, which are very different from the original area chart that I aim to reproduce. The lines, in the original version, are very smooth, creating almost wave-like shapes, instead of the sharp spikes that are default in a stacked area chart. 
+My first approach was to use typr = 'ridge' through ggstream, as seen in class. This attempt did not improve the lines because the smoothness that it applied to the lines was not as strong as in the original version. 
 
+Therefore, I tried to directly smooth the data since smoothing the lines did not work. 
+My second attempt was to apply a local polynomial regression adjusting the span to the highest possible value - I tried up to span = 0.3, but it was not working. The smoothness was never quite right, and the areas' shape always ended up looking uneven. 
+
+After some research and some help from Gemini, I was able to achieve my goal through the spline function. 
 SPLINE FUNCTION (from R documentation): Perform cubic (or Hermite) spline interpolation of given data points, returning either a list of points obtained by the interpolation or a function performing the interpolation. 
-Basically it draws a smooth curve through your the data and calculates what the percentage would be at each new point. It draws curves, which allows my graph to look smoother and more similar to the original one. 
+Basically it draws a smooth curve through your the data and calculates what the percentage would be at each new point. It draws curves, which allowed my graph to look smoother and much more similar to the original one. 
 
 ```{r smooth-lines}
-#create spline-interpolated smooth curves
+
 genres_time_smooth <- genres_time |>
   group_by(genre) |>
   arrange(year) |>
@@ -108,14 +128,13 @@ genres_time_smooth <- genres_time |>
     percentage_interp = spline(year, percentage, xout = seq(min(year), max(year), length.out = 200))$y
   ) |>
   ungroup() |>
-  #keep factor levels
   mutate(genre = factor(genre, levels = levels(genres_time$genre)))
 
-#keep all levels within 100 even now that the data has been smoothed out
+
 genres_time_smooth <- genres_time_smooth |>
   mutate(percentage_interp = pmin(percentage_interp, 100))
 
-#plot with interpolated data
+
 ggplot(genres_time_smooth, aes(x = year_interp, y = percentage_interp, fill = genre)) +
   geom_area(color = "white", size = 0.2) +
   scale_y_continuous(
@@ -135,15 +154,20 @@ ggplot(genres_time_smooth, aes(x = year_interp, y = percentage_interp, fill = ge
     plot.margin = margin(10, 10, 10, 10))
 ```
 
-The x axis needs to have a jump from 1945 to 1950, and from then onwards to be marked every 10 years. In order for it work, I need to manually adjust them. 
-The y axis has percentages, marked every 20%.
+The further step I took in order to improve my replication was working on the axis. 
+The x axis needs to have a jump from 1945 to 1950, and from then onwards to be marked every 10 years. In order for it work, I manually adjusted them. 
+The y axis was easier to manage because it has percentages, marked every 20%.
 
-With ggplot it is really complex to make the axis float, and I was not able to replicate it. Here I also adjusted the font, taking the needed font from Google. 
+The axis's ticks in the original graph float, and I tried many different ways to make them float, also asking AI tools, but the answer I got was finally on Reddit, and it was as simple as - you can't. 
+I found out that, with ggplot, it is really complex to make the axis float, since it is not a function that the package allows for easily. Therefore, for the sake of time and for my mental health, I decided to give up and focus on elements I could actually work on.
+
+During this step I also adjusted the font to apply to annotations and to the title, which was taken from Google. Now that my graph started to feel more complete and getting closer to the original visualization, I saved it as a 'p' object to have it as a structured base to then build upon. 
 
 ```{r axis-font}
+
 library(showtext)
-font_add_google("EB Garamond", "eb-garamond") #for title and annotations
-showtext_auto() #enable it 
+font_add_google("EB Garamond", "eb-garamond") 
+showtext_auto() 
 
 p <- ggplot(genres_time_smooth, aes(x = year_interp, y = percentage_interp, fill = genre)) +
   geom_area(color = "white", size = 0.1) +
@@ -155,7 +179,7 @@ p <- ggplot(genres_time_smooth, aes(x = year_interp, y = percentage_interp, fill
     position = "left"
   ) +
   scale_x_continuous(
-    breaks = c(1945, 1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020), #manually input the years 
+    breaks = c(1945, 1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020), 
     expand = c(0, 0)
   ) +
   coord_cartesian(ylim = c(0, 100), clip = "off") +
@@ -166,28 +190,27 @@ p <- ggplot(genres_time_smooth, aes(x = year_interp, y = percentage_interp, fill
   theme_minimal() +
   theme(
     text = element_text(family = "sans"),
-    panel.border = element_rect(color = "grey40", fill = NA, size = 0.4), #rectangle from the axis
-    panel.grid = element_blank(), #to remove grid lines 
-    #title
+    panel.border = element_rect(color = "grey40", fill = NA, size = 0.4), 
+    panel.grid = element_blank(),  
     plot.title = element_text(family = "eb-garamond", size = 18, face = "bold", hjust = 1, margin = margin(b = 5)),
-    #text of the axis
-    axis.text.x = element_text(size = 9, color = "grey40", margin = margin(t = 8)), #add space
+    
+    axis.text.x = element_text(size = 9, color = "grey40", margin = margin(t = 8)), 
     axis.text.y = element_text(size = 9, color = "grey40", margin = margin(r = 8)),
     axis.line = element_blank(),
-    #remove default ticks
+   
     axis.title = element_blank(),
-#TICKS
+
     axis.ticks = element_line(color = "grey40", linewidth = 0.3),
     axis.ticks.length = unit(6, "pt"), 
-    #legend
+   
     legend.position = "none",
-    #background
+ 
     panel.background = element_rect(fill = "white", color = NA),
     plot.background = element_rect(fill = "white", color = NA),
 
     plot.margin = margin(15, 15, 15, 15))
 
-#adding the 'percentage of episodes' annotation on the upper left corner
+
 p <- p +
   annotate(
     "text", 
@@ -205,23 +228,33 @@ p <- p +
 p
 ```
 
-A gradient scale with a range from darkest to lightest color was created. To replicate the graph as closely as possible, the main recognizable (and biggest) layers were replicated and manually inserted through a color picker tool.
+Now this was one of the trickiest part of the graph's recreation. The colors in the graph are very light and have very slightly different shades, creating a nice effect - although making it really hard to read the graph. 
+There are many different shades of blue and light blue, some almost white. I tried to apply some pre-existing blue scales, hoping for a magical scale that would by chance be exactly the same as the one in the original graph. Of course, it didn't exist. 
+I therefore tried to manually pick all the shades through a color-picking tool, but after the first 10 shades I was going blind. Some layers are so thin that it was almost impossible to identify the color, and most of all their order. 
+
+To solve this issue I opted for a middle ground, which worked surprisingly (but not perfectly) well.
+A gradient scale with a range from darkest to lightest color identified in the graph was created. 
+To replicate the graph as closely as possible, the thickest and most recognizable layers were identified with a color-picker tool and saved, to then be manually inserted within the graph.
+
+#COLORS
+
 
 ```{r colors}
+
 ordered_genres <- levels(genres_time_smooth$genre) 
 ordered_blue_genres <- ordered_genres[ordered_genres != "Other"]
 n_blue_genres <- length(ordered_blue_genres)
 
-# with colorPicker, the key three colors were defined - darkest, medium and lighter, plus a medium reference color
+
 dark_blue <- "#c4dfe8"
 mid_blue <- "#cee2e9" 
 light_blue <- "#f7fbfc" 
 
-#colorRampPalette automatically smooths the transition between the provided colors.
+
 blue_function <- colorRampPalette(c(dark_blue, mid_blue, light_blue))
 gradient_colors <- blue_function(n_blue_genres)
 
-#to get the final palette, I will be adding some reference colors to specific genres to make it more precise
+
 full_palette <- gradient_colors
 names(full_palette) <- ordered_blue_genres
 
@@ -238,29 +271,34 @@ p <- p +
     scale_fill_manual(values = full_palette)
 
 p
-
-#ggsave("p.jpg", width = 14, height = 9, dpi = "screen")
 ```
 
-Attempting to manually input the main labels by looking at the original graph and placing them according to their approximate position on the x and y axis. Four vectors were created (labels, x coordinates, y coordinates and size), which were then annotated. 
+The final step to complete the replication was to add labels. 
+In the original visualization the labels were placed in very specific spots, with different sizes and placed in groups in different part of the graph. 
+
+To place them as closely as possible to the original graph, the main labels were manually input by looking at the blog's visualization and by placing them according to their approximate position on the x and y axis. 
+To achieve this, four vectors were created (labels, x coordinates, y coordinates and size), which were then annotated. This was a very tedious step of the replication, and given the great amount of specificity and the quantity of the actual labels, I was not able to place all of them. 
+
+I manually placed around 70 labels, writing for each the position on the x and y axis and their sizze, attempting to make it look as close as possible to the original visualization.
+
 ```{r labels}
-#vectors 
+
 labels <- c("Animation & Comedy & Family", "Adventure & Animation & Comedy", "Sport", "Comedy & Music", "Crime & Drama", "Action & Adventure & Family", "Drama & History", "Comedy & Family", "Family & Game Show", "Documentry & News", "Documentary & Family", "Comedy & Drama", "Music", "Family & Music", "Sci Fi", "Comedy & Family & Music", "Drama","Other", "Crime", "Fantasy", "Adult", "Reality TV", "Documentary", "Action & Comedy & Drama", "Talk Show", "News", "News & Talk Shows", "Drama & Romance", "Comedy", "Animation", "Action & Adventure & Crime", "Adventure", "Music & Talk Shows", "Animation & Comedy", "Documentary & History", "Reality & Romance", "Action & Adventure & Animation", "Adventure & Animation & Family", "Game Show", "Comedy & Music & Talk Show", "Comedy & Drama & Music", "Comedy & Drama & Mystery", "Comedy & Talk Show", "Family", "Horror", "Romance", "Western", "Documentary & Music", "Drama & Family", "Adventure & Comedy & Family", "Comedy & Crime & Drama", "Animation & Family", "Documentary & Talk Show", "Comedy & Drama & Fantasy", "Adventure & Drama & Family", "Action & Adventure & Drama", "Family & Game Show & Reality TV", "Comedy & Crime & Drama",  "Comedy & Family & Fantasy", "Adventure & Comedy & Family", "Drama & Family & Romance","Comedy & Crime & Sport", "comedy & Documentary", "Reality Tv & Talk Show", "Thrillers", "Drama & Thriller", "History", "Short", "Drama & Reality TV", "Crime & Documentary", "News & Sport & Talk Show", "Music & Reality TV", "Documentary & Reality TV", "Comedy & Romance", "Game Show & Music & Reality TV"
 )
 
-#X coordinates (year positions)
+
 x_coord <- c(1945, 1945, 1946, 1945.5, 1945.5, 1954, 1954, 1954, 1953, 1956, 1952, 1952, 1947, 1949, 1950, 1948, 1957, 2017, 2018, 2018, 2016, 2012, 2015, 2011, 2020, 2020, 2019, 1982, 1953, 1959, 1959, 1960, 1960, 1960, 1985, 1983, 1985, 1985, 1986, 1956, 1958, 1959, 1963, 1964, 1964, 1969.5, 1958, 1969, 1972, 1972, 1974, 1976, 1978, 1980, 1982, 1984, 1986, 1988, 1992, 1993, 1993, 1994, 2003, 2003, 2003, 2019, 2019, 2017, 2017, 2017, 2015, 2009, 2008, 2008, 2004
 )
 
-#y coordinates
+
 y_coord <- c(87, 82, 84, 78, 65, 76, 75, 73, 72, 71, 68, 66, 64, 63, 62, 58, 53, 95, 30, 31, 33, 35, 21, 38, 26, 5, 10, 30, 30, 24, 23, 22, 19, 18, 24, 22, 21, 20, 17, 40, 32, 35, 33, 31, 27, 27, 27, 31, 35, 37, 38 ,39, 38, 39, 40, 39, 38, 37, 18, 17, 16, 15, 24, 23, 22, 8, 7, 35, 34, 33, 32, 24, 26, 27, 28
 )
 
-#font sizes 
+ 
 size <- c(3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3.5, 4, 3, 2, 3, 5, 4, 3, 3, 4, 4, 4, 3, 4.5, 4, 4, 4.5, 5,3, 3, 3, 3, 3, 3, 3, 3.5, 3, 4, 3, 3, 3, 4, 4, 3, 3.5, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3
 )
-#make it as a vector x = labels, y = coordinates and sizes and annotate it
-#annotations
+
+
 p <- p +
   annotate(
     "text", 
@@ -275,16 +313,33 @@ p <- p +
   )
 
 p
-#ggsave("p_annotations2.jpg", width = 14, height = 9, dpi = "screen")
 ```
 
-## PART 2 - IMPROVEMENT
-To improve the graph, I will create a smaller dataset grouping the main genres and try to showcase the change over the years through an animated line chart. 
+### PART 2 - IMPROVEMENT
+
+One of the main reasons why I chose the stacked area chart from FlowingData's blog is because I saw a lot of room for improvement.
+The original work is very messy and unclear. The lack of clear colors, the quantity of layers not well distinguishable, as well as the clustered labels hider the graph's interpretability. 
+
+My initial plan was to re-create a stacked area chart with less layers and a different color scale. After different attempts, I decided to change approach because I felt like a simpler stacked area chart was not effective in showcasing the story of the evolution of TV genres over time. A graph like that, in my opinion, was not communicating the evolution to the viewer as much as it could. I wanted something more striking and effective. 
+
+I therefore opted for an animated line chart, so that the viewer could follow the TV genres' evolution over time, in a more interactive way that would show change in a very active manner. 
+By following the lines in the chart, changes can be seen throughout the years (still placed as ticks in the x-axis). 
+In my opinion, the way in which the original chart was grouping the genres was very confusing, with small groups of random genres that contributed to the graph's messiness (e.g. "Drama & Family & Romance or Comedy & Music & Talk Show). 
+I changed approach and decided to reduce the labels, by creating bigger groups of more general genres. I believed that this was going to make the graph clearer and, while some information might be lost, at least the visualization would gain clarity, deeply missing in the original version. 
+
+I also decided to add a legend, so to give the viewers a guideline to understand the graph. As mentioned earlier, the original graph's label placement was really hard to read, contributing to the visualization's lack of clarity. By providing a simple legend inside the graph, hopefully the viewers will have a way to understand every line present within the chart and its corresponding genre. 
+
+A lot of thought and research was also given to the lines' colors. A wrong color palette could strongly impact the graph's readability, especially in a line chart. 
+I scouted different color palette all throughout the Internet, ranging from colors related to national parks to palettes inspired by painters. I tried many different colors, but I then opted for manually inserting different colors until I was satisfied with how the graph looked overall and with the distinction between each line.
 
 ## Animated line chart
-First of all, I want to group the bigger genres togheter, to have a cleaner look.  
+
+Here is the code that I used in the new graph, where the genres are broader. The genres I settled upon are: Drama & Crime, Comedy & Family, Reality & Adult, Entertainment, Documentary, Sport and other. 
+
 ```{r new-dataset}
+
 library(stringr)
+
 new_genres <- genres_time |>
   mutate(
     genres = case_when(
@@ -306,21 +361,17 @@ new_genres <- genres_time |>
 
 ```
 
-The animated line chart. 
+Here is the animated line chart. 
 ```{r improved-graph}
-library(gganimate)
-library(gifski)
-library(MetBrewer)
 
-#use a different color palette
-tam_palette <- met.brewer("Tam", n = 8, type = "discrete")
+color_palette <- c("#006d2c", "#F77F00", "#FCBF49" , "#4eb3d3",
+                   "#00008B", "#9D4EDD", "#FF006E")
 
-#simple version of the improved chart
 p3 <- ggplot(new_genres, aes(x = year, y = percentage, 
                                      group = genres, color = genres)) +
   geom_line(linewidth = 1.2) +
   geom_point(size = 2) +
-  scale_color_manual(values = tam_palette, name = "Genres") +
+  scale_color_manual(values = color_palette, name = "Genres") +
     scale_y_continuous(
     name = "Percentage of Episodes",
     labels = function(x) paste0(x, "%"),
@@ -341,26 +392,25 @@ p3 <- ggplot(new_genres, aes(x = year, y = percentage,
   theme_minimal() +
   theme(
     text = element_text(family = "sans"),
-    panel.border = element_rect(color = "grey40", fill = NA, size = 0.4), #rectangle 
-    panel.grid = element_blank(), #to remove grid lines 
-    #title
+    panel.border = element_rect(color = "grey40", fill = NA, size = 0.4), 
+    panel.grid = element_blank(), 
     plot.title = element_text(family = "eb-garamond", size = 16, face = "bold", hjust = 0.5, margin = margin(b = 5)),
     panel.background = element_rect(fill = "white", color = NA),
     plot.background = element_rect(fill = "white", color = NA))
 
-#define the legend and axis's elements
+
 p3 <- p3 + theme(
-    legend.position = "right",
-    legend.justification = "left",
+    legend.position = "inside",
+    legend.position.inside = c(0.95, 0.95),
+    legend.justification = c("right", "top"),
     legend.title = element_text(family = "eb-garamond", face = "bold", size = 13, 
                                 margin = margin(b = 8)),
     legend.text = element_text(family = "eb-garamond", size = 12, margin = margin(l = 5)),
     legend.key = element_rect(color = "white", size = 0.5),
     legend.key.size = unit(0.5, "cm"),
     legend.spacing.y = unit(0.3, "cm"),
-    legend.background = element_rect(fill = "white", color = "grey80", size = 0.3),
+    legend.background = element_rect(fill = alpha("white", 0.6), size = 0.3),
     legend.margin = margin(10, 10, 10, 10), 
-    #axis
     axis.text.x = element_text(size = 9, color = "black", margin = margin(t = 8)),
     axis.text.y = element_text(size = 9, color = "black", margin = margin(r = 8)),
     axis.ticks.x = element_line(color = "black", linewidth = 0.3),
@@ -368,12 +418,12 @@ p3 <- p3 + theme(
     axis.line = element_blank(),
     plot.margin = margin(15, 15, 15, 15))
 
-#add the transition
+
 p3 <- p3 + transition_reveal(year)
 
 anim <- animate(p3, nframes = 200, fps = 20, width = 900, height = 600,  units = "px", res = 100)
-anim_save("p3.gif", animation = anim)
 ```
 
-
+In conclusion, I believe that this animated line chart is clearer and conveys more information to the viewer even if, paradoxically, it has less data than the original work. In my opinion, the first graph was so messy and full of information that it was hard to get anything out of it at all. 
+By simplifying the data and focusing on what I wanted it to represent, it became easier to understand and to actually perceive its intent: to showcase the evolution of TV genres over time. 
 
