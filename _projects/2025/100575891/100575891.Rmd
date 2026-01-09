@@ -4,39 +4,40 @@ description: |
   Tracking the generation and storage of energy in Spain April 28th, 2025.
 categories: "2025"
 author: Amelia Shuler
-date: 2025-12-11
+date: "`r Sys.Date()`"
 output:
   distill::distill_article:
     self_contained: false
+    toc: true
 ---
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(out.width="100%", fig.align="center", fig.showtext=TRUE)
 ```
 
-# Introduction
+## Introduction
 
-On April 28th, 2025 starting at 12:33 CEST (local time), Spain, parts of Portugal, and parts of France suffered complete shutdown of the electricity grid which lasted roughly ten hours. Trains ceased to run, radio and cellular signals shut down, shops returned to a cash-based system, and Spain's nuclear power plants were taken off the grid automatically. The BBC estimates that the blackout caused a €1.6 billion hit to the economy.
+Beginning on April 28th, 2025 at 12:33 CEST (local time), Spain, parts of Portugal, and parts of France suffered complete shutdown of the electricity grid which lasted nearly ten hours. Trains ceased to run, radio and cellular signals shut down, shops returned to a cash-based system, and Spain's nuclear power plants were taken off the grid automatically. The BBC estimates that the blackout caused a €1.6 billion hit to the Spanish economy.
 
-Hours after the collapse, constituents demanded answers and looked to Spain's sole Transmission System Operator (TSO), Red Eléctrica. The company is responsible for transmitting, organizing, and securing electrical supply to all of mainland Spain and the islands. On April 28th and the following days, there was a frenzy of press conferences, news announcements, and statements from Red Eléctrica to answer the question: how did this happen?
+Hours after the collapse, constituents demanded answers and looked to Spain's sole Transmission System Operator (TSO), Red Eléctrica. The company is responsible for transmitting, organizing, and securing electrical supply to all of Spain's mainland and islands. In the days following April 28th, there was a frenzy of press conferences, news announcements, and statements from Red Eléctrica to answer the question: how did this happen?
 
-Red Eléctrica has [publicly available generation data](https://demanda.ree.es/visiona/peninsula/nacionalau/acumulada/2025-04-28) that tracks types of generation and storage. The Europa Press quickly used this data [to create graphics](https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html#google_vignette) hoping to provide context to the blackout. On April 29th, they published an area graph of generation and storage of energy in Spain during the blackout.
+Red Eléctrica has [publicly available generation data](https://demanda.ree.es/visiona/peninsula/nacionalau/acumulada/2025-04-28) that tracks types of generation and storage. The Europa Press quickly used this data [to create graphics](https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html#google_vignette) hoping to provide context for the blackout. On April 29th, they published an area graph of generation and storage of energy in Spain during the blackout.
 
-## Original Graph
+### Original Graph
 
 ![Original chart. Source: <https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html>](images/original-chart.png){.external width="100%"}
 
-There are some obvious issues with this graph: it's density of information makes it difficult to read and comprehend. With 15 types of energy and storage being tracked, along with marking the blackout time and line of real demand, there is a lot of information here that is missing context.
+There are some obvious issues with this graph: it's density of information makes it difficult to read and comprehend. The graph tracks 15 types of energy and storage along with real time demand over time. There is also a line marking the moment of the blackout. The overwhelming amount of information makes it difficult to understand at a glance.
 
-However, there are larger issues when the graph is studied in more detail. As seen later on, the data is manipulated (without disclosure). The lines pointing to "Turbinación bombeo" and "Consumo bombeo" do not align with their labels. There are a number of areas without labels, such as the light green part in the upper left hand corner. All of these leave much room for improvement, which will be seen after the recreation.
+However, there are larger issues when the graph is studied in more detail. As seen later on, the data is manipulated (without disclosure). The lines pointing to "Turbinación bombeo" and "Consumo bombeo" do not align with their labels. There are a number of areas without labels, such as the light green part in the upper left hand corner. All of these leave much room for improvement, which will be seen after the initial recreation.
 
-# Libraries
+### Libraries
 
 `Tidyverse` cleaned and modified the data.
 
-`Lubridate` handled the x axis which was date-time.
+`Lubridate` handled the x axis which was date-time. This is a subset of tidyverse.
 
-`GGplot2` provided the graphics.
+`GGplot2` provided the graphics. This is a subset of tidyverse.
 
 `Scales` allows some styling of the scales.
 
@@ -46,40 +47,42 @@ However, there are larger issues when the graph is studied in more detail. As se
 
 ```{r libraries}
 library(tidyverse)
-library(lubridate)
-library(ggplot2)
 library(scales)
 library(patchwork)
 library(grid)
 ```
 
-# Data
+### Data
 
-## Data Access
+#### Data Access
 
-As mentioned before, Red Eléctrica [offers access](https://demanda.ree.es/visiona/peninsula/nacionalau/acumulada/2025-04-28) to their historical generation and storage data as convenient .csv files. While most of the data is contained in "Estructura de generación", "Estructura de almacenamiento" provided turbinación bombeo, consumo bombeo, entrega de baterías, and carga de baterías. "Seguimiento de la demanda de energía eléctria" provided the data for the "real demand" line.
+As mentioned before, Red Eléctrica [offers access](https://demanda.ree.es/visiona/peninsula/nacionalau/acumulada/2025-04-28) to their historical generation and storage data as convenient .csv files. While most of the data is contained in "Estructura de generación", "Estructura de almacenamiento" provides turbinación bombeo, consumo bombeo, entrega de baterías, and carga de baterías. "Seguimiento de la demanda de energía eléctria" provides the data for the "real demand" line.
 
-```{r data sets}
-generacion <- read.csv(file = "100575891_files/data/Custom-Report-2025-04-28-Estructura de generación (MW).csv")
-almacenamiento <- read.csv(file = "100575891_files/data/Custom-Report-2025-04-28-Estructura de almacenamiento (MW).csv")
-demanda <- read.csv(file = "100575891_files/data/Custom-Report-2025-04-28-Seguimiento de la demanda de energía eléctrica (MW).csv")
+```{r datasets}
+generacion <- read.csv(file = "data/Custom-Report-2025-04-28-Estructura de generación (MW).csv")
+almacenamiento <- read.csv(file = "data/Custom-Report-2025-04-28-Estructura de almacenamiento (MW).csv")
+demanda <- read.csv(file = "data/Custom-Report-2025-04-28-Seguimiento de la demanda de energía eléctrica (MW).csv")
 ```
 
-## Issues with the Data Used in the Graph
+#### Issues with the Data Used in the Graph
 
-When looking at the original graph and the replicated graph, it is clear the data is not the same.
+When looking at the original graph and the replicated graph, it is clear the data is not the same. Pay attention to the information after the "Apagón" line.
 
 | Original Graph | Replicated Graph |
-|----|----|
+|------------------------------------|------------------------------------|
 | ![Original chart. Source: https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html](images/original-chart.png){.external alt="Original chart. Source: https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html" width="100%"} | ![Replicated chart.](images/replicated-chart.png){.external alt="Replicated chart." width="100%"} |
 
-The left half of the graph, the data before the blackout, is nearly identical between the original graph and the replicated graph. The right half of the graph, after the blackout, is starkly different. The prevailing theory is that the data was manipulated in the original graph in order to better distinguish the labeling. In the replicated graph, some areas are too small to properly label. However, the original graph makes no indication of this change in the graph or in the accompanying webpage. It also lists the x axis as the same time frames, and the y axis as the same scales. Since replicating the modification would be a game of trial and error - not to mention unethical - it was excluded from the replication. The replicated graph uses the original, unedited data gathered from Red Eléctrica.
+When comparing both graphs, the lefthand side of the graph - the data before the blackout - is nearly identical between the two graphs. The righthand side of the graph - after the blackout - is starkly different between the original and replicated graphs.
 
-## Data Cleanup
+The prevailing theory is that the data was manipulated in the original graph in order to better distinguish the labels. In the replicated graph, some areas are too small to properly label.
 
-The original graph uses a subset of variables from the generation and demand data sets. These datasets were also combined into one using "Hora" or hour.
+However, the original graph makes no indication of this change in the graph or in the accompanying webpage. It also lists the x axis as the same time frames, and the y axis as the same scales. Since replicating the modification would be a game of trial and error - not to mention unethical - it was excluded from the replication. The replicated graph uses the original, unedited data gathered from Red Eléctrica.
 
-```{r remove columns}
+#### Data Cleanup
+
+The original graph uses a subset of variables from the generation and demand data sets. These datasets were combined into one using "Hora" or hour.
+
+```{r remove_columns}
 # --------
 # Remove Unnecessary Columns
 # --------
@@ -225,24 +228,27 @@ demanda <- demanda |>
   )
 ```
 
-In the end, full_data represents the energy production and storage. It consists of three variables:
+In the end, "full_data" represents the energy production and storage. It consists of three variables:
 
-Hora \<- The date and time of the reading
+`Hora` \<- The date and time of the reading
 
-Type \<- The type of energy being generated.
+`Type` \<- The type of energy being generated.
 
-Rating \<- The rating of the type of energy.
+`Rating` \<- The rating of the type of energy.
+
+```{r show_full_data}
+head(full_data)
+```
 
 "Demanda" has the date and time of the energy demand, and the variable "real" represents the real demand for energy in megawatts.
 
-```{r data_print}
-full_data
-demanda
+```{r show_demanda}
+head(demanda)
 ```
 
-# Creating the Plot
+## Creating the Plot
 
-## Fonts
+### Fonts
 
 The original fonts in the graph were Avenir Next. However, due to licensing and copyright, it was replaced with Roboto from Google fonts which has open licensing.
 
@@ -251,7 +257,7 @@ sysfonts::font_add_google("Roboto", family="roboto")
 showtext::showtext_auto()
 ```
 
-## Geom Area
+### Geom Area
 
 GGplot was used to set the x axis as time, the y axis as Rating (in Megawatts), and fill to Type. The lines were colored to white to match the original graph.
 
@@ -269,9 +275,11 @@ final <- ggplot() +
 final
 ```
 
-## Scales
+### Scales & Colors
 
-Colors were manually set using scale_fill_manual. The legend and labels for the scales were removed.
+Colors were manually set using scale_fill_manual.
+
+The legend and labels for both scales were removed.
 
 The limits for the y scale were set to -10,000 and 40,000 to match the graph. The separator for thousands, ",", was changed to "." to match the graph.
 
@@ -332,7 +340,7 @@ final <- final +
 final
 ```
 
-## Theme
+### Theme
 
 The theme removed the plot's grid lines, changed the color of the axis, modified the tick length and color, and set a global default for the fonts. It also modified the padding in order to add space for the external annotations.
 
@@ -387,17 +395,9 @@ final <- final +
 final
 ```
 
-## Internal Annotations
+### Internal Annotations
 
-The most difficult part of this graph were annotations set outside the plot of the graph. Four functions were attempted: `annotate()`, `annotation_custom()`, `grid.text()` and `geom_text()`. `Annotate()` worked well for annotations within the plot. However, it did not appear when the x and y values of the annotation were pushed beyond the limits of the plot. `Annotation_custom()` required the use of `unit(value, NPC)` as the x and y coordinate values. This meant that the text would respond to the preview panel size and not stay fixed to the graph.
-
-![Annotation Issues.](images/annotation-issues.gif){.external width="100%"}
-
-It also was struggling to work with `coord_cartesian(clip = "off")` meaning it would not appear even with clipping was off. `Grid.text()` was working with `coord_cartesian(clip = "off")`, however it still required the use of `unit(value, NPC)`, meaning it would respond with the browser size.
-
-Finally, `geom_text()` and `geom_segment()` were used to add lines and words outside of the plot. While this resulted in a file of 5.2 MB, it allowed the graph to annotations needed outside of the plot while maintaining the as.POSIXct x scale units.
-
-Each internal text annotation was given an x and y coordinate, a text color, a size, and a label. Each internal line annotation was given an x and y coordinate, an ending x and y coordinate, a line color of black, and a line width of 0.2.
+Internal annotations refers to those that were plotted within the graph space. Each internal text annotation was given an x and y coordinate, a text color, a size, and a label. Each internal line annotation was given an x and y coordinate, an ending x and y coordinate, a line color of black, and a line width of 0.2.
 
 ```{r internal_annotations, fig.width = 6.82, fig.height = 6.37}
 final <- final +
@@ -597,11 +597,33 @@ final <- final +
 final
 ```
 
-## External Annotations
+### External Annotations
 
-Each external text annotation was removed of data, given an x and y coordinate, a text color, a size, label, font family, line height, and horizontal adjustment (to ensure proper alignment). While line height, size, and font family could've been combined into a global class, preliminary investigations did not yield a straightforward way to do this.
+The most difficult part of this graph were annotations set outside the plot of the graph. Four functions were attempted: `annotate()`, `annotation_custom()`, `grid.text()` and `geom_text()`.
 
-Each external line annotation was an x and y coordinate, an ending x and y coordinate, and a line width. Again, line width could've been combined into a global class, but preliminary investigations proved unfruitful.
+#### Attempt 1: Annotate()
+
+`Annotate()` worked well for annotations within the plot. However, it did not appear when the x and y values of the annotation were pushed beyond the limits of the plot.
+
+#### Attempt 2: Annotate_custom()
+
+`Annotation_custom()` required the use of `unit(value, NPC)` as the x and y coordinate values. This meant that the text would respond to the preview panel size and not stay fixed to the graph. Below is an example of annotations fixing to the panel size and not the graph.
+
+![Annotation Issues.](images/annotation-issues.gif){.external width="100%"}
+
+`Annotation_custom()` was also struggling to work with `coord_cartesian(clip = "off")` meaning the annotations would not appear even when clipping was off.
+
+#### Attempt 3: Grid.text()
+
+`Grid.text()` was working with `coord_cartesian(clip = "off")`, however it still required the use of `unit(value, NPC)`, meaning it would respond with the browser size.
+
+#### Attempt 4: Geom_text() and Geom_segment()
+
+Finally, `geom_text()` and `geom_segment()` were used to add lines and words outside of the plot. While this resulted in a file of 5.2 MB, it allowed the graph to annotations needed outside of the plot while maintaining the as.POSIXct x scale units.
+
+Each external text annotation was given an x and y coordinate, a text color, a size, label, font family, line height, and horizontal adjustment (to ensure proper alignment - left, right, or center). While line height, size, and font family could've been combined into a global class, preliminary investigations did not yield a straightforward way to do this.
+
+Each external line annotation had an x and y coordinate, an ending x and y coordinate, and a line width. Again, line width could have been combined into a global class, but preliminary investigations proved unfruitful.
 
 Finally, the title was treated with `ggtitle()` instead of `geom_text()`. Initially, `geom_text()` was struggling to push the title so far out of the y axis, and `ggtitle()` was working better.
 
@@ -857,75 +879,75 @@ final <- final +
 final
 ```
 
-# Improvement
+## Improvement
 
-## Visual Critique of Existing Graph
+### Visual Critique of Existing Graph
 
-While an area graph is the correct choice for this kind of data - it shows how types of energy, represented as areas, are contributing to the whole of the production, the overarching area - there are too many variables in the graph to make sense of the data.
+The original graph utilizes an area graph, which represents a total area over time, subdivided into smaller areas and distinguished by colors. While this was the correct choice for the data, there are too many types of energy represented in the graph for the distinctions to be meaningful. Some areas are so small that they are seemingly invisible.
 
 The other issues with this graph - misplaced annotations and missing annotations - are addressed in the improvement.
 
-## Audience Analysis
+### Audience Analysis
 
-The original graph was [published by Europa Press](https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html#google_vignette), a Spanish news source. It is assumed this graph was intended for a general audience, with limited understanding of energy production and storage. The main goal is to understand what types of energy were being produced at the time of and shortly after the blackout.
+[Europa Press](https://www.europapress.es/economia/noticia-graficos-asi-desplomo-energia-electrica-apagon-20250429111043.html#google_vignette), a Spanish news source, published the original graph. Based on Europa Press' audience, it is assumed this graph was intended for a general audience who would have limited understanding of energy production and storage. The main goal is to understand what types of energy were being produced at the time of and shortly after the blackout.
 
-While usually the graph would be replicated and improved in Spanish to match the source, since this is an English-speaking masters program, the graph improvement was completed in English.
+*Note: While usually the graph would be replicated and improved in Spanish to match the source, since this is an English-speaking masters program, the graph improvement was completed in English.*
 
-## Variable Analysis
+### Variable Analysis
 
 The original graph replication was completed without detailed analysis of the variables. In order to improve the graph, the variables of the original data sets were analyzed to determine if any excluded would be relevant, and to determine how to better categorize the data.
 
-### Demanda
+#### Demanda
 
-Real \<- Real represents the actual demand for energy from Spanish households, businesses, municipal buildings, hospitals, and other constituents. This is measured using meters and sensors.
+`Real` \<- Real represents the actual demand for energy from Spanish households, businesses, municipal buildings, hospitals, and other constituents. This is measured using meters and sensors.
 
-Prevista \<- Prevista is the forecasted demand set by Red Eléctrica. This is predicted based on historical patterns, weather, and yesterday’s demand.
+`Prevista` \<- Prevista is the forecasted demand set by Red Eléctrica. This is predicted based on historical patterns, weather, and yesterday’s demand.
 
-Programada \<- Programada represents the planned demand in the market. This is the energy that has been planned and agreed upon by energy providers. It determines which plants will run and provide energy.
+`Programada` \<- Programada represents the planned demand in the market. This is the energy that has been planned and agreed upon by energy providers. It determines which plants will run and provide energy.
 
-### Almacenamiento
+#### Almacenamiento
 
-Turbinación.bombeo \<- Pumped-hydro storage is a system with water stored at two heights. When energy needs to be generated, the system pushes water from the higher reservoir to the lower reservoir. This is called pumped-hydro generation (turbinación bombeo) and tracks the energy generated from the system. That is why it is positive or zero.
+`Consumo.bombeo` \<- Pumped-hydro storage is a system with water stored at two heights. When there is extra energy in the grid from other sources, the system spends that energy pushing water from the lower reservoir to the higher reservoir so it can be released at a future time. This is called pumping consumption (Consumo bombeo). The data recorded in this variable tracks the amount spent in this process. That is why it is always zero or negative, since it is taking energy from the grid.
 
-Consumo.bombeo \<- Pumped-hydro storage is a system with water stored at two heights. When there is extra energy in the grid from other sources, the system pushes water from the lower reservoir to the higher reservoir. This is called pumping consumption (Consumo bombeo) and tracks the energy spent to store excess energy in this way. That is why it is always negative, since it is taking energy from the grid.
+`Turbinación.bombeo` \<- Pumped-hydro storage is a system with water stored at two heights. When energy needs to be generated, the system pushes water from the higher reservoir to the lower reservoir. This is called pumped-hydro generation (turbinación bombeo). Pumped-hydro storage has ways of monitoring demand and releases stored energy into the system when needed. This variable tracks the amount of energy being produced by pumped-hydro. That is why it is positive or zero.
 
-Entrega.de.baterías \<- Battery energy storage systems (BESS) are similar to pumped-hydro storage. Battery discharge (entrega de baterías) means energy is being delivered to the system from storage.
+`Carga.de.baterías` \<- Battery energy storage systems (BESS) are similar to pumped-hydro storage. In this case, excess energy from the grid is being stored in batteries. This variable tracks the amount of energy being take from the grid and stored in batteries (meaning it is negative or zero).
 
-Carga.de.baterías \<- Excess energy is being stored in batteries. Both battery discharge and battery charging values are extremely low (-5 to 10), which means they will not be well represented in a plot with the other variables.
+`Entrega.de.baterías` \<- Battery discharge (entrega de baterías) means energy is being delivered to the system from storage. Both battery discharge and battery charging values are extremely low (-5 to 10), which means they will not be well represented in a plot with the other variables.
 
-### Generación
+#### Generación
 
-Eólica \<- Eólica is the energy being generated by wind power. This makes up a large portion of Spain’s energy production. This is considered a renewable energy source.
+`Eólica` \<- Eólica is the energy being generated by wind power. This makes up a large portion of Spain’s energy production. This is considered a renewable energy source.
 
-Nuclear \<- Nuclear is the energy being generated by nuclear power. While not the first or second energy source, it still makes up a large portion of Spain’s energy production.
+`Nuclear` \<- Nuclear is the energy being generated by nuclear power. While not the first or second highest energy source, it still makes up a large portion of Spain’s energy production. This is not considered a renewable energy source.
 
-Carbón \<- Carbón is the energy being generated by coal. This is not a large energy source for Spain.
+`Carbón` \<- Carbón is the energy being generated by coal. This is not a large energy source for Spain. This is not considered a renewable energy source.
 
-Ciclo.combinado \<- Ciclo combinado represents the energy produced by gas power plants. This is a larger producer than nuclear, but not as productive as wind or solar. This is not considered a renewable energy source.
+`Solar.fotovoltaica` \<- This is the energy produced by solar panels. It’s output can be volatile since it relies on sunshine. Around noon, this hit a peak production of 17,000 MW. It is a renewable energy.
 
-Intercambios.int \<- This is the net exchange of energy between countries, however it does not equal the net exchange of imports and exports for Andorra, France, Morocco, and Portugal, so it must be including other countries. This is not an energy source, but rather represents a flow of energy.
+`Solar.térmica` \<- This is also solar energy, but with a different process. Mirrors are used to concentrate sunlight, use heat to produce steam, and use that steam to drive a turbine. This is a more stable type of solar energy, but its peak output was only 1,000 MW, much less than that of solar panels.
 
-Solar.fotovoltaica \<- This is the energy produced by solar panels. It’s output can be volatile since it relies on sunshine. Around noon, this hit a peak production of 17,000 MW. It is a renewable energy.
+`Térmica.renovable` \<- This is energy produced by burning biomass (agricultural waste or wood pellets), biogas (a renewable gas fuel produced when organic material, such as that in landfills, breaks down without oxygen), and renewable waste. The energy is then used to power a turbine. It is considered renewable since the fuel is replenished biologically. It is not a major energy source for Spain.
 
-Solar.térmica \<- This is also solar energy, but with a different process. Mirrors are used to concentrate sunlight, use heat to produce steam, and use that steam to drive a turbine. This is a more stable type of solar energy, but its peak output was only 1,000 MW, much less than that of solar panels.
+`Cogeneracion.y.residuos` \<- This is similar to the process of Renewable thermal energy in that it burns a fuel source to produce heat that is converted to energy, however the process itself produces electricity and the sources do not have to be renewable. The sources burned could be natural gas, diesel, biomass, or municipal solid waste. This represents a larger portion of Spain’s energy production. It is not renewable energy.
 
-Térmica.renovable \<- This is energy produced by burning biomass (agricultural waste or wood pellets), biogas (a renewable gas fuel produced when organic material, such as that in landfills, breaks down without oxygen), and renewable waste. The energy is then used to power a turbine. It is considered renewable since the fuel is replenished biologically. It is not a major energy source for Spain.
+`Ciclo.combinado` \<- Ciclo combinado represents the energy produced by gas power plants. This is a larger producer than nuclear, but not as productive as wind or solar. This is not considered a renewable energy source.
 
-Motores.diesels \<- This is the energy produced by diesel power plants, similar to ciclo.combinado, but represents a very small portion of Spain’s energy production.
+`Motores.diesels` \<- This is the energy produced by diesel power plants, similar to ciclo.combinado, but represents a very small portion of Spain’s energy production. This is not a renewable energy source.
 
-Turbina.de.gas \<- Gas turbine is a device that converts gas, usually natural gas, into mechanical energy that drives a generator and produces electricity. It also makes up a small portion of Spain’s energy production.
+`Turbina.de.gas` \<- Gas turbine is a device that converts gas, usually natural gas, into mechanical energy that drives a generator and produces electricity. It also makes up a small portion of Spain’s energy production. This is not a renewable energy source.
 
-Tubrina.de.vapor \<- Steam turbine is similar the gas turbine, but it uses thermal steam to power the generator. The source of the steam can be fossil fuels, nuclear energy, or solar power. It also represents a small portion of Spain’s energy production.
+`Turbina.de.vapor` \<- Steam turbine is similar the gas turbine, but it uses thermal steam to power the generator. The source of the steam can be fossil fuels, nuclear energy, or solar power. It also represents a small portion of Spain’s energy production. This is not a renewable energy source since it pulls from both renewable and non-renewable sources.
 
-Generación.auxiliar \<- This is energy produced by backup equipment in a facility, plant, or system. Since it is zero, we will remove it from the data set.
+`Generación.auxiliar` \<- This is energy produced by backup equipment in a facility, plant, or system. Since it is zero, we will remove it from the data set.
 
-Cogeneracion.y.residuos \<- This is similar to the process of Renewable thermal energy in that it burns a fuel source to produce heat that is converted to energy, however the process itself produces electricity and the sources do not have to be renewable. The sources burned could be natural gas, diesel, biomass, or municipal solid waste. This represents a larger portion of Spain’s energy production.
+`Hidráulica` \<- This energy is produced from a water-powered turbine, usually from a natural source such as a river or reservoir. This is a huge part of Spain’s energy production. This is a renewable energy source.
 
-Hidráulica \<- This energy is produced from a water-powered turbine, usually from a natural source such as a river or reservoir. This is a huge part of Spain’s energy production.
+`Intercambios.int` \<- This is the net exchange of energy between countries, however it does not equal the net exchange of imports and exports for Andorra, France, Morocco, and Portugal, so it must be including other countries. This is not an energy source, but rather represents a flow of energy.
 
 Imports and Exports \<- Portugal, France, Andorra, and Morocco have variables for both imports and exports. The importation of energy is energy that is imported into the country to be used by the system. The exportation of energy is energy being sold or delivered out of Spain for use elsewhere. In this data set, the importation variables are all positive (or zero) and the exportation variables are all negative (or zero).
 
-## Data Changes
+### Data Changes
 
 Re-importing the data allows for reprocessing.
 
@@ -934,15 +956,17 @@ Re-importing the data allows for reprocessing.
 # Import Data
 # --------
 
-generacion <- read.csv(file = "100575891_files/data/Custom-Report-2025-04-28-Estructura de generación (MW).csv")
-almacenamiento <- read.csv(file = "100575891_files/data/Custom-Report-2025-04-28-Estructura de almacenamiento (MW).csv")
-demanda <- read.csv(file = "100575891_files/data/Custom-Report-2025-04-28-Seguimiento de la demanda de energía eléctrica (MW).csv")
+generacion <- read.csv(file = "data/Custom-Report-2025-04-28-Estructura de generación (MW).csv")
+almacenamiento <- read.csv(file = "data/Custom-Report-2025-04-28-Estructura de almacenamiento (MW).csv")
+demanda <- read.csv(file = "data/Custom-Report-2025-04-28-Seguimiento de la demanda de energía eléctrica (MW).csv")
 
 ```
 
-From this analysis, it is clear that two erroneous data points were included: consumo bombeo and carga de baterías. These are distinct from the rest of the included data points because they are not ways of producing energy, and represent one half of a process to store energy. The mixing of storage and production makes the original graph dense and difficult to interpret. These data points will not be included in the improved version.
+#### Removing Consumo Bombeo and Carga.de.baterías
 
-```{r remove_columns}
+From the analysis of variables, it is clear that two variables were erroneously included in the original graph: consumo bombeo and carga de baterías. These are distinct from the rest because they are not ways of producing energy, and represent one half of a process to store energy. The mixing of storage and production makes the original graph dense and difficult to interpret. These variables will not be included in the improved version.
+
+```{r remove_columns_2}
 # --------
 # Remove Unnecessary Columns
 # --------
@@ -968,9 +992,11 @@ demanda <- demanda |>
 
 ```
 
-Imports and Exports are represented by separate areas. However, they are two halves of the same data point and should be treated as such. Additionally, this can be confirmed by looking at the data itself, where a missing value from Andorra imports is made up for with a value in Andorra exports. See the example below.
+#### Combining Imports and Exports
 
-![Import and Export Values from Red Eléctrica.](images/import-export-issues.png){.external width="100%"}
+In the original graph, imports and Exports are represented by separate areas. However, they are two halves of the same data and should be treated as such. Additionally, this can be confirmed by looking at the data itself, where missing values from Andorra imports is made up for with values in Andorra exports. See the example below.
+
+![Import and Export Values from Red Eléctrica.](images/import-export-issues.png){.external width="45%"}
 
 In the improved version, imports and exports are combined.
 
@@ -1002,7 +1028,9 @@ generacion <- generacion |>
   mutate(Portugal = str_replace(Portugal, "_0", ""))
 ```
 
-The general public will not care to make the distinction between Solar panels and solar processed with mirrors. Both solars are combined.
+#### Combining Solar.fotovoltaica and Solar.térmica
+
+While potentially controversial, a trade-off here is made. Combining solar panel data and thermal solar data makes one larger and more readable area. Unfortunately, it means the data is less specific and less true to the original dataset. However, given that the audience is the general public, it is safe to assume they will not care to make the distinction between solar panels and solar processed with mirrors and that the benefits of combining the data outweighs the distinction between solar energy production. With a different audience, different assumptions would be made. Both solar variables are combined.
 
 ```{r combine_solar}
 # --------
@@ -1039,22 +1067,25 @@ combined_data <- generacion |>
   full_join(almacenamiento, by = "Hora")
 ```
 
-For the improvement, four graphs will be needed. One to combine Renewable, Non-renewable, stored energy, and imported energy sources and three others to break out the categories by sub-categories.
+#### Broad Energy Categories
+
+For the improvement, four graphs will be needed. One main graph looks at renewable, non-renewable, stored energy, and imported energy sources as broad categories. Three smaller graphs break out the categories by sub-categories.
 
 ![Improvement.](images/improvement.png){.external width="100%"}
 
-The below code combines the sub-categories into the broader categories of Renewable, non-renewable, stored energy use, and imported energy use. The data is then transformed to have tidy data, and refactored to set the correct order.
+#### Data for the Main Graph
+
+The below code combines the sub-categories into the broader categories of renewable production, non-renewable production, stored energy production, and imported energy production. The data is then transformed to have tidy data, and refactored to set the correct order.
 
 ```{r main_graph_data}
 # --------
-# Data Subset 1
+# Create Subset 1 Data for the Main Graph - Combine Data into Four Broad Categories
 # --------
 
 subset1 <- combined_data |>
   mutate(Renewable = rowSums(across(c(Hidráulica, Eólica, Solar, Térmica.renovable))) ) |>
   select(-Hidráulica, -Eólica, -Solar, -Térmica.renovable) |>
-  mutate(Non_Renewable = rowSums(across(c(Ciclo.combinado, Nuclear, Cogeneración.y.residuos,
-                                      Motores.diésel, Carbón, Turbina.de.gas, Turbina.de.vapor))) ) |>
+  mutate(Non_Renewable = rowSums(across(c(Ciclo.combinado, Nuclear, Cogeneración.y.residuos, Motores.diésel, Carbón, Turbina.de.gas, Turbina.de.vapor))) ) |>
   select(-Ciclo.combinado, -Nuclear, -Cogeneración.y.residuos,
          -Motores.diésel, -Carbón, -Turbina.de.gas, -Turbina.de.vapor) |>
   mutate(Stored_Energy = rowSums(across(c(Turbinación.bombeo, Entrega.de.baterías))) ) |>
@@ -1111,9 +1142,15 @@ demanda <- demanda |>
   )
 ```
 
+#### Data for the Sub-Graphs
+
 Pre-processing of the full_data data set is completed to be able to process it into smaller categories.
 
 ```{r data_refinement2}
+# --------
+# Creating Full_Data - Processing of the Subcategory Data 
+# --------
+
 # --------
 # Pivot Longer
 # --------
@@ -1220,7 +1257,9 @@ imported_energy_data <- full_data |>
           | Type == "Marruecos")
 ```
 
-## Main Plot
+Each graph will have its own dataset - the main plot will use `subset1`, the renewable graph will use `renewable_data`, non-renewable graph will use `non_renewable_data`, the stored energy graph will use `stored_energy_data`, and the imported energy graph will use `imported_energy_data`.
+
+### Main Plot
 
 ```{r main_plot}
 # --------
@@ -1242,7 +1281,8 @@ combined <-
     aes(
       x = Hora,
       y = Real),
-    color = "black", linewidth = 0.3) + # line width
+    color = "#000000",
+    linewidth = 0.5) + # line width
   coord_cartesian(clip = "off") +
   # remove legend
   guides(fill = "none") +
@@ -1270,51 +1310,51 @@ combined <-
     Stored_Energy = "#D58936",
     Imported_Energy = "#AA4465")
   ) +
-theme(
-  # removes background grey
-  panel.background = 
-    element_rect(fill = "white"),
-  # changes line color
-  panel.grid.major.y = 
-    element_line(color = "#d6d6d6", linewidth = 0.2),
-  # remove axis tick y
-  axis.ticks.y =
-    element_line(color = "#ffffff"),
-  # changes axis tick color
-  axis.ticks.x = 
-    element_line(color = "#b8b8b8", linewidth = 0.1),
-  # changes axis length
-  axis.ticks.length = 
-    unit(.3, "cm"),
-  # changes axis line
-  axis.line = 
-    element_line(color = "#b8b8b8", linewidth = 0.3),
-  # remove x grid
-  panel.grid.major.x = 
-    element_line(color = "#ffffff00"),
-  # set global font family
-  text = 
-    element_text(family = "roboto"),
-  # set title size and weight
-  plot.title = 
-    element_text(size = 14, face = "bold"),
-  plot.title.position = "plot",
-  # set x and y axis color
-  axis.text = 
-    element_text(color = "#b8b8b8"),
-  axis.text.x =
-    element_text(face = "bold"),
-  # set caption color
-  plot.caption = 
-    element_text(color = "#b8b8b8")
-) +
+  theme(
+    # removes background grey
+    panel.background = 
+      element_rect(fill = "white"),
+    # changes line color
+    panel.grid.major.y = 
+      element_line(color = "#d6d6d6", linewidth = 0.2),
+    # remove axis tick y
+    axis.ticks.y =
+      element_line(color = "#ffffff"),
+    # changes axis tick color
+    axis.ticks.x = 
+      element_line(color = "#b8b8b8", linewidth = 0.1),
+    # changes axis length
+    axis.ticks.length = 
+      unit(.3, "cm"),
+    # changes axis line
+    axis.line = 
+      element_line(color = "#b8b8b8", linewidth = 0.3),
+    # remove x grid
+    panel.grid.major.x = 
+      element_line(color = "#ffffff00"),
+    # set global font family
+    text = 
+      element_text(family = "roboto"),
+    # set title size and weight
+    plot.title = 
+      element_text(size = 14, face = "bold"),
+    plot.title.position = "plot",
+    # set x and y axis color
+    axis.text = 
+      element_text(color = "#b8b8b8"),
+    axis.text.x =
+      element_text(face = "bold"),
+    # set caption color
+    plot.caption = 
+      element_text(color = "#b8b8b8")
+  ) +
   annotate(
     "text",
     x = as.POSIXct("2025-04-28 13:00", tz = "Europe/Madrid"),
     y = 19000,
     label = "Renewable Energy",
     color = "#4CB944",
-    size = rel(2.5),
+    size = rel(3),
     fontface = "bold",
     hjust = 0,
     lineheight = 0.8
@@ -1325,38 +1365,29 @@ theme(
     y = 6000,
     label = "Non-Renewable \nEnergy",
     color = "#246EB9",
-    size = rel(2.5),
+    size = rel(3),
     fontface = "bold",
     hjust = 0,
     lineheight = 0.8
   ) +
   annotate(
     "text",
-    x = as.POSIXct("2025-04-28 13:00", tz = "Europe/Madrid"),
-    y = 27000,
+    x = as.POSIXct("2025-04-28 5:00", tz = "Europe/Madrid"),
+    y = 32000,
     label = "Demand in Real Time",
     color = "#000000",
-    size = rel(2.5),
+    size = rel(3),
     fontface = "bold",
-    hjust = 0,
+    hjust = 0.5,
     lineheight = 0.8
-  ) +
-  geom_segment(
-    aes(
-      x = as.POSIXct("2025-04-28 12:32", tz = "Europe/Madrid"),
-      xend = as.POSIXct("2025-04-28 12:32", tz = "Europe/Madrid"),
-      y = 35000,
-      yend = -10000),
-    linetype = "dashed",
-    linewidth = 0.6
   ) +
   annotate(
     "text",
     x = as.POSIXct("2025-04-28 12:35", tz = "Europe/Madrid"),
-    y = 35500,
+    y = 36000,
     label = "Blackout",
     color = "#000000",
-    size = rel(2.5),
+    size = rel(3),
     fontface = "bold",
     hjust = 0.5,
     lineheight = 0.8
@@ -1364,10 +1395,10 @@ theme(
   # demand in real time
   annotate(
     "segment",
-    x = as.POSIXct("2025-04-28 12:25", tz = "Europe/Madrid"),
-    xend = as.POSIXct("2025-04-28 12:45", tz = "Europe/Madrid"),
-    y = 27000,
-    yend = 27000,
+    x = as.POSIXct("2025-04-28 6:25", tz = "Europe/Madrid"),
+    xend = as.POSIXct("2025-04-28 8:10", tz = "Europe/Madrid"),
+    y = 31300,
+    yend = 29000,
     color = "black",
     linewidth = 0.2
   ) +
@@ -1377,7 +1408,7 @@ theme(
     y = -4000,
     label = "Stored Energy",
     color = "#D58936",
-    size = rel(2.5),
+    size = rel(3),
     fontface = "bold",
     hjust = 0.5,
     lineheight = 0.8
@@ -1388,7 +1419,7 @@ theme(
     y = -6000,
     label = "Imported Energy",
     color = "#AA4465",
-    size = rel(2.5),
+    size = rel(3),
     fontface = "bold",
     hjust = 0.5,
     lineheight = 0.8
@@ -1430,11 +1461,20 @@ theme(
     yend = -5500,
     color = "black",
     linewidth = 0.2
+  ) +
+  geom_segment(
+    aes(
+      x = as.POSIXct("2025-04-28 12:32", tz = "Europe/Madrid"),
+      xend = as.POSIXct("2025-04-28 12:32", tz = "Europe/Madrid"),
+      y = 35000,
+      yend = -10000),
+    linetype = "dashed",
+    linewidth = 1.2
   )
 combined
 ```
 
-## Renewable Plot
+### Renewable Plot
 
 ```{r renewable}
 # --------
@@ -1463,7 +1503,7 @@ renewable <-
     breaks = seq(
       from = as.POSIXct("2025-04-28 00:00", tz = "Europe/Madrid"),
       to   = as.POSIXct("2025-04-29 00:00", tz = "Europe/Madrid"),
-      by   = "2 hours"
+      by   = "4 hours"
     ),
     labels = function(x) format(x, "%H:%M"),
     limits = c(
@@ -1600,7 +1640,7 @@ renewable <-
 renewable
 ```
 
-## Non-Renewable Plot
+### Non-Renewable Plot
 
 ```{r non_renewable}
 # --------
@@ -1629,7 +1669,7 @@ non_renewable <-
     breaks = seq(
       from = as.POSIXct("2025-04-28 00:00", tz = "Europe/Madrid"),
       to   = as.POSIXct("2025-04-29 00:00", tz = "Europe/Madrid"),
-      by   = "2 hours"
+      by   = "4 hours"
     ),
     labels = function(x) format(x, "%H:%M"),
     limits = c(
@@ -1688,8 +1728,8 @@ non_renewable <-
   ) +
   annotate(
     "text",
-    x = as.POSIXct("2025-04-28 01:00", tz = "Europe/Madrid"),
-    y = 12000,
+    x = as.POSIXct("2025-04-28 02:00", tz = "Europe/Madrid"),
+    y = 12500,
     label = "Gas Power \nPlants",
     color = "#000000",
     size = rel(2.5),
@@ -1711,7 +1751,7 @@ non_renewable <-
   annotate(
     "text",
     x = as.POSIXct("2025-04-28 12:00", tz = "Europe/Madrid"),
-    y = 10000,
+    y = 10500,
     label = "Combined Heat \nand Power",
     color = "#000000",
     size = rel(2.5),
@@ -1722,7 +1762,7 @@ non_renewable <-
   annotate(
     "text",
     x = as.POSIXct("2025-04-28 15:00", tz = "Europe/Madrid"),
-    y = 3000,
+    y = 4500,
     label = "Diesel \nPower \nPlants",
     color = "#000000",
     size = rel(2.5),
@@ -1733,7 +1773,7 @@ non_renewable <-
   annotate(
     "text",
     x = as.POSIXct("2025-04-28 18:00", tz = "Europe/Madrid"),
-    y = 8000,
+    y = 8500,
     label = "Coal",
     color = "#000000",
     size = rel(2.5),
@@ -1744,7 +1784,7 @@ non_renewable <-
   annotate(
     "text",
     x = as.POSIXct("2025-04-28 20:00", tz = "Europe/Madrid"),
-    y = 10000,
+    y = 10500,
     label = "Gas Turbine",
     color = "#000000",
     size = rel(2.5),
@@ -1755,7 +1795,7 @@ non_renewable <-
   annotate(
     "text",
     x = as.POSIXct("2025-04-28 23:00", tz = "Europe/Madrid"),
-    y = 12000,
+    y = 12500,
     label = "Steam \nTurbine",
     color = "#000000",
     size = rel(2.5),
@@ -1763,37 +1803,37 @@ non_renewable <-
     hjust = 0.5,
     lineheight = 0.8
   ) +
-  # water turbine
-  annotate(
-    "segment",
-    x = as.POSIXct("2025-04-28 01:00", tz = "Europe/Madrid"),
-    xend = as.POSIXct("2025-04-28 01:00", tz = "Europe/Madrid"),
-    y = 11500,
-    yend = 9000,
-    color = "black",
-    linewidth = 0.2
-  ) +
   # gas power plants
   annotate(
     "segment",
-    x = as.POSIXct("2025-04-28 06:00", tz = "Europe/Madrid"),
-    xend = as.POSIXct("2025-04-28 06:00", tz = "Europe/Madrid"),
-    y = 10500,
-    yend = 5000,
+    x = as.POSIXct("2025-04-28 02:00", tz = "Europe/Madrid"),
+    xend = as.POSIXct("2025-04-28 02:00", tz = "Europe/Madrid"),
+    y = 11000,
+    yend = 9000,
     color = "black",
     linewidth = 0.2
   ) +
   # nuclear
   annotate(
     "segment",
-    x = as.POSIXct("2025-04-28 12:00", tz = "Europe/Madrid"),
-    xend = as.POSIXct("2025-04-28 12:00", tz = "Europe/Madrid"),
-    y = 9500,
-    yend = 2000,
+    x = as.POSIXct("2025-04-28 06:00", tz = "Europe/Madrid"),
+    xend = as.POSIXct("2025-04-28 06:00", tz = "Europe/Madrid"),
+    y = 10000,
+    yend = 5000,
     color = "black",
     linewidth = 0.2
   ) +
   # combined heat and power
+  annotate(
+    "segment",
+    x = as.POSIXct("2025-04-28 12:00", tz = "Europe/Madrid"),
+    xend = as.POSIXct("2025-04-28 12:00", tz = "Europe/Madrid"),
+    y = 9000,
+    yend = 2000,
+    color = "black",
+    linewidth = 0.2
+  ) +
+  # diesel power plants
   annotate(
     "segment",
     x = as.POSIXct("2025-04-28 15:00", tz = "Europe/Madrid"),
@@ -1828,7 +1868,7 @@ non_renewable <-
     "segment",
     x = as.POSIXct("2025-04-28 23:00", tz = "Europe/Madrid"),
     xend = as.POSIXct("2025-04-28 23:00", tz = "Europe/Madrid"),
-    y = 11500,
+    y = 11000,
     yend = 100,
     color = "black",
     linewidth = 0.2
@@ -1836,7 +1876,7 @@ non_renewable <-
 non_renewable
 ```
 
-## Stored Energy Plot
+### Stored Energy Plot
 
 ```{r stored_energy}
 # --------
@@ -1865,7 +1905,7 @@ stored_energy <-
     breaks = seq(
       from = as.POSIXct("2025-04-28 00:00", tz = "Europe/Madrid"),
       to   = as.POSIXct("2025-04-29 00:00", tz = "Europe/Madrid"),
-      by   = "2 hours"
+      by   = "4 hours"
     ),
     labels = function(x) format(x, "%H:%M"),
     limits = c(
@@ -1932,7 +1972,7 @@ stored_energy <-
     "segment",
     x = as.POSIXct("2025-04-28 7:00", tz = "Europe/Madrid"),
     xend = as.POSIXct("2025-04-28 7:00", tz = "Europe/Madrid"),
-    y = 2250,
+    y = 2100,
     yend = 600,
     color = "black",
     linewidth = 0.2
@@ -1952,7 +1992,7 @@ stored_energy <-
     "segment",
     x = as.POSIXct("2025-04-28 14:00", tz = "Europe/Madrid"),
     xend = as.POSIXct("2025-04-28 14:00", tz = "Europe/Madrid"),
-    y = 1850,
+    y = 1700,
     yend = 0,
     color = "black",
     linewidth = 0.2
@@ -1960,7 +2000,7 @@ stored_energy <-
 stored_energy
 ```
 
-## Imported Energy
+### Imported Energy
 
 ```{r imported_energy}
 # --------
@@ -1989,7 +2029,7 @@ imported_energy <-
     breaks = seq(
       from = as.POSIXct("2025-04-28 00:00", tz = "Europe/Madrid"),
       to   = as.POSIXct("2025-04-29 00:00", tz = "Europe/Madrid"),
-      by   = "2 hours"
+      by   = "4 hours"
     ),
     labels = function(x) format(x, "%H:%M"),
     limits = c(
@@ -2068,7 +2108,7 @@ imported_energy <-
   annotate(
     "text",
     x = as.POSIXct("2025-04-28 12:45", tz = "Europe/Madrid"),
-    y = 1000,
+    y = 1500,
     label = "Andorra",
     color = "#000000",
     size = rel(2.5),
@@ -2130,7 +2170,7 @@ imported_energy <-
 imported_energy
 ```
 
-## Combining the Plots
+### Combining the Plots
 
 In the original, there was only one ggplot needed to reconstruct the graph. This new version has four graphs laid out with a title across the top. Patchwork was utilized to combine the graphs.
 
@@ -2139,7 +2179,7 @@ siderail <- renewable / non_renewable / imported_energy / stored_energy
 siderail
 ```
 
-```{r improvement, fig.width = 8, fig.height = 7}
+```{r improvement, fig.width = 8, fig.height = 7, preview=TRUE}
 improved <- combined + siderail +
     plot_layout(ncol = 2, widths = c(2,1)) +
   plot_annotation(
