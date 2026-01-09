@@ -1,21 +1,37 @@
 ---
 title: "Small Stats Can Be Big Players in Development and Good Governance"
 description: |
-  This report reconstructs the “Small States Can Be Big Players in Development and Good Governance” figure using R, combining World Bank, UNDP, and V-Dem data in a fully reproducible workflow..
+  This report reconstructs the “Small States Can Be Big Players in Development and Good Governance” figure using R, combining World Bank, UNDP, and V-Dem data in a fully reproducible workflow.
 author: Abdullah Tadmuri
-date: 2025-11-26
+date: "`r Sys.Date()`"
+categories: ["2025"]
+bibliography: references.bib
 output:
-  distill::distill_article:
+   distill::distill_article:
     self_contained: false
+    toc: true
 ---
 
-# Introduction
+```{r setup-global, include=FALSE}
+
+knitr::opts_chunk$set(
+  out.width    = "100%",
+  fig.align    = "center",
+  fig.showtext = TRUE,
+  fig.width    = 12,
+  fig.height   = 7
+)
+```
+
+## Introduction
 
 This project replicates the multi-panel visualization “Small States Can Be Big Players in Development and Good Governance”, originally produced for the World Data Visualization Prize. The original figure combines several international datasets to show how countries differ in human development, governance quality, political stability, corruption, and democratic freedoms, depending on their population size.
 
 The aim here is twofold. First, to recreate the graphic as faithfully as possible using only R and openly available data. Second, to build a fully transparent and reproducible workflow that covers the entire pipeline: data retrieval, cleaning, transformation, visualization, and final layout. The final figure is generated entirely from scratch using tidyverse tools, ggplot2, sf, and related packages. Every element—scatterplot, ridge-density panels, world map, annotation blocks, and the overall layout—is constructed through a structured sequence of steps designed to balance precision, clarity, and readability.
 
-![](images/clipboard-2056465238.png){width="662" height="452"}\
+## Original Visualization
+
+![Original chart. Source: World Data Visualization Prize](images/clipboard-2056465238.png){.external}
 
 ## Motivation
 
@@ -33,8 +49,7 @@ Democratic freedoms are measured with the Liberal Democracy Index from the Varie
 
 ##### Libraries & Options
 
-```{r  LIBRARIES & OPTIONS}
-#| echo: FALSE 
+```{r libraries-and-ptions, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(janitor)
 library(wbstats)
@@ -53,11 +68,13 @@ library(magick)
 
 options(timeout = 300)
 
+
+
 ```
 
 ##### Fonts & Colors
 
-```{r FONTS & COLORS}
+```{r fonts-and-colour,message=FALSE,warning=FALSE}
 
 font_add_google("Montserrat", "Montserrat")
 showtext_auto()
@@ -86,7 +103,7 @@ order_size        <- c("small", "medium", "big")
 
 ##### Helper
 
-```{r HELPER: FETCH WORLD BANK DATA}
+```{r helper-fetch-web, message=FALSE, warning=FALSE}
 
 fetch_wb <- function(indicators, years = c(2007, 2012, 2017)) {
   map_dfr(indicators, ~{
@@ -112,7 +129,7 @@ fetch_wb <- function(indicators, years = c(2007, 2012, 2017)) {
 
 ##### Economic Data
 
-```{r   ECONOMIC DATA}
+```{r economic-data, message=FALSE, warning=FALSE}
 
 options(timeout = 300)
 econ_all <- fetch_wb(c("NY.GDP.MKTP.PP.KD", "SP.POP.TOTL","NY.GDP.PCAP.PP.KD", "SL.UEM.TOTL.ZS"))
@@ -138,7 +155,7 @@ d.econ17 <- econ_all |>
 
 ##### Governance Data
 
-```{r   GOVERNANCE DATA}
+```{r governance-data, message=FALSE, warning=FALSE}
 
 gov_all <- fetch_wb(c("CC.EST", "GE.EST", "PV.EST", "RL.EST", "RQ.EST", "VA.EST"))
 
@@ -162,7 +179,7 @@ d.gov17 <- gov_all |>
 
 ##### HDI Data
 
-```{r   HDI DATA}
+```{r hdi-data, message=FALSE, warning=FALSE}
 
 d.hdi <- read_csv(
   "https://hdr.undp.org/sites/default/files/2021-22_HDR/HDR21-22_Composite_indices_complete_time_series.csv",
@@ -177,7 +194,7 @@ d.hdi <- read_csv(
 
 ##### V-Dem Data
 
-```{r   V-DEM DATA }
+```{r vdem-data, message=FALSE, warning=FALSE }
 
 freedom_data <- vdem |>
   filter(year == 2017) |>
@@ -202,7 +219,7 @@ Finally, the dataset is filtered to remove incomplete or problematic cases. Coun
 
 ##### Size Groups
 
-```{r  size groups}
+```{r size-groups, message=FALSE, warning=FALSE}
 w <- d.econ17 |>
   transmute(
     iso3c, country, pop = popul,
@@ -223,7 +240,7 @@ w |>
 
 ##### Merge Everything -\> w1
 
-```{r  merge everything -> w1}
+```{r  merge-everything, message=FALSE, warning=FALSE}
 w1 <- w |>
   left_join(select(d.gov17, -country), by = "iso3c") |>
   left_join(select(d.hdi, iso3c, hdi.00, hdi.2017), by = "iso3c") |>
@@ -264,7 +281,7 @@ Every colour, font, and spacing decision is encoded directly in the script. This
 
 ##### Custom Theme
 
-```{r   CUSTOM THEME}
+```{r costom-theme, message=FALSE, warning=FALSE}
 
 theme_small_states <- function() {
   theme_minimal(base_family = base_font, base_size = 11) %+replace%
@@ -320,7 +337,7 @@ theme_small_states <- function() {
 
 ##### Text Blocks (Scatte+ Bottom Strip)
 
-```{r  TEXT BLOCKS (SCATTER + BOTTOM STRIP)}
+```{r text-blocks, message=FALSE, warning=FALSE}
 
 bottom_left_html <- paste0(
   "These charts show the distribution densities <br>of different",
@@ -366,7 +383,7 @@ The panel also includes two text elements that allow it to stand alone: a short 
 
 ##### Main Scatter Panel
 
-```{r  Main scatter panel}
+```{r main-scatter-plot,fig.width=30, fig.height=20}
 
 w1_plot <- w1 |>
   filter(
@@ -502,10 +519,10 @@ p_scatter <- ggplot(w1_plot, aes(x = govef, y = hdi.2017)) +
     plot.subtitle = element_blank()
   )
 
-
+p_scatter
 ```
 
-## ![](images/clipboard-3481148340.png){width="700" height="420"} The Ridge Plots: Distributions Across State-Size Groups
+## The Ridge Plots: Distributions Across State-Size Groups
 
 To complement the country-level perspective of the scatter plot, the figure includes five ridge-density panels. These plots shift the focus from individual countries to the distributions of key indicators within each population group.
 
@@ -517,7 +534,7 @@ The patterns that emerge from these panels reinforce and nuance the story told b
 
 ##### Ridge Plots (No Legends)
 
-```{r   RIDGE PLOTS (NO LEGENDS)}
+```{r ridge-plot, fig.width=14, fig.height=10}
 
 make_ridge <- function(data, var, title, xlab, show_y = FALSE) {
   ggplot(data |> filter(!is.na({{ var }})),
@@ -532,7 +549,7 @@ make_ridge <- function(data, var, title, xlab, show_y = FALSE) {
     scale_x_continuous(expand = c(0.01, 0)) +
     scale_y_discrete(expand = c(0.01, 0)) +
     labs(title = title, x = xlab, y = NULL) +
-    theme_ridges(font_size = 20, grid = TRUE, font_family = base_font) +
+    theme_ridges(font_size = 24, grid = TRUE, font_family = base_font) +
     theme(
       legend.position = "none",
       plot.margin = unit(c(0.1, 0.4, 0.1, 0.4), "lines"),
@@ -540,7 +557,7 @@ make_ridge <- function(data, var, title, xlab, show_y = FALSE) {
       # ridge titles 
       plot.title  = element_text(
         colour = dark.color,
-        size   = 14,
+        size   = 19,
         face   = "bold",
         hjust  = 0.5
       ),
@@ -550,7 +567,7 @@ make_ridge <- function(data, var, title, xlab, show_y = FALSE) {
       # y labels: big / midsized / small states
       axis.text.y = if (show_y) {
         element_text(
-          size  = 16,             
+          size  = 19,             
           face  = "italic",
           family= base_font,
           hjust = 0.5    # a bit more centered against ridges
@@ -565,12 +582,12 @@ make_ridge <- function(data, var, title, xlab, show_y = FALSE) {
       # x-axis titles under each ridge
       axis.title.x  = element_text(
         colour = dark.color,
-        size   = 20,              
+        size   = 26,              
         hjust  = 0.5,
         vjust  = .60,                # nudge away from axis a bit
         family = base_font
       ),
-      axis.text.x   = element_text(size = 12)
+      axis.text.x   = element_text(size = 16)
     ) +
     coord_cartesian(ylim = c(1, 7), clip = "off")
 }
@@ -628,7 +645,7 @@ Several broad patterns become clear at a glance. Small states tend to cluster in
 
 ##### World Map Panel
 
-```{r  WORLD MAP PANEL}
+```{r world-map-panel, fig.width=7, fig.height=6}
 
 world_sf <- rnaturalearth::ne_countries(
   scale       = "medium",
@@ -653,7 +670,7 @@ p_map
 
 ##### Text Panels for Bottom Section
 
-```{r  TEXT PANELS FOR BOTTOM SECTION}
+```{r bottom-text-panel, fig.width=10, fig.height=3}
 
 p_bottom_left_text <- ggplot() +
   xlim(0, 1) + ylim(0, 1) +
@@ -690,6 +707,10 @@ p_bottom_data_caption <- ggplot() +
     label.padding = unit(0, "pt"),
     lineheight    = 1.05
   )
+
+
+
+plot_grid(p_bottom_left_text, p_bottom_data_caption, ncol = 1, rel_heights = c(2, 1))
 ```
 
 ## Assembling the Composite Figure
@@ -704,20 +725,20 @@ Consistent background colours and text styling are applied across all panels. At
 
 ##### Combine Panels with CowPlot
 
-```{r   COMBINE PANELS WITH COWPLOT}
+```{r  assamble-figure, fig.width=39, fig.height=24}
 
 bottom_row_main <- plot_grid(
   p_bottom_left_text,
   p_pol, p_cor, p_free,
   ncol = 5,
-  rel_widths = c(1.3, 1.4, 1.4, 1.4)
+  rel_widths = c(1.45, 1.4, 1.4, 1.4)
 )
 
 bottom_row <- plot_grid(
   bottom_row_main,
   p_bottom_data_caption,
   ncol = 1,
-  rel_heights = c(4, 1)
+  rel_heights = c(3, 1)
 )
 
 right_col <- plot_grid(
@@ -728,37 +749,18 @@ right_col <- plot_grid(
 top_section <- plot_grid(
   p_scatter, right_col,
   ncol = 2,
-  rel_widths = c(4, 1)
+  rel_widths = c(3, 1)
 )
 
 final_plot <- plot_grid(
   top_section, bottom_row,
   ncol = 1,
-  rel_heights = c(4, 1.3)
+  rel_heights = c(4, 1.2)
 )
-
+final_plot
 ```
 
-##### ![](images/clipboard-525838016.png){width="699" height="451"} Save
-
-```{r 14. SAVE }
-
-ggsave(
-  "figure_small_states.png",
-  final_plot,
-  width  = 42,
-  height = 26,
-  units  = "in",
-  dpi    = 96,
-  bg     = bg.col
-)
-
-img        <- image_read("figure_small_states.png")
-img_border <- image_border(img, "white", "20x20")
-image_write(img_border, "figure_small_states.png", quality = 100)
-```
-
-## Conclusion and Reflections
+### Conclusion and Reflections
 
 This project brings together several strands of computational social science: systematic data collection, reproducible workflows, careful data preparation, and thoughtful visual design. Rebuilding the “Small States Can Be Big Players in Development and Good Governance” figure required more than copying its appearance. It meant reconstructing its logic, from data sources and indicator definitions to grouping rules and layout choices.
 
@@ -768,7 +770,7 @@ Methodologically, the project illustrates the value of open data and scripted an
 
 Taken together, the replication demonstrates how data, code, and visualization can work together to produce insights about the global distribution of development and governance. It shows that careful replication is not simply an exercise in copying, but a way to deepen understanding of both the underlying phenomena and the tools used to study them.
 
-# Extended Analysis: Democratic Governance, Human Development and Low-Carbon Development (1990–2022)
+## Extended Analysis: Democratic Governance, Human Development and Low-Carbon Development (1990–2022)
 
 The second part of this report presents an expanded and substantially updated version of the original replication. While the first section reproduced the visual design and data choices of the World Data Visualization Prize entry, this new version builds a broader empirical foundation, strengthens the statistical modelling, and incorporates a much wider temporal range. The goal is to evaluate how democratic governance, carbon emissions and human development interact over time, and to examine whether small states remain distinctive once richer data and more flexible methods are introduced.
 
@@ -782,11 +784,9 @@ The new visual design reflects these methodological choices. The main scatterplo
 
 Each of these additions is intended not only to update the data, but also to provide a more complete account of what distinguishes small states within the global landscape of development and sustainability. When longer time-series, richer democracy measures and more flexible modelling are incorporated, the basic narrative from the original replication still holds: small states tend to be more democratic and less carbon-intensive than large states, even after three decades of global change. What the extended analysis adds is a higher-resolution understanding of why this occurs. Many small states maintain stable or improving democracy while simultaneously improving their development–emissions balance. Midsized states often emerge as the most “efficient” developers in terms of HDI per unit CO₂, whereas big states show much greater dispersion and include both high-emission energy exporters and major developing economies.
 
-The extended version therefore stands as a comprehensive update to the original replication. It incorporates new data sources, a more robust modelling strategy, an explicit treatment of temporal change, and a refined visual grammar that supports a deeper and more accurate interpretation of global sustainability trajectories. The accompanying master script, presented in full below, executes the entire workflow from raw data retrieval to final multi-panel layout.
+The extended version therefore stands as a comprehensive update to the original replication. It incorporates new data sources, a more robust modelling strategy, an explicit treatment of temporal change, and a refined visual grammar that supports a deeper and more accurate interpretation of global sustainability trajectories. The accompanying master script, presented in full below, executes the entire workflow from raw data retrieval to final multi-panel layout.\
 
-```{r Libraries & Options}
-#| echo: FALSE 
-
+```{r libraries-options, message=FALSE, warning=FALSE}
 
 suppressPackageStartupMessages({
   # Core
@@ -827,9 +827,14 @@ suppressPackageStartupMessages({
 
 ```
 
+```{r,message=FALSE, warning=FALSE}
+dir.create("data", showWarnings = FALSE)
+dir.create("data/cache", recursive = TRUE, showWarnings = FALSE)
+```
+
 ##### Visual Configuration
 
-```{r Visual configuration }
+```{r visual-configuration , message=FALSE, warning=FALSE}
 col_small <- "#EE7733"  # Paul Tol – orange
 col_mid   <- "#009988"  # teal
 col_big   <- "#0077BB"  # blue
@@ -865,7 +870,7 @@ set.seed(123)
 
 ##### Helper Functions
 
-```{r HELPER FUNCTIONS}
+```{r helper-functions, message=FALSE, warning=FALSE}
 
 safe_request <- function(url,
                          params      = list(),
@@ -975,7 +980,7 @@ theme_uc3m <- function(grid = TRUE, base_size = 42) {
 
 ##### Metadata
 
-```{r METADATA}
+```{r metadata, message=FALSE, warning=FALSE}
 
 metadata <- list(
   fetch_timestamp = Sys.time(),
@@ -988,7 +993,7 @@ metadata <- list(
 
 #### Data Loding
 
-```{r}
+```{r data-loading, message=FALSE, warning=FALSE}
 
 #  HDI from HDRO API
 
@@ -1245,7 +1250,7 @@ metadata$governance_fetch <- list(
 
 ##### Data Integration & Deriver Variables
 
-```{r DATA INTEGRATION & DERIVED VARIABLES}
+```{r data-integration-derived-varibles,message=FALSE, warning=FALSE}
 
 df <- audit_join(
   hdi_clean,
@@ -1312,7 +1317,7 @@ df <- df |>
 
 ##### Size Groups, Snapshots & Decoupling
 
-```{r SIZE GROUPS, SNAPSHOTS & DECOUPLING}
+```{r size-groups-snapshots-decoupling,message=FALSE, warning=FALSE}
 
 #  Size groups 
 
@@ -1415,7 +1420,7 @@ print(decouple_summary)
 
 ##### Modeling (LM, GAM, GROUP TESTS, NARRATIVE STATS)
 
-```{r MODELLING (LM, GAM, GROUP TESTS, NARRATIVE STATS)}
+```{r modelling,message=FALSE, warning=FALSE}
 
 #  Modelling dataset 
 
@@ -1688,7 +1693,7 @@ saveRDS(model_results, "data/cache/model_results.rds")
 
 ##### Visualisation
 
-```{r VISUALIZATION}
+```{r visualisation, message=FALSE, warning=FALSE}
 
 # Helper factor for ridge ordering (big → midsized → small on y-axis)
 
@@ -1719,7 +1724,7 @@ size_scale <- ggplot2::scale_size_continuous(range = c(5, 10), guide = "none")
 
 
 bottom_left_html <- glue::glue(
-  "These panels show how democracy,CO2 emissions<br>",
+ "These panels show how democracy, CO2 emissions<br>",
   "and human development are distributed across<br>",
   "three population-size groups:<br>",
   "<span style='color:{col_small};'>small states</span> ",
@@ -1727,9 +1732,7 @@ bottom_left_html <- glue::glue(
   "<span style='color:{col_mid};'>midsized states</span> ",
   "({SMALL_POP/1e6}–{MID_POP/1e6} million),<br>",
   "and <span style='color:{col_big};'>big states</span> ",
-  "(&gt;{MID_POP/1e6} million).<br>",
-  "Higher curves indicate that more countries in each<br>",
-  "group have values in that part of the distribution."
+  "(&gt;{MID_POP/1e6} million)."
 )
 
 panelA_html <- glue::glue(
@@ -1743,6 +1746,7 @@ panelA_html <- glue::glue(
   "Each circle is a country; larger circles represent larger populations,",
   "and transparency reflects democracy level (V-Dem).<br>",
   "Coloured curves are GAM fits by size group; arrows show changes","from 1990 to 2022."
+
 )
 
 
@@ -1851,7 +1855,7 @@ df_model <- df_model |>
 
 ```
 
-```{r  World map (right-column top panel)}
+```{r world-map, fig.width=9, fig.height=6,message=FALSE, warning=FALSE}
 
 sf::sf_use_s2(TRUE)
 
@@ -1927,13 +1931,13 @@ map_panel <- ggplot2::ggplot() +
     )
   )
 
-
+map_panel
 
 ```
 
 ###### Panel A – main scatter: HDI vs CO2 (log)
 
-```{r  PANEL A – main scatter: HDI vs CO2 (log)}
+```{r panel-a-scatter, fig.width=40, fig.height=23, preview=TRUE,message=FALSE, warning=FALSE}
 
 co2_min <- 0
 co2_max <- 60
@@ -2130,15 +2134,11 @@ figA <- ggplot2::ggplot(df_model, ggplot2::aes(x = co2log_jit, y = hdi_jit)) +
       margin     = ggplot2::margin(b = 10)
     )
   )
-
+figA
 
 ```
 
-![](images/clipboard-1427654515.png){width="724" height="423"}\
-\
-\
-
-```{r Helper for log1p CO2 axis labels }
+```{r helper-for-log1p-c02-axis-labels,message=FALSE, warning=FALSE}
 if (!exists("label_log1p_tons")) {
   label_log1p_tons <- function(x) {
     vals <- exp(x) - 1
@@ -2148,9 +2148,9 @@ if (!exists("label_log1p_tons")) {
 }
 ```
 
-###### Panels B–D: ridge plots for freedom, CO2, HDI
+###### Panel B – Democracy
 
-```{r PANELS B–D: ridge plots for freedom, CO2, HDI}
+```{r panel-b-democracy, fig.width=12, fig.height=6,message=FALSE, warning=FALSE}
 
 # Panel B – Democracy (freedom_latest)
 figB <- df_model |>
@@ -2219,6 +2219,12 @@ figB <- df_model |>
     plot.margin   = ggplot2::margin(6, 6, 6, 6)
   )
 
+figB
+```
+
+###### Panel C – CO2 (log)
+
+```{r panel-c-co2, fig.width=12, fig.height=6,message=FALSE, warning=FALSE}
 # Panel C – CO2 (log)
 figC <- df_model |>
   dplyr::filter(
@@ -2282,7 +2288,12 @@ figC <- df_model |>
     axis.ticks.y  = ggplot2::element_blank(),
     plot.margin   = ggplot2::margin(6, 6, 6, 6)
   )
+figC
+```
 
+###### Panel D – HDI
+
+```{r panel-d-hdi, fig.width=12, fig.height=6,message=FALSE, warning=FALSE}
 # Panel D – HDI
 figD <- df_model |>
   dplyr::filter(
@@ -2343,17 +2354,12 @@ figD <- df_model |>
     axis.ticks.y  = ggplot2::element_blank(),
     plot.margin   = ggplot2::margin(6, 6, 6, 6)
   )
-
-
-
-
-
+figD 
 ```
 
 ###### Panel E – efficiency pair (CO2 absolute & HDI/CO2)
 
-```{r PANEL E – efficiency pair (CO₂ absolute & HDI/CO₂)}
-
+```{r panel-e-data, message=FALSE, warning=FALSE}
 eff_data <- df_model |>
   dplyr::filter(
     !is.na(size_group),
@@ -2382,6 +2388,11 @@ medians_eff <- eff_data |>
     median_eff = stats::median(hdi_eff_robust, na.rm = TRUE),
     .groups    = "drop"
   )
+```
+
+###### Left efficiency panel – absolute CO2
+
+```{r panel-e-co2-absolute, fig.width=12, fig.height=6,message=FALSE, warning=FALSE}
 
 # Left efficiency panel – absolute CO2
 figE_left <- df_model |>
@@ -2430,7 +2441,13 @@ figE_left <- df_model |>
     axis.ticks.y  = ggplot2::element_blank(),
     plot.margin   = ggplot2::margin(6, 3, 6, 6)
   )
+figE_left
 
+```
+
+###### Right efficiency panel – HDI per CO2
+
+```{r panel-e-hdi-per-co2, fig.width=12, fig.height=6,message=FALSE, warning=FALSE}
 # Right efficiency panel – HDI per CO2
 figE_right <- eff_data |>
   dplyr::filter(is.finite(hdi_eff_robust)) |>
@@ -2474,9 +2491,11 @@ figE_right <- eff_data |>
     axis.ticks.y  = ggplot2::element_blank(),
     plot.margin   = ggplot2::margin(6, 6, 6, 3)
   )
+
+figE_right
 ```
 
-```{r Bottom text panel (left)}
+```{r bottem-text-panel, fig.width=12, fig.height=3,message=FALSE, warning=FALSE}
 
 p_bottom_left_text <- ggplot2::ggplot() +
   ggplot2::xlim(0, 1) + ggplot2::ylim(0, 1) +
@@ -2495,11 +2514,12 @@ p_bottom_left_text <- ggplot2::ggplot() +
     label.padding = grid::unit(0, "pt"),
     lineheight    = 1
   )
+p_bottom_left_text
 ```
 
-##### Save panels and Assemble Layout ![](images/clipboard-1185801521.png){width="723" height="421"}
+###### Save panels and Assemble Layout
 
-```{r Save panels and assemble layout}
+```{r assemble-layout, fig.width=49.1, fig.height=27, preview=TRUE,message=FALSE, warning=FALSE}
 
 
 all_panels <- list(
@@ -2551,12 +2571,10 @@ top_section <- cowplot::plot_grid(
 global_caption <- glue::glue(
   "Data: UNDP (HDI); Our World in Data (CO2); World Bank (Population); V-Dem v14 (Democracy). ",
   "Coverage: {YEAR_START}\u2013{YEAR_END}, {dplyr::n_distinct(df$iso3)} countries. ",
-  "Model: GAM (R\u00b2 = {round(gam_rsq, 3)}, \u0394AIC
-  {round(model_results$narrative_stats$aic_improvement, 1)} vs linear). ",
-  "Size groups: Small <{SMALL_POP/1e6}M (n = {sum(df_latest$size_group=='small',    na.rm=TRUE)}); ",
-  "Midsized {SMALL_POP/1e6}\u2013{MID_POP/1e6}M (n =
-  {sum(df_latest$size_group=='midsized', na.rm=TRUE)}); ",
-  "Big >{MID_POP/1e6}M (n = {sum(df_latest$size_group=='big', na.rm=TRUE)})."
+  "Model: GAM (R\u00b2 = {round(gam_rsq, 3)}, \u0394AIC = {round(model_results$narrative_stats$aic_improvement, 1)} vs linear). ",
+  "Size groups: Small <{SMALL_POP/1e6}M (n = {sum(df_latest$size_group == 'small',    na.rm = TRUE)}); ",
+  "Midsized {SMALL_POP/1e6}\u2013{MID_POP/1e6}M (n = {sum(df_latest$size_group == 'midsized', na.rm = TRUE)}); ",
+  "Big >{MID_POP/1e6}M (n = {sum(df_latest$size_group == 'big',    na.rm = TRUE)})."
 )
 
 final_figure <- (top_section / bottom_row) +
@@ -2578,55 +2596,6 @@ final_figure <- (top_section / bottom_row) +
       plot.margin = ggplot2::margin(10, 10, 10, 10)
     )
   )
-
-# 
-ggplot2::ggsave(
-  filename = "outputs/figures/democracy_lowcarbon_development.png",
-  plot     = final_figure,
-  width    = 49.3,
-  height   = 27,
-  dpi      = 96,
-  bg       = bg_col
-)
-
-
-img <- magick::image_read("outputs/figures/democracy_lowcarbon_development.png")
-
-img_border <- magick::image_border(
-  img,
-  color    = "white",
-  geometry = "20x20"
-)
-
-magick::image_write(
-  img_border,
-  path    = "outputs/figures/democracy_lowcarbon_development.png",
-  quality = 100
-)
+final_figure
 
 ```
-
-*\
-References:*\
-\
-*World Bank. (2024). World Development Indicators; Worldwide Governance Indicators. <https://data.worldbank.org/>*
-
-*United Nations Development Programme. (2022). Human Development Index: Time series 1990–2021. <https://hdr.undp.org/>*
-
-*Coppedge, M., Gerring, J., Knutsen, C. H., Lindberg, S. I., Teorell, J., Altman, D., … Ziblatt, D. (2023). Varieties of Democracy (V-Dem) Dataset v12. V-Dem Institute. <https://www.v-dem.net/>*
-
-*\*Natural Earth. (2023). Admin 0 – Countries. <https://www.naturalearthdata.com/>*
-
-*Wickham, H., Averick, M., Bryan, J., Chang, W., D’Agostino McGowan, L., François, R., … Yutani, H. (2019). Welcome to the tidyverse. Journal of Open Source Software, 4(43), 1686. <https://doi.org/10.21105/joss.01686>*
-
-*Wilke, C. O. (2023). ggridges: Ridgeline plots in R [R package]. <https://cran.r-project.org/package=ggridges>*
-
-*Pedersen, T. L. (2024). ggrepel: Automatically position non-overlapping text labels [R package]. <https://cran.r-project.org/package=ggrepel>*
-
-*Pebesma, E. (2018). Simple features for R: Standardized support for spatial vector data. R Journal, 10(1), 439–446.  <https://journal.r-project.org/articles/RJ-2018-009/>*\
-\
-\
-\
-Distill is a publication format for scientific and technical writing, native to the web.
-
-Learn more about using Distill at <https://rstudio.github.io/distill>.
