@@ -688,3 +688,215 @@ edited_graph <- p_pyramid + p_gedr +
 print(edited_graph)
 ```
 
+## Final Graph:
+To ease graph readability and after some comments on the prior graph, some
+minor changes have been provided. Firstly, and to avoid limit problems with 
+data, as ranges have been one of the problems when building this graph, a max
+variable for both GDP and GEDR has been built, to use it as a reference when 
+rebuilding the final graph and able to align them. That is what the following 
+chunk does. In order to be rendered properly, dataset changes in both gdo_data 
+and gedr_data are also presented.
+```{r Dataset changes Symmetric limits for common scale}
+# ------------------------------------------------------------------------------
+#                             Dataset changes
+# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+#          GDP Dataset modification to plot West in the left. 
+# ------------------------------------------------------------------------------
+final_gdp_data <- gdp_data_ |>
+  group_by(year, region, group) |>
+  summarise(gdp = sum(gdp, na.rm = TRUE), .groups = "drop") |>
+  mutate(
+    # WEST negative → left
+    gdp_display = ifelse(region == "WEST", -gdp, gdp),
+    
+    # Reverse stacking order ONLY for WEST
+    group_stack = if_else(
+      region == "WEST",
+      fct_rev(group),
+      group
+    )
+  )
+
+# Factor levels
+final_gdp_data$group_stack <- factor(
+  final_gdp_data$group_stack,
+  levels = c("China", "Russia", "U.S.", "EU", "Japan", "Other")
+)
+# ------------------------------------------------------------------------------
+#                                GEDR dataset changes
+# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+#                Dataset changes needed to plot it horizontally
+# ------------------------------------------------------------------------------
+final_gedr_data <- gedr_data_ |>
+  group_by(region, group) |>
+  summarise(gerd = sum(OBS_VALUE), .groups = "drop") |>
+  mutate(
+    gerd_display = ifelse(region == "WEST", -gerd, gerd)
+  )
+
+final_gedr_data$group <- factor(
+  final_gedr_data$group,
+  levels = c("Other", "Japan", "EU", "U.S.", "Russia", "China")
+)
+```
+
+
+That said,blocks WEST and EAST have been side-changed in 
+the GDP graph, not only because of numbers provided but also by reader´s eye
+custom. Moreover, the R&D graph has been plotted horizontally at above the 
+GDP graph, aligned at 0, to make easier the comparison between both graphs,
+blocks and countries. Said that, other minor changes such as recoloring when 
+readability was not as favorable as required have been implemented. In all and
+that said, the following chunks replicates the new graph building.
+
+```{r GDP final graph}
+# ------------------------------------------------------------------------------
+#                             Graph
+# ------------------------------------------------------------------------------
+p_pyramid <- ggplot(
+  final_gdp_data,
+  aes(
+    x = gdp_display,
+    y = as.factor(year),
+    fill = group_stack
+  )
+) +
+  geom_col(
+    color = "white",
+    linewidth = 0.3,
+    position = "stack"
+  ) +
+
+  # X-axis
+  scale_x_continuous(
+    breaks = seq(-70000, 70000, 10000),
+    labels = c("$70", "60", "50", "40", "30", "20", "10", "0",
+               "10", "20", "30", "40", "50", "60", "$70"),
+    expand = c(0, 0),
+    limits = c(-72000, 72000)
+  ) +
+
+  # Y-axis
+  scale_y_discrete(
+    breaks = as.character(seq(1990, 2023, 1)),
+    labels = c(
+      "1990", rep("", 4), "'95", rep("", 4), "'00", rep("", 4),
+      "'05", rep("", 4), "'10", rep("", 4),
+      "'15", rep("", 4), "'20", "", "", "'23"
+    ),
+    position = "right"
+  ) +
+
+  # Colors
+  scale_fill_manual(values = fill_cols) +
+
+  # Labels
+  labs(
+    title = "Gross Domestic Product by Year (1990–2023), in billions",
+    x = NULL,
+    y = NULL
+  ) +
+
+  # Region labels
+  annotate("text", x = -35000, y = "1990", label = "WEST",
+           size = 7, fontface = "bold") +
+  annotate("text", x =  35000, y = "1990", label = "EAST",
+           size = 7, fontface = "bold") +
+
+  # Country labels (unchanged logic)
+  annotate("text", x =  25000, y = "2010", label = "China",
+           size = 6, color = "#e0c461", fontface = "bold") +
+  annotate("text", x =  25000, y = "2005", label = "Russia",
+           size = 6, color = "#d4a940", fontface = "bold") +
+  annotate("text", x = -45000, y = "2010", label = "US",
+           size = 6, color = "#94cced", fontface = "bold") +
+  annotate("text", x = -45000, y = "2005", label = "EU",
+           size = 6, color = "#6baed6", fontface = "bold") +
+  annotate("text", x = -45000, y = "2000", label = "Japan",
+           size = 6, color = "#4292c6", fontface = "bold") +
+  annotate("text", x = -45000, y = "1995", label = "Other",
+           size = 6, color = "#2171b5", fontface = "bold") +
+
+  # Theme
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_line(color = "gray85"),
+    legend.position = "none",
+    plot.title = element_text(size = 13, face = "bold"),
+    axis.text = element_text(size = 9),
+    axis.text.y = element_text(hjust = 1)
+  ) +
+
+  # Zero line
+  geom_vline(xintercept = 0, linewidth = 0.8)
+
+p_pyramid
+```
+
+Done this, the following chunk shows the process of building of the final GEDR 
+graph, with the changes mentioned.
+
+```{r GEDR changes and final graph}
+# ------------------------------------------------------------------------------
+#                       West data and Graph
+# ------------------------------------------------------------------------------
+p_gedr <- ggplot(
+  final_gedr_data,
+  aes(
+    x = gerd_display,
+    y = region,
+    fill = group
+  )
+) +
+  geom_col(
+    color = "white",
+    linewidth = 0.3,
+    position = "stack"
+  ) +
+
+  scale_x_continuous(
+    labels = function(x) abs(x),
+    expand = c(0, 0)
+  ) +
+
+  scale_fill_manual(values = fill_cols) +
+
+  labs(
+    title = "Gross domestic expenditure on research and development, 2019 (trillions)",
+    x = NULL,
+    y = NULL
+  ) +
+
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+    legend.position = "none",
+    plot.title = element_text(size = 11, face = "bold"),
+    plot.margin = margin(5, 10, 0, 10)
+  ) +
+
+  geom_vline(xintercept = 0, linewidth = 0.8)
+```
+Lastly, both graphs are merged and aligned in this last chunk.
+
+```{r}
+final_plot <- p_gedr / p_pyramid +
+  plot_layout(heights = c(1, 3)) +
+  plot_annotation(
+    title = "The U.S. and its democratic, market-based allies in Europe and Asia together generate far more economic\noutput and spend much more on research and development than China, Russia and countries aligned with\nthem.",
+    caption = "Note: GDP is converted from local currency to dollars at market exchange rates. Research and development spending is for\n2019, converted from local currency to dollars at purchasing power parity.\nSources: IMF (GDP); OECD (expenditure on R&D)",
+    theme = theme(
+      plot.title = element_text(size = 11, margin = margin(b = 10)),
+      plot.caption = element_text(size = 8, hjust = 0, color = "gray40", 
+                                  margin = margin(t = 10)))
+  )
+final_plot
+```
+
+
