@@ -9,24 +9,52 @@ output:
   distill::distill_article:
     self_contained: false
     toc: true
+editor_options: 
+  chunk_output_type: console
+  markdown: 
+    wrap: 72
 ---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(out.width="100%", fig.align="center", fig.showtext=TRUE)
+```
 
-## PACKAGES
-```{r}
+## INTRODUCTION
+
+As we went through the data visualisation journey, one of the classes
+that grabbed me the most was the one involving maps. I hadn't thought of
+using R to build much more than statistical representations so the idea
+of a map wormed it's way into my brain and seemed novel.
+
+I also had it in my head to do the project on an interesting topic - I
+didn't want to choose something dry beacuse the data was easier to work
+with. I settled on conflict in sub-suharan africa as it is a significant
+series of international armed conflicts that consistently go
+under-reported. With that as a target, I came across a map of conflict
+in sub-suharan Africa from 2022.
+
+The replication process was more complicated than anticipated and I
+strugged at times. Annotations at scale are not for the faint of heart!
+
+## REPLICATION
+
+### PACKAGES
+
+```{r PACKAGES}
 library(giscoR)
 library(sf)
 library(ggplot2)
 library(ggforce)
 library(patchwork)
-library(dplyr)
+#library(dplyr)
 library(grid)
 library(png)
 library(tidyverse)
-library(lubridate)
+#library(lubridate)
 ```
 
-## CLEANING THE DATA
-```{r}
+### CLEANING THE DATA
+
+```{r CLEANING THE DATA}
 data <- read_csv("data/Africa_aggregated_data_up_to-2025-11-29.csv")
 
 data <- 
@@ -73,9 +101,11 @@ filtered_data <-
   left_join(values_lookup, by = "COUNTRY")
 ```
 
-## BASE MAP
-### COLOURS FOR ARC GRAPHS
-```{r}
+### BASE MAP
+
+#### COLOURS FOR ARC GRAPHS
+
+```{r BASE MAP - COLOURS FOR ARC GRAPHS}
 color_points <- tibble(
   value = c(0, 5, 10, 15, 17, 20, 23, 30, 32, 42, 44, 48),
   color = c("#FAF8B2", "#FAF3B0", "#F6E5A8", "#F0DA9F", "#EFD69C",
@@ -205,7 +235,8 @@ auto_countries <- c(
 countries_auto <- countries_in_view |>
   filter(NAME_ENGL %in% auto_countries)
 
-# Precisely positioned countries (many did not behave well. Here the text at the base of the plot about the sources of the data was plotted as well)
+# Precisely positioned countries (many did not behave well. Here the text at 
+# the base of the plot about the sources of the data was plotted as well)
 custom_positions <- tribble(
   ~name, ~lon, ~lat,
     "SOUTH\nSUDAN", 30, 8.0,
@@ -234,12 +265,14 @@ custom_positions <- tribble(
   "MAURITANIA", -13, 19.5,
   "NIGERIA", 6.5, 9.5,
   "ZAMBIA", 25, -15,
-  "Sources: Armed Conflict Location & Event Data Project (ACLED), www.acleddata.com; IISS analysis", -6, -29
+  "Sources: Armed Conflict Location & Event Data Project (ACLED), 
+  www.acleddata.com; IISS analysis", -6, -29
 ) |>
   st_as_sf(coords = c("lon", "lat"), crs = 4326)
 
 # FINAL MAP
-# Incorporates countries with colours, the coastline, the labels and the ocean colour
+# Incorporates countries with colours, the coastline, the labels and the ocean 
+# colour
 base_map <- ggplot() +
   geom_sf(data = countries_in_view_colored,
           aes(fill = fill_color),
@@ -263,11 +296,13 @@ base_map <- ggplot() +
         plot.background = element_rect(fill = "white"))
 ```
 
+#### DATA CREATION FOR COUNTRY GRAPHS
 
-### UPDATED DATA CREATION FOR COUNTRY GRAPHS
-- Function to create country data
-- I found myself repeating the same lines of code many, many times, so I used Claude to help me build a function to avoid the repetition
-```{r}
+-   Function to create country data
+-   I found myself repeating the same lines of code many, many times, so
+    I used Claude to help me build a function to avoid the repetition
+
+```{r BASE MAP - DATA CREATION FOR COUNTRY GRAPHS}
 create_country_data <- function(country_name, filtered_data, value_to_color) {
   filtered_data |> 
     filter(COUNTRY == country_name) |> 
@@ -293,7 +328,8 @@ create_country_data <- function(country_name, filtered_data, value_to_color) {
 
 # Create all country data frames using the function
 cameroon_data <- create_country_data("Cameroon", filtered_data, value_to_color)
-central_african_republic_data <- create_country_data("Central African Republic", filtered_data, value_to_color)
+central_african_republic_data <- create_country_data("Central African Republic", 
+                                                     filtered_data, value_to_color)
 chad_data <- create_country_data("Chad", filtered_data, value_to_color)
 democratic_republic_of_congo_data <- create_country_data("Democratic Republic of Congo", filtered_data, value_to_color)
 ethiopia_data <- create_country_data("Ethiopia", filtered_data, value_to_color)
@@ -307,11 +343,16 @@ sudan_data <- create_country_data("Sudan", filtered_data, value_to_color)
 uganda_data <- create_country_data("Uganda", filtered_data, value_to_color)
 burkina_faso_data <- create_country_data("Burkina Faso", filtered_data, value_to_color)
 ```
-## COUNTRY ARC PLOTS
 
-- Function to create arc plots
--  These proved unexpectedly challenging. There was a package that worked when I began the project to plot parliament graphs, however this stopped working midway through writing the project. I resorted to stack exchange and Claude to help me build the graphs.
-```{r}
+### COUNTRY ARC PLOTS
+
+-   Function to create arc plots
+-   These proved unexpectedly challenging. There was a package that
+    worked when I began the project to plot parliament graphs, however
+    this stopped working midway through writing the project. I resorted
+    to stack exchange and Claude to help me build the graphs.
+
+```{r COUNTRY ARC PLOTS}
 create_arc_plot <- function(data, country_name, is_tall = FALSE) {
   ymin_val <- if(is_tall) -0.8 else -0.6
   ylim_val <- if(is_tall) c(-0.8, 1.0) else c(-0.6, 1.0)
@@ -326,17 +367,21 @@ create_arc_plot <- function(data, country_name, is_tall = FALSE) {
                  color = "white", linewidth = 0.2) +
     scale_fill_identity()
   
-  # Add text layers conditionally based on the height of the plot (the placement of the text differs for 2 of the plots as the names of the countries are longer, so they needed to be taller.)
+  # Add text layers conditionally based on the height of the plot (the 
+  # placement of the text differs for 2 of the plots as the names of the 
+  # countries are longer, so they needed to be taller.)
   
   if (is_tall) {
     p <- p +
-      geom_text(aes(x = label_x * 1.05, y = (label_y - 0.3) * 1.05, label = value),
+      geom_text(aes(x = label_x * 1.05, y = (label_y - 0.3) * 1.05, 
+                    label = value),
                 fontface = "plain", size = 2.75, lineheight = 0.9) +
       annotate("text", x = 0, y = text_y, label = country_name, 
                fontface = "bold", size = 2.75, lineheight = 0.9)
   } else {
     p <- p +
-      geom_text(aes(x = label_x * 1.05, y = (label_y - 0.3) * 1.05, label = value),
+      geom_text(aes(x = label_x * 1.05, y = (label_y - 0.3) * 1.05, 
+                    label = value),
                 fontface = "plain", size = 2.75, lineheight = 0.9) +
       annotate("text", x = 0, y = text_y, label = country_name, 
                fontface = "bold", size = 2.75, lineheight = 0.9)
@@ -354,9 +399,12 @@ create_arc_plot <- function(data, country_name, is_tall = FALSE) {
 
 # Create all arc plots
 cameroon_plot <- create_arc_plot(cameroon_data, "Cameroon")
-central_african_republic_plot <- create_arc_plot(central_african_republic_data, "Central African\nRepublic", is_tall = TRUE)
+central_african_republic_plot <- create_arc_plot(central_african_republic_data, 
+                                  "Central African\nRepublic", is_tall = TRUE)
 chad_plot <- create_arc_plot(chad_data, "Chad")
-democratic_republic_of_congo_plot <- create_arc_plot(democratic_republic_of_congo_data, "Democratic Rep.\nof the Congo", is_tall = TRUE)
+democratic_republic_of_congo_plot <- 
+  create_arc_plot(democratic_republic_of_congo_data, 
+                  "Democratic Rep.\nof the Congo", is_tall = TRUE)
 ethiopia_plot <- create_arc_plot(ethiopia_data, "Ethiopia")
 mali_plot <- create_arc_plot(mali_data, "Mali")
 mozambique_plot <- create_arc_plot(mozambique_data, "Mozambique")
@@ -369,10 +417,15 @@ uganda_plot <- create_arc_plot(uganda_data, "Uganda")
 burkina_faso_plot <- create_arc_plot(burkina_faso_data, "Burkina Faso")
 ```
 
-### BASE MAP + LINES FROM ARC PLOTS
-- Helper function to convert pixels to lon/lat coordinates
-- This let me measure the positions of the lines as a number of pixels (in preview on mac this appears when you drag a selection box on an image) and have that series of "pixel co-ordinates" converted to latitude and longitude to plot on the map.
-```{r}
+#### LINES FROM ARC PLOTS AND BOXES
+
+-   Helper function to convert pixels to lon/lat coordinates
+-   This let me measure the positions of the lines as a number of pixels
+    (in preview on mac this appears when you drag a selection box on an
+    image) and have that series of "pixel co-ordinates" converted to
+    latitude and longitude to plot on the map.
+
+```{r LINES FROM ARC PLOTS AND BOXES}
 pixel_to_lonlat <- function(x_pixels, y_pixels, 
                             map_width = 2232, map_height = 1783,
                             lon_min = -27, lon_max = 64,
@@ -384,7 +437,10 @@ pixel_to_lonlat <- function(x_pixels, y_pixels,
   return(list(lon = lon, lat = lat))
 }
 
-# ALL CONNECTION LINES (these are the pixel measurements discussed above. You read them as pairs; distance from the keft edge of the map is the x and from the top is the y. Taken together they define points for the lines to be plotted to.)
+# ALL CONNECTION LINES (these are the pixel measurements discussed above. 
+# You read them as pairs; distance from the keft edge of the map is the x and 
+# from the top is the y. Taken together they define points for the lines 
+# to be plotted to.)
 connections <- list(
   #arc graphs
   mali = list(
@@ -507,7 +563,8 @@ connections <- list(
 )
 
 # white endpoints
-# The lines used for the arc graphs and countries involved in the various conflicts are differentiated by the colour of the end points they use.
+# The lines used for the arc graphs and countries involved in the various 
+# conflicts are differentiated by the colour of the end points they use.
 white_endpoints <- c("the_sahel_left", 
                      "the_sahel_middle", 
                      "the_sahel_right", 
@@ -539,7 +596,8 @@ lines_df <- map_dfr(names(connections), function(country) {
 })
 
 # Endpoints
-# This section makes a dataframe using the final coordinates of the lines as the position of the endpoint.
+# This section makes a dataframe using the final coordinates of the lines as 
+# the position of the endpoint.
 endpoints_df <- map_dfr(names(connections), function(country) {
   n <- length(connections[[country]]$x)
   coords <- pixel_to_lonlat(
@@ -581,15 +639,18 @@ base_map <- base_map +
              size = 1.5,
              stroke = 0.3)
 ```
-### BASE MAP + ARC GRAPHS
-```{r}
+
+#### ARC GRAPHS
+
+```{r ARC GRAPHS}
 # Standard arc box dimensions
 # These dimensions applied for the majority of the arc graphs
 arc_w <- 215 / 2232
 arc_h <- 156 / 1783
 
 # CAR and DRC dimensions
-# I realised quite late that these graphs were subtly different in height due to the length of the country name needing to fit in the box
+# I realised quite late that these graphs were subtly different in height due 
+# to the length of the country name needing to fit in the box
 car_drc_h <- 183 / 1783
 
 # Map dimensions
@@ -597,7 +658,8 @@ map_width <- 2232
 map_height <- 1783
 
 # Helper function for positioning
-# I reused the same method as for the lines, this time measuring to the left edge of the plots and the bottom edge.
+# I reused the same method as for the lines, this time measuring to the left 
+# edge of the plots and the bottom edge.
 pixel_to_prop <- function(left_px, top_px, height_px = 156) {
   list(
     left = left_px / map_width,
@@ -619,30 +681,49 @@ add_inset <- function(map, plot, left, bottom, width, height) {
 # Define all arc plot configurations
 arc_configs <- list(
   list(plot = mali_plot, pos = pixel_to_prop(190, 77), w = arc_w, h = arc_h),
-  list(plot = burkina_faso_plot, pos = pixel_to_prop(487, 77), w = arc_w, h = arc_h),
+  list(plot = burkina_faso_plot, pos = pixel_to_prop(487, 77), 
+       w = arc_w, h = arc_h),
   list(plot = niger_plot, pos = pixel_to_prop(754, 77), w = arc_w, h = arc_h),
   list(plot = chad_plot, pos = pixel_to_prop(1020, 77), w = arc_w, h = arc_h),
   list(plot = sudan_plot, pos = pixel_to_prop(1272, 77), w = arc_w, h = arc_h),
-  list(plot = south_sudan_plot, pos = pixel_to_prop(1528, 196), w = arc_w, h = arc_h),
+  list(plot = south_sudan_plot, pos = pixel_to_prop(1528, 196), 
+       w = arc_w, h = arc_h),
   list(plot = ethiopia_plot, pos = pixel_to_prop(1947, 547), w = arc_w, h = arc_h),
   list(plot = somalia_plot, pos = pixel_to_prop(1947, 733), w = arc_w, h = arc_h),
   list(plot = uganda_plot, pos = pixel_to_prop(1947, 914), w = arc_w, h = arc_h),
-  list(plot = democratic_republic_of_congo_plot, pos = pixel_to_prop(1947, 1108, height_px = 183), w = arc_w, h = car_drc_h),
-  list(plot = mozambique_plot, pos = pixel_to_prop(1947, 1517), w = arc_w, h = arc_h),
-  list(plot = nigeria_plot, pos = pixel_to_prop(114, 836), w = arc_w, h = arc_h),
-  list(plot = cameroon_plot, pos = pixel_to_prop(364, 943), w = arc_w, h = arc_h),
-  list(plot = central_african_republic_plot, pos = pixel_to_prop(897, 1104, height_px = 183), w = arc_w, h = car_drc_h)
+  list(plot = democratic_republic_of_congo_plot, 
+       pos = pixel_to_prop(1947, 1108, height_px = 183), 
+       w = arc_w, h = car_drc_h),
+  list(plot = mozambique_plot, pos = pixel_to_prop(1947, 1517), 
+       w = arc_w, h = arc_h),
+  list(plot = nigeria_plot, pos = pixel_to_prop(114, 836), 
+       w = arc_w, h = arc_h),
+  list(plot = cameroon_plot, pos = pixel_to_prop(364, 943), 
+       w = arc_w, h = arc_h),
+  list(plot = central_african_republic_plot, 
+       pos = pixel_to_prop(897, 1104, height_px = 183), 
+       w = arc_w, h = car_drc_h)
 )
 
 # Add all arc plots to map
 for (config in arc_configs) {
-  base_map <- add_inset(base_map, config$plot, config$pos$left, config$pos$bottom, config$w, config$h)
+  base_map <- add_inset(base_map, config$plot, config$pos$left, 
+                        config$pos$bottom, config$w, config$h)
 }
 ```
-## BOXES
-### SAHEL BOX
-- I used a different approach here as there were a lot of elements to position. I measured the flags and overall box size in pixels and then positioned them relative to the left and bottom edges of the boxes. This was fiddly, so I ended up measuring the margins, flag width, gap between the flags and plotting these for each box (you can see this in the code for the other boxes below)
-```{r}
+
+### BOXES
+
+#### SAHEL BOX
+
+-   I used a different approach here as there were a lot of elements to
+    position. I measured the flags and overall box size in pixels and
+    then positioned them relative to the left and bottom edges of the
+    boxes. This was fiddly, so I ended up measuring the margins, flag
+    width, gap between the flags and plotting these for each box (you
+    can see this in the code for the other boxes below)
+
+```{r BOXES - SAHEL BOX}
 create_sahel_box <- function() {
   france_flag <- readPNG("flags_and_logos/france.png")
   italy_flag <- readPNG("flags_and_logos/italy.png")
@@ -668,7 +749,8 @@ create_sahel_box <- function() {
                       xmin = 0.08, xmax = 0.08 + flag_width, 
                       ymin = 0.62, ymax = 0.62 + flag_height) +
     annotation_raster(italy_flag, 
-                      xmin = 0.5 - (flag_width / 2), xmax = 0.5 + (flag_width / 2), 
+                      xmin = 0.5 - (flag_width / 2), xmax = 0.5 + 
+                        (flag_width / 2), 
                       ymin = 0.62, ymax = 0.62 + flag_height) +
     annotation_raster(usa_flag, 
                       xmin = 0.92 - flag_width, xmax = 0.92, 
@@ -677,7 +759,8 @@ create_sahel_box <- function() {
                       xmin = 0.08, xmax = 0.08 + logo_width, 
                       ymin = 0.30, ymax = 0.30 + logo_height) +
     annotation_raster(un_logo, 
-                      xmin = 0.5 - (logo_width / 2), xmax = 0.5 + (logo_width / 2), 
+                      xmin = 0.5 - (logo_width / 2), xmax = 0.5 + 
+                        (logo_width / 2), 
                       ymin = 0.30, ymax = 0.30 + logo_height) +
     annotation_raster(au_logo, 
                       xmin = 0.92 - logo_width, xmax = 0.92, 
@@ -698,8 +781,10 @@ create_sahel_box <- function() {
   return(p)
 }
 ```
-### LAKE CHAD BOX
-```{r}
+
+#### LAKE CHAD BOX
+
+```{r BOXES - LAKE CHAD BOX}
 create_lake_chad_box <- function() {
   france_flag <- readPNG("flags_and_logos/france.png")
   uk_flag <- readPNG("flags_and_logos/uk.png")
@@ -749,8 +834,10 @@ create_lake_chad_box <- function() {
   return(p)
 }
 ```
-### GREAT LAKES BOX
-```{r}
+
+#### GREAT LAKES BOX
+
+```{r BOXES - GREAT LAKES BOX}
 create_great_lakes_box <- function() {
   un_logo <- readPNG("flags_and_logos/un.png")
   au_logo <- readPNG("flags_and_logos/au.png")
@@ -802,8 +889,10 @@ create_great_lakes_box <- function() {
   return(p)
 }
 ```
-### RWANDA EU SADCMM BOX
-```{r}
+
+#### RWANDA EU SADCMM BOX
+
+```{r BOXES - RWANDA EU SADCMM BOX}
 create_two_row_box <- function() {
   rwanda_flag <- readPNG("flags_and_logos/rwanda.png")
   eu_logo <- readPNG("flags_and_logos/eu.png")
@@ -832,8 +921,10 @@ create_two_row_box <- function() {
                       ymin = 0.15, 
                       ymax = 0.15 + flag_height) +
     annotation_raster(sadcmm_flag, 
-                      xmin = bottom_left_margin + bottom_flag_width + bottom_gap, 
-                      xmax = bottom_left_margin + bottom_flag_width + bottom_gap + bottom_flag_width, 
+                      xmin = bottom_left_margin + bottom_flag_width + 
+                        bottom_gap, 
+                      xmax = bottom_left_margin + bottom_flag_width + 
+                        bottom_gap + bottom_flag_width, 
                       ymin = 0.15, 
                       ymax = 0.15 + flag_height) +
     coord_fixed(ratio = box_height/box_width, xlim = c(0, 1), ylim = c(0, 1)) +
@@ -847,8 +938,10 @@ create_two_row_box <- function() {
   return(p)
 }
 ```
-### TURK UK US AU EU BOX
-```{r}
+
+#### TURK UK US AU EU BOX
+
+```{r BOXES - TURK UK US AU EU BOX}
 create_three_two_box <- function() {
   top_flag1 <- readPNG("flags_and_logos/turkey.png")
   top_flag2 <- readPNG("flags_and_logos/uk.png")
@@ -890,7 +983,8 @@ create_three_two_box <- function() {
                       ymax = 0.15 + flag_height) +
     annotation_raster(bottom_flag2, 
                       xmin = bottom_margin + bottom_flag_width + bottom_gap, 
-                      xmax = bottom_margin + bottom_flag_width + bottom_gap + bottom_flag_width, 
+                      xmax = bottom_margin + bottom_flag_width + bottom_gap + 
+                        bottom_flag_width, 
                       ymin = 0.15, 
                       ymax = 0.15 + flag_height) +
     coord_fixed(ratio = box_height/box_width, xlim = c(0, 1), ylim = c(0, 1)) +
@@ -904,8 +998,10 @@ create_three_two_box <- function() {
   return(p)
 }
 ```
-### ERITREA BOX
-```{r}
+
+#### ERITREA BOX
+
+```{r BOXES - ERITREA BOX}
 create_single_flag_box <- function() {
   eritrea_flag <- readPNG("flags_and_logos/eritrea.png")
   
@@ -935,8 +1031,10 @@ create_single_flag_box <- function() {
   return(p)
 }
 ```
-### UN BOX
-```{r}
+
+#### UN BOX
+
+```{r BOXES - UN BOX}
 create_single_flag_box_2 <- function() {
   un_logo <- readPNG("flags_and_logos/un.png")
   
@@ -966,8 +1064,10 @@ create_single_flag_box_2 <- function() {
   return(p)
 }
 ```
-### RUSSIA RWANDA UN BOX
-```{r}
+
+#### RUSSIA RWANDA UN BOX
+
+```{r BOXES - RUSSIA RWANDA UN BOX}
 create_three_flag_row_box <- function() {
   russia_flag <- readPNG("flags_and_logos/russia.png")
   rwanda_flag <- readPNG("flags_and_logos/rwanda.png")
@@ -1009,8 +1109,10 @@ create_three_flag_row_box <- function() {
   return(p)
 }
 ```
-### CREATE ALL BOX PLOTS
-```{r}
+
+#### CREATE ALL BOX PLOTS
+
+```{r BOXES - CREATE ALL BOX PLOTS}
 sahel_box <- create_sahel_box()
 lake_chad_box <- create_lake_chad_box()
 great_lakes_box <- create_great_lakes_box()
@@ -1023,26 +1125,40 @@ three_flag_row_box <- create_three_flag_row_box()
 ### DEFINE ALL BOX CONFIGURATIONS ###
 # Here I position the boxes relative to the overall map
 box_configs <- list(
-  list(plot = sahel_box, left = 0.27, bottom = 0.68, w = 245/2232, h = 205/1783),
-  list(plot = lake_chad_box, left = 0.4, bottom = 0.55, w = 235/2232, h = 145/1783),
-  list(plot = great_lakes_box, left = 0.52, bottom = 0.4, w = 177/2232, h = 177/1783),
-  list(plot = two_row_box, left = 0.71, bottom = 0.22, w = 195/2232, h = 135/1783),
-  list(plot = three_two_box, left = 0.76, bottom = 0.35, w = 245/2232, h = 138/1783),
-  list(plot = single_flag_box, left = 0.70, bottom = 0.50, w = 95/2232, h = 65/1783),
-  list(plot = single_flag_box_2, left = 0.58, bottom = 0.577, w = 95/2232, h = 65/1783),
-  list(plot = three_flag_row_box, left = 0.515, bottom = 0.75, w = 205/2232, h = 84/1783)
+  list(plot = sahel_box, left = 0.27, bottom = 0.68, w = 245/2232, 
+       h = 205/1783),
+  list(plot = lake_chad_box, left = 0.4, bottom = 0.55, w = 235/2232, 
+       h = 145/1783),
+  list(plot = great_lakes_box, left = 0.52, bottom = 0.4, w = 177/2232, 
+       h = 177/1783),
+  list(plot = two_row_box, left = 0.71, bottom = 0.22, w = 195/2232, 
+       h = 135/1783),
+  list(plot = three_two_box, left = 0.76, bottom = 0.35, w = 245/2232, 
+       h = 138/1783),
+  list(plot = single_flag_box, left = 0.70, bottom = 0.50, w = 95/2232, 
+       h = 65/1783),
+  list(plot = single_flag_box_2, left = 0.58, bottom = 0.577, w = 95/2232, 
+       h = 65/1783),
+  list(plot = three_flag_row_box, left = 0.515, bottom = 0.75, w = 205/2232, 
+       h = 84/1783)
 )
 ```
-### ADD ALL BOXES TO MAP
-```{r}
+
+#### ADD ALL BOXES TO MAP
+
+```{r BOXES - ADD ALL BOXES TO MAP}
 for (config in box_configs) {
-  base_map <- add_inset(base_map, config$plot, config$left, config$bottom, config$w, config$h)
+  base_map <- add_inset(base_map, config$plot, config$left, config$bottom, 
+                        config$w, config$h)
 }
 ```
-## KEY
-- This creates the grey legend arc plot data using the same method as the other arc plots.
-### GREY ARC
-```{r}
+
+### KEY
+
+-   This creates the grey legend arc plot data using the same method as
+    the other arc plots. \#### GREY ARC
+
+```{r KEY}
 grey_legend_data <- tibble(
   segment = 1:3,
   label = c("A", "B", "C"),
@@ -1078,8 +1194,10 @@ grey_legend_arc <- ggplot(grey_legend_data) +
         plot.margin = margin(0, 0, 0, 0),
         text = element_text(size = rel(1)))
 ```
-### TEXT
-```{r}
+
+#### TEXT
+
+```{r KEY - TEXT}
 white_rectangle <- ggplot() +
   annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 1,
            fill = "white") +
@@ -1110,10 +1228,12 @@ white_rectangle <- ggplot() +
          hjust = 0, vjust = 1, size = 2.5) +
   
   # Text left of bar
-  annotate("text", x = 0.02, y = 0.49, label = "High", hjust = 0, vjust = 0.5, size = 2.5) +
+  annotate("text", x = 0.02, y = 0.49, label = "High", hjust = 0, vjust = 0.5, 
+           size = 2.5) +
   
   # Text right of bar
-  annotate("text", x = 0.62, y = 0.49, label = "Low", hjust = 0, vjust = 0.5, size = 2.5) +
+  annotate("text", x = 0.62, y = 0.49, label = "Low", hjust = 0, vjust = 0.5, 
+           size = 2.5) +
   
   # Text below bar
   annotate("text", x = 0.02, y = 0.41,
@@ -1122,18 +1242,22 @@ white_rectangle <- ggplot() +
   
   # Peacekeeping text
   annotate("text", x = 0.02, y = 0.23, 
-           label = "Peacekeeping, stabilisation and military-training operations",
+           label = "Peacekeeping, stabilisation and military-training 
+           operations",
            hjust = 0, vjust = 1, size = 2.5) +
   
   coord_fixed(ratio = 582/833, xlim = c(0, 1), ylim = c(0, 1)) +
   theme_void() +
   theme(
-    plot.background = element_rect(fill = "white", color = "black", linewidth = 0.5),
+    plot.background = element_rect(fill = "white", color = "black", 
+                                   linewidth = 0.5),
     plot.margin = margin(0, 0, 0, 0)
   )
 ```
-### POSITION AND ADD
-```{r}
+
+#### POSITION AND ADD
+
+```{r KEY - POSITION AND ADD}
 white_rect_w <- 833 / 2232
 white_rect_h <- 582 / 1783
 white_rect_left <- 50 / 2232
@@ -1166,8 +1290,10 @@ base_map <- base_map +
     top = grey_arc_bottom + grey_arc_h_map
   )
 ```
-### HORIZONTAL BAR
-```{r}
+
+#### HORIZONTAL SCALE
+
+```{r KEY - HORIZONTAL SCALE}
 # Colours
 color_scale_data <- tibble(
   x = seq(0, 48, length.out = 100),
@@ -1176,7 +1302,8 @@ color_scale_data <- tibble(
 )
 
 # Colour bar
-color_scale_bar_only <- ggplot(color_scale_data, aes(x = x, y = y, fill = fill_color)) +
+color_scale_bar_only <- ggplot(color_scale_data, aes(x = x, y = y, 
+                                                     fill = fill_color)) +
   geom_tile(width = 0.5, height = 1) +
   scale_fill_identity() +
   scale_x_reverse(expand = c(0, 0)) +
@@ -1188,8 +1315,10 @@ color_scale_bar_only <- ggplot(color_scale_data, aes(x = x, y = y, fill = fill_c
     plot.margin = margin(0, 0, 0, 0)
   )
 ```
-### FLAGS COUNTRIUES
-```{r}
+
+#### FLAGS COUNTRIUES
+
+```{r KEY - FLAGS COUNTRIUES}
 create_involvement_flags <- function() {
   # Load flag images
   burundi_flag <- readPNG("flags_and_logos/burundi.png")
@@ -1216,7 +1345,8 @@ create_involvement_flags <- function() {
   flag_x <- function(i) spacing + (i * (flag_width + spacing))
   
   p <- ggplot() +
-    annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 1, fill = NA, color = NA) +
+    annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 1, fill = NA, 
+             color = NA) +
     
     # Burundi
     annotation_raster(burundi_flag,
@@ -1298,8 +1428,10 @@ create_involvement_flags <- function() {
   return(p)
 }
 ```
-### ADD ALL PARTS TO THE WHITE BOX
-```{r}
+
+#### ADD ALL PARTS TO THE WHITE BOX
+
+```{r KEY - ADD ALL PARTS TO THE WHITE BOX}
 # Plot flags
 flags_plot <- create_involvement_flags()
 
@@ -1332,8 +1464,10 @@ base_map <- base_map +
     top = white_rect_bottom + (50 / 1783) + flags_h_map
   )
 ```
-### PEACEKEEPING LOGOS
-```{r}
+
+#### PEACEKEEPING LOGOS
+
+```{r KEY - PEACEKEEPING LOGOS}
 create_peacekeeping_logos <- function() {
   # Load logo images
   un_logo <- readPNG("flags_and_logos/un.png")
@@ -1356,7 +1490,8 @@ create_peacekeeping_logos <- function() {
   last_logo_x <- 0.75
   
   p <- ggplot() +
-    annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 1, fill = NA, color = NA) +
+    annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 1, fill = NA, 
+             color = NA) +
     
     # UN
     annotation_raster(un_logo,
@@ -1377,28 +1512,32 @@ create_peacekeeping_logos <- function() {
                       xmin = logo_x(2), xmax = logo_x(2) + logo_width,
                       ymin = 0.5, ymax = 0.5 + logo_height) +
     annotate("text", x = logo_x(2) + logo_width/2, y = 0.48, 
-             label = "African\nUnion", hjust = 0.5, vjust = 1, size = 2, lineheight = 0.9) +
+             label = "African\nUnion", hjust = 0.5, vjust = 1, size = 2, 
+             lineheight = 0.9) +
     
     # G5 Sahel
     annotation_raster(g5_logo,
                       xmin = logo_x(3), xmax = logo_x(3) + logo_width,
                       ymin = 0.5, ymax = 0.5 + logo_height) +
     annotate("text", x = logo_x(3) + logo_width/2, y = 0.48, 
-             label = "G5\nSahel", hjust = 0.5, vjust = 1, size = 2, lineheight = 0.9) +
+             label = "G5\nSahel", hjust = 0.5, vjust = 1, size = 2, 
+             lineheight = 0.9) +
     
     # MNJTF
     annotation_raster(multi_logo,
                       xmin = logo_x(4), xmax = logo_x(4) + logo_width,
                       ymin = 0.5, ymax = 0.5 + logo_height) +
     annotate("text", x = logo_x(4) + logo_width/2, y = 0.48, 
-             label = "Multinational\nJoint Task\nForce", hjust = 0.5, vjust = 1, size = 2, lineheight = 0.9) +
+             label = "Multinational\nJoint Task\nForce", hjust = 0.5, vjust = 1, 
+             size = 2, lineheight = 0.9) +
     
     # SADCMM
     annotation_raster(sadcmm_logo,
                       xmin = last_logo_x, xmax = last_logo_x + logo_width,
                       ymin = 0.5, ymax = 0.5 + logo_height) +
     annotate("text", x = last_logo_x + logo_width/2, y = 0.48, 
-             label = "Southern African\nDevelopment Community\nMission in Mozambique", hjust = 0.5, vjust = 1, size = 2, lineheight = 0.9) +
+             label = "Southern African\nDevelopment Community\nMission in 
+             Mozambique", hjust = 0.5, vjust = 1, size = 2, lineheight = 0.9) +
     
     coord_fixed(ratio = 582/833, xlim = c(0, 1), ylim = c(0, 1)) +
     theme_void() +
@@ -1425,8 +1564,19 @@ base_map <- base_map +
     top = white_rect_bottom + (590 / 1783) + logos_h_map
   )
 ```
-## PLOT FINAL MAP!
-```{r}
+
+### PLOT FINAL MAP
+
+```{r PLOT FINAL MAP}
 base_map
 ```
 
+## IMPROVEMENT
+
+### RATIONALE FOR IMPROVEMENT
+
+### IMPROVEMENT GRAPH
+
+```{r IMPROVEMENT GRAPH}
+
+```
