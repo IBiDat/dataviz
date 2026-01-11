@@ -57,8 +57,8 @@ recovered from the [Main Science and Investigation Institute
 
 In what is related with GDP data, recovered from the [IMF
 database](https://data.imf.org/en/datasets/IMF.RES:WEO) based on the
-World Economic Outlook (WEO). Having said the previous, the first chunk
-exposes the loading of both databases.
+World Economic Outlook (WEO). Both need to be loaded to be able to
+start.
 
 ```{r Database loading}
 # library (readr) or
@@ -72,9 +72,6 @@ required to select the countries and columns of interest to graph. As
 long there are two graph that in the last step will be merged (one for
 GDP and other for R&D), I prefer to work with two separated databases
 rather than with one, in order to avoid misunderstandings.
-
-The second and third chunk shows the procedure of cleaning of both
-databases and the selection of countries.
 
 ```{r Data cleaning and country selection for gdp_data}
 library(tidyverse)
@@ -114,8 +111,8 @@ gdp_data_ <- gdp_data_ |>
     year = as.integer(sub("X", "", year)))
 ```
 
-The third chunk shows the cleaning and selection procedure for the R&D
-database.
+R&D database also needs to be cleaned, and only variables of interest
+selected.
 
 ```{r Data cleaning and country selection for gedr_data}
 # 1st: I clean and select countries in gedr_data. As in the previous, I use
@@ -132,31 +129,47 @@ gedr_data_ <- gedr_data |>
 The first part of the cleaning and selection procedure is now done.
 However, as the original graph groups countries in blocks (EAST-WEST),
 and some other features (EU countries) can´t be extracted from the
-original databases, some work still needs to be done. The following
-chunks show the creation of the variable eu_countries and the
-group-region add in both databases.
+original databases, some work still needs to be done. Hence, some
+variables are created, such as eu_countries, west_allies, group or
+region.
 
 ```{r EU_countries, group and region variables add in original databases}
-# 1st: I build a variable of eu_countries.
+# # 1st: I build a variable of eu_countries.
+
+# Ensure names match your dataset (e.g., "Slovakia" vs "Slovak Republic")
 eu_countries <- c(
   "Austria","Belgium","Bulgaria","Croatia","Cyprus","Czech Republic","Denmark",
   "Estonia","Finland","France","Germany","Greece","Hungary","Ireland","Italy",
   "Latvia","Lithuania","Luxembourg","Malta","Netherlands","Poland","Portugal",
   "Romania","Slovak Republic","Slovenia","Spain","Sweden")
-# 2nd: Add a group and region variables to gdp_data_
-gdp_data_<- gdp_data_ |> 
+
+# Explicitly defining Western allies to prevent them from being "lost"
+west_allies <- c("United Kingdom", "Canada", "Australia", "Korea", "Israel", "Norway", "Switzerland")
+
+# 1. Processing GDP Data. Add a group and region
+gdp_data_ <- gdp_data_ |>
   mutate(
     group = case_when(
       Country == "United States" ~ "U.S.",
-      Country == "Japan" ~ "Japan",
-      Country == "China" ~ "China",
-      Country == "Russia" ~ "Russia",
-      Country %in% eu_countries ~ "EU",
-      TRUE ~ "Other"),
+      Country == "Japan"         ~ "Japan",
+      Country == "China"         ~ "China",
+      Country == "Russia"        ~ "Russia",
+      Country %in% eu_countries  ~ "EU",
+      TRUE                       ~ "Other" # This captures allies and aligned countries
+    ),
     region = case_when(
-      group %in% c("U.S.", "Japan", "EU", "Other") ~ "WEST",
-      group %in% c("China", "Russia") ~ "EAST"))
-# 3rd: Replicate the process with gedr_data_
+      # Define who belongs to the "WEST" side of the graph
+      group %in% c("U.S.", "Japan", "EU") | Country %in% west_allies ~ "WEST",
+      # Define who belongs to the "EAST" side (adjust list based on your data)
+      group %in% c("China", "Russia") ~ "EAST",
+
+      TRUE ~ "WEST" 
+    )
+  ) |>
+  # IMPORTANT: You must sum the values so "EU" is the total of all 27 countries
+  group_by(year, region, group) |>
+  summarise(gdp = sum(gdp, na.rm = TRUE), .groups = "drop")
+# Replicates the process with GEDR
 gedr_data_ <- gedr_data_ |> 
   mutate(
     group = case_when(
@@ -169,7 +182,6 @@ gedr_data_ <- gedr_data_ |>
     region = case_when(
       group %in% c("U.S.", "Japan", "EU", "Other") ~ "WEST",
       group %in% c("China", "Russia") ~ "EAST"))
-
 ```
 
 ## Original Graph Replication
@@ -203,7 +215,7 @@ following chunk starts to replicate the GDP part of the graph with the
 most basic version of our graph. Firstly, we will display our axis to
 then start plotting the data.
 
-```{r First step: ggplot + aes}
+```{r First step ggplot + aes}
 p <- 
   ggplot(
   gdp_data_,
@@ -215,9 +227,9 @@ print(p)
 Once the code is run, we can see how our axis seem to be correct.
 Although they will be latter transformed, and labels year and gdp_mirror
 will be eliminated in future stages, before is needed to include some
-data. The following chunk modifies p by plotting geom_area.
+data.
 
-```{r Second step: p + geom_area}
+```{r Second step p + geom_area}
 p <- 
   p + geom_area(color = "white", linewidth = .6)
 
@@ -226,19 +238,19 @@ print(p)
 
 Now we can see that our data is looking more similar to the graph we
 want to replicate. However, colors are not grouped by block, labels
-still there and the axis are not still the ones as in the WSJ article.
-The following chunk changes the axis to adequate them to the WSJ
-reference, taking into account that the y- axis is right-hand placed.
+still there and the axis are not still the ones as in the WSJ article,
+so these changes are needed.
 
-```{r Third step: p + scale_x_continuous scale_y_continuous}
+```{r Third step p + scale_x_continuous scale_y_continuous}
 p <- 
   p + scale_x_continuous( # I create a vector of years to adequate it to WSJ.
     breaks = c(1990, 1995, 2000, 2005, 2010, 2015, 2020),
     labels = c("'90", "'95", "2000", "'05", "'10", "'15", "'20")) +
   
   scale_y_continuous( # This vector is needed to not have negative numbers in EAST)
-    breaks = seq(-40000, 40000, 10000),
-    labels = c("$40", "30", "20", "10", "0", "10", "20", "$30", "40"),
+    breaks = seq(-70000, 70000, 10000),
+    labels = c("$70","$60","50","40", "30", "20", "10", "0", "10", "20", "30", "$40",
+               "50", "60", "$70"),
     position = "right",
     expand = c(0,0))
 print(p)
@@ -247,10 +259,9 @@ print(p)
 Now we can see how our graph is increasingly being more similar to the
 WSJ one. However, colors are still different, and not grouped by block.
 Moreover, labels are not present in the original WSJ graph, and some add
-no information, such as year. Hence, the following chunk orders the
-colors in blue and gold, and eliminate the labels of the axis.
+no information, such as year.
 
-```{r Fourth step: replicate WSJ colors and eliminate labels}
+```{r Fourth step replicate WSJ colors and eliminate labels}
 p <- 
   p + scale_fill_manual(values = c(
     "U.S."   = "#94cced",
@@ -274,12 +285,9 @@ the ones of the original graph. In what is more, the title has been
 added, although it needs to be modified and placed in bold. Added to
 that, the group label is not present in the original one, and add few if
 any information. Besides, these labels will be added to be plotted
-within the graph, so there is no utility in keeping it. The following
-chunk eliminates the group label, include the labels within the data,
-puts the title in bold and includes some theme_minimal adjustments to
-make the graph cleaner and more easily readable.
+within the graph, so there is no utility in keeping it.
 
-```{r Fifth step: Group label elimination, labels and title modification}
+```{r Fifth step Group label elimination, labels and title modification}
 p <- 
   p + theme_minimal(base_size = 11) +
   theme(
@@ -290,9 +298,9 @@ p <-
     plot.margin = margin(5, 10, 5, 5),
     plot.title = element_text(size = 11, face = "bold")) +
   
-  annotate("text", x = 2010, y = 26000, label = "Other", size = 2.5, color = "black") +
-  annotate("text", x = 2010, y = 20000, label = "Japan", size = 2.5, color = "black") +
-  annotate("text", x = 2010, y = 17000, label = "EU", size = 3, color = "black") +
+  annotate("text", x = 2010, y = 28000, label = "Other", size = 3.5, color = "black") +
+  annotate("text", x = 2010, y = 20000, label = "Japan", size = 3.5, color = "black") +
+  annotate("text", x = 2010, y = 16000, label = "EU", size = 3, color = "black") +
   annotate("text", x = 2010, y = 8000, label = "U.S.", size = 3.5, color = "black") +
   annotate("text", x = 2020, y = 5000, label = "WEST", size = 7, color = "white",
            fontface = "bold", family = "Bale") +
@@ -309,8 +317,8 @@ major differences will be noted, such as the small portion of GDP the EU
 has. This is perhaps caused by differences in original dataset and our
 dataset. However, this seems a pretty accurate replication of our
 original graph, even taking into account these differences. By now, we
-will leave this graph stored as p, and start building the R&D graph as
-p1, to then merge them with patchwork.
+will leave this graph stored as p, and start building the R&D graph, to
+then merge them with patchwork.
 
 In what is related with R&D graph, two different graphs, one for WEST
 data and other for EAST data need to be built to then be merged. To make
@@ -318,8 +326,7 @@ this process easier, I group gedr_data\_ by group and region. This can
 be done in gedr_data\_ but in order to not miss information I prefer to
 build a gedr_grouped and work from this results. In what is more, since
 two graphs are going to be done, I prefer to build a variable with
-colors rather than to repeat them twice. The following chunk replicates
-this process, to be able to graph the R&D part.
+colors rather than to repeat them twice.
 
 ```{r gedr_grouped and colors variable}
 gedr_grouped <- gedr_data_ |> 
@@ -341,8 +348,7 @@ fill_cols <- c(
 
 Now we can filter this data to build ordered different datasets for WEST
 and EAST, with data ordered from the lowest to the highest, and labels
-centered. The following chunk does this and builds west_data and
-east_data.
+centered.
 
 ```{r west_data and east_data building}
 west_data <- filter(gedr_grouped, region == "WEST") |> 
@@ -360,9 +366,8 @@ east_data <- filter(gedr_grouped, region == "EAST") |>
   )
 ```
 
-Now we can start plotting each graph separately. Firstly, the following
-chunk displays the initial steps for building the west part of the
-graph.
+Now we can start plotting each graph separately, starting from the WEST
+one.
 
 ```{r p_west initial steps}
 p_west <- 
@@ -376,8 +381,7 @@ We can see that the initial steps of the process may lead us to
 replicate in a very precise manner the original WSJ graph. However,
 major changes need to be made, as including replicating colors, place
 names of the countries within the bars, eliminate the group label, place
-the y-axis in the right side or write the title. The following chunk
-does all this.
+the y-axis in the right side or write the title.
 
 ```{r p_west major changes process}
 p_west <- p_west + 
@@ -409,7 +413,7 @@ Once done this, it seems that the resulting graph is a pretty accurate
 replication of the original WSJ we can repeat in the east part of the
 graph. In order to make it easier to read and faster to run, the
 following chunk imitates the process of the previous west graph at once.
-Note that, as they will be merged and the west part (the blue one) is
+Note that, as they will be merged and the west part *(the blue one)* is
 placed at the top, when building the east part of the graph no title is
 needed.
 
@@ -437,10 +441,10 @@ print(p_east)
 ```
 
 Now, we can merge them with patchwork to see the result when trying to
-replicate thw whole right part of the WSJ journal. The following chunk
-libraries patchwork, that needs to be priorly installed, to then merge
-both of them. Note that the formula is used to place the east bars (the
-gold ones) below the west bars (the blue ones), as in the WSJ.
+replicate the whole right part of the WSJ journal. The following chunk
+libraries **patchwork**, that needs to be priorly installed, to then
+merge both of them. Note that the formula is used to place the east bars
+*(the gold ones)* below the west bars *(the blue ones)*, as in the WSJ.
 
 ```{r patchwork and p_west/p_east merge}
 library(patchwork)
@@ -453,24 +457,37 @@ Once we have both parts of the original graph, being the GDP part that
 is placed in the left part of the graph and the R&D part that is placed
 in the right part of the graph, it is possible to merge them, add a
 general title and the notes placed in the original bottom part of the
-GDP part. The following chunk shows this process.
+GDP part.
 
-```{r p and p_gedr merge, title and notes added}
+```{r p-p_gedr-merged}
 final_graph <- p + p_gedr +
   plot_layout(widths = c(3, 1)) +
   plot_annotation(
-    title = "The U.S. and its democratic, market-based allies in Europe and Asia together generate far more economic\noutput and spend much more on research and development than China, Russia and countries aligned with\nthem.",
+    title = "The Western Advantage",
+    subtitle = "The U.S. and its democratic, market-based allies in Europe and Asia together generate far more economic\noutput and spend much more on research and development than China, Russia and countries aligned with\nthem.",
     caption = "Note: GDP is converted from local currency to dollars at market exchange rates. Research and development spending is for\n2019, converted from local currency to dollars at purchasing power parity.\nSources: IMF (GDP); OECD (expenditure on R&D)",
     theme = theme(
-      plot.title = element_text(size = 11, margin = margin(b = 10)),
-      plot.caption = element_text(size = 8, hjust = 0, color = "gray40", 
-                                  margin = margin(t = 10)))
+      plot.title = element_text(size = 18, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      plot.caption = element_text(size = 10, hjust = 0, color = "gray40", 
+                                  margin = margin(t = 15))
+    )
   )
 
 print(final_graph)
 ```
 
-## Edited graph.
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+
+*Limitations and furher improvement:* It has been imposible, after
+numerous trials, to solve the mismatch between the original EU data and
+the replication EU data. This might have been provoked by differences in
+dataset exact sources, name mismatches not found when building
+eu_countries or code errors when building the graph.
+
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+
+## Edited graph
 
 Having done the previous, this graph can be redone in a cleaner, fancier
 and more understandable way. Firstly, the original graph have some
@@ -487,10 +504,10 @@ one.
 
 Said this, the first chunk prepares gdp_data\_ to plot the edited
 version of this graph. Note that, as long now we have a mirrored graph,
-it is needed to build a negative (mirrored) variable for the EAST block,
-which is going to be in the left side of the graph. It can be done in
-only one line of code, but is preferred to do it separately for reader´s
-ease.
+it is needed to build a negative *(mirrored)* variable for the EAST
+block, which is going to be in the left side of the graph. It can be
+done in only one line of code, but is preferred to do it separately for
+reader´s ease.
 
 ```{r data preparation for GDP edited graph}
 pyramid_gdp_data <- gdp_data_ |>
@@ -507,8 +524,7 @@ order the column group in this new dataset pyramid_gdp_data. Moreover,
 since as said different tones of blue and gold would make the graph
 easier to read, the fill_cols variable needs to be redone, in order to
 save time at plotting colors. After different steps of trial and error,
-colors chosen are the ones displayed in the following chunk, which shows
-this mentioned process.
+colors chosen are the ones displayed in the following.
 
 ```{r group column ordering and colors reelection}
 pyramid_gdp_data$group <- factor(pyramid_gdp_data$group, 
@@ -528,7 +544,7 @@ Now, all steps to be able to start plotting have been covered. The
 following chunk shows the inital steps for the pyramid GDP data to be
 plotted.
 
-```{r Initial steps for GDP edited graph}
+```{r ppyramid-start, fig.width=16, fig.height=11}
 p_pyramid <- ggplot(pyramid_gdp_data, aes(x = gdp_display, y = as.factor(year), 
                                       fill = group)) +
   geom_col(color = "white", linewidth = 0.3, position = "stack")
@@ -539,7 +555,7 @@ Now, we can see some initial intuition of the graph that is intended to
 improve the original WSJ one. However, some major changes need to be
 made, clean Y-axis and make the X-axistwo sided positive.
 
-```{r Axis labels cleaning}
+```{r ppyramid-axis, fig.width=16, fig.height=11}
  p_pyramid<- p_pyramid +
   # X-axis cleansing
   scale_x_continuous(
@@ -564,10 +580,10 @@ print(p_pyramid)
 
 Moreover, and as said, new colors need to be plotted, axis labels can be
 eliminated and both region and country labels need to be added within
-the graph. The following chunk shows all this process. Note that, for
-reader´ease country names have been included in the side of its block.
+the graph. Note that, for reader´ease country names have been included
+in the side of its block.
 
-```{r Colours, Axis labels dropout and region/country labels}
+```{r ppyramid-colors-labels-axis, fig.width=16, fig.height=11}
 p_pyramid <- p_pyramid +
   # Colors
   scale_fill_manual(values = fill_cols) +
@@ -603,10 +619,9 @@ print (p_pyramid)
 Now the graph seems much more WSJ stylish and clean. Lastly, it is time
 to add theme_minimal to make the graph even cleaner, remove group label
 on the side and finally add a black vertical line at 0 to make graph
-readability even more straightforward. The following chunk takes into
-account this lasts steps.
+readability even more straightforward.
 
-```{r theme_minimal, group label drop, vertical black line at 0}
+```{r ppyramid-theme, fig.width=16, fig.height=11}
 p_pyramid <- p_pyramid +
   # theme_minimal and group label drop
   theme_minimal(base_size = 15) +
@@ -635,9 +650,10 @@ EAST gold part is now mirrored, with one black horizontal line built as
 a threshold between both blocks. The following chunk exposes the
 neccessary changes to mirror R&D graph for the EAST part, and the whole
 construction of the new R&D graph. As in the original p_gedr, the graph
-is divided in two parts (WEST and EAST), and then merged with patchwork.
+is divided in two parts *(WEST and EAST)*, and then merged with
+patchwork.
 
-```{r R&D graph modification}
+```{r GERD-modification, fig.width=16, fig.height=11}
 gedr_grouped <- gedr_data_ |> 
   group_by(region, group) |> 
   summarise(gerd = sum(OBS_VALUE), .groups = "drop") #Perhaps already done, but
@@ -715,9 +731,8 @@ p_gedr <- p_west / p_east + plot_layout(heights = c(.77, .33))
 print(p_gedr)
 ```
 
-Finally, both the R&D and the GDP (p_pyramid) parts are merged with
-patchwork, including titles and captions as in the original. The
-following chunk does this process and ends the modification of the graph
+Finally, both the R&D and the GDP *(p_pyramid)* parts are merged with
+patchwork, including titles and captions as in the original.
 
 ```{r edited-graph, fig.width=16, fig.height=11}
 edited_graph <- p_pyramid + p_gedr +
@@ -733,7 +748,7 @@ edited_graph <- p_pyramid + p_gedr +
 print(edited_graph)
 ```
 
-## Final Graph:
+## Final Graph
 
 To ease graph readability and after some comments on the prior graph,
 some minor changes have been provided. Firstly, final datasets for both
@@ -813,8 +828,6 @@ Moreover, the R&D graph has been plotted horizontally at above the GDP
 graph, aligned at 0, to make easier the comparison between both graphs,
 blocks and countries. Said that, other minor changes such as recoloring
 when readability was not as favorable as required have been implemented.
-In all and that said, the following chunks replicates the new graph
-building.
 
 ```{r GDP-final, fig.width=16,fig.height=11}
 # ------------------------------------------------------------------------------
@@ -902,8 +915,7 @@ p_pyramid <- ggplot(
 p_pyramid
 ```
 
-Done this, the following chunk shows the process of building of the
-final GEDR graph, with the changes mentioned.
+Hence, the process is repeated with GERD graph, to plot it horizontally.
 
 ```{r GEDR changes and final graph}
 # ------------------------------------------------------------------------------
@@ -951,18 +963,21 @@ p_gerd <- ggplot(
 
 ```
 
-Lastly, both graphs are merged and aligned in this last chunk.
+Lastly, both graphs are merged and aligned in this last step.
 
-```{r final-plpot, fig.width=16, fig.height=11}
-final_plot <- p_gerd / p_pyramid + 
-  plot_layout(heights = c(1, 12)) +
+```{r final-plot, fig.width=16, fig.height=11}
+final_plot <- (p_gerd / p_pyramid) + 
+  plot_layout(heights = c(1, 12)) + # Adjusted height ratio for better visibility
   plot_annotation(
-    title = "The U.S. and its democratic, market-based allies in Europe and Asia together generate far more economic\noutput and spend much more on research and development than China, Russia and countries aligned with\nthem.",
+    title = "The Western Advantage",
+    subtitle = "The U.S. and its democratic, market-based allies in Europe and Asia together generate far more economic\noutput and spend much more on research and development than China, Russia and countries aligned with\nthem.",
     caption = "Note: GDP is converted from local currency to dollars at market exchange rates. Research and development spending is for\n2019, converted from local currency to dollars at purchasing power parity.\nSources: IMF (GDP); OECD (expenditure on R&D)",
     theme = theme(
-      plot.title = element_text(size = 20, margin = margin(b = 10)),
-      plot.caption = element_text(size = 12, hjust = 0, color = "gray40",
-                                  margin = margin(t = 10)))
+      plot.title = element_text(size = 18, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      plot.caption = element_text(size = 10, hjust = 0, color = "gray40", 
+                                  margin = margin(t = 15))
+    )
   )
 final_plot
 ```
