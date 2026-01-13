@@ -1,7 +1,7 @@
 ---
 title: "Conflict in Sub-Suharan Africa"
 description: |
-  A graph representing conflict in Sub-Suharan Africa from 2021 - 2022
+  A series of graphs representing conflict in Sub-Suharan Africa from 2021 - 2022
 categories: "2025"
 author: Benjamin Sam
 date: 2025-12-16
@@ -19,13 +19,6 @@ editor_options:
 knitr::opts_chunk$set(out.width="100%", fig.align="center")#, fig.showtext=TRUE)
 ```
 
-## TO-DO
-- Add original image
-- Add improvement rationale
-- Add improvement code
-- Work out scaling
-- Re-read instructions and double check all are completed
-
 ## INTRODUCTION
 
 As we went through the data visualisation journey, one of the classes
@@ -41,7 +34,11 @@ under-reported. With that as a target, I came across a map of conflict
 in sub-suharan Africa from 2022.
 
 The replication process was more complicated than anticipated and I
-strugged at times. Annotations at scale are not for the faint of heart!
+strugged at times. Annotations at scale are not for the faint of heart
+
+![Original chart. Source:
+<https://www.iiss.org/online-analysis/online-analysis/2022/11/acs-2022-sub-saharan-africa/>](acs-2022_sub-saharan-africa-regional-map.png){.external
+width="100%"}
 
 ## REPLICATION
 
@@ -53,11 +50,9 @@ library(sf)
 library(ggplot2)
 library(ggforce)
 library(patchwork)
-#library(dplyr)
 library(grid)
 library(png)
 library(tidyverse)
-#library(lubridate)
 ```
 
 ### CLEANING THE DATA
@@ -119,7 +114,7 @@ color_points <- tibble(
   color = c("#FAF8B2", "#FAF3B0", "#F6E5A8", "#F0DA9F", "#EFD69C",
             "#EDCF97", "#E9C790", "#E4B585", "#E3B080", "#D89670",
             "#D9956D", "#CF8A69")
-) %>%
+) |>
   arrange(value)
 
 value_to_color <- function(val) {
@@ -135,7 +130,7 @@ value_to_color <- function(val) {
     upper_col <- color_points$color[upper_idx]
     
     weight <- (val - lower_val) / (upper_val - lower_val)
-    return(colorRamp(c(lower_col, upper_col))(weight) %>%
+    return(colorRamp(c(lower_col, upper_col))(weight) |>
              rgb(maxColorValue = 255))
   }
 }
@@ -154,9 +149,6 @@ bbox_poly <- st_as_sfc(bbox)
 countries_in_view <- countries[st_intersects(countries, bbox_poly, sparse = FALSE), ]
 
 # Define country colors
-# Orange: conflict-affected countries
-# White: other Sub-Saharan countries
-# Beige: Other countries on the map
 country_colors <- tribble(
   ~COUNTRY, ~color,
   # Conflict-affected (orange-y)
@@ -210,8 +202,8 @@ country_colors <- tribble(
 )
 
 # Merge colors with map data
-countries_in_view_colored <- countries_in_view %>%
-  left_join(country_colors, by = c("NAME_ENGL" = "COUNTRY")) %>%
+countries_in_view_colored <- countries_in_view |> 
+  left_join(country_colors, by = c("NAME_ENGL" = "COUNTRY")) |>
   mutate(fill_color = ifelse(is.na(color), "#F0EDE3", color))
 
 # Create coastline
@@ -244,7 +236,8 @@ countries_auto <- countries_in_view |>
   filter(NAME_ENGL %in% auto_countries)
 
 # Precisely positioned countries (many did not behave well. Here the text at 
-# the base of the plot about the sources of the data was plotted as well)
+# the base of the plot about the sources of the data was plotted as well 
+#originally, but I needed to affect it independently later so it was dropped to a different section.
 custom_positions <- tribble(
   ~name, ~lon, ~lat,
     "SOUTH\nSUDAN", 30, 8.0,
@@ -272,10 +265,12 @@ custom_positions <- tribble(
   "THE GAMBIA", -18, 13,
   "MAURITANIA", -13, 19.5,
   "NIGERIA", 6.5, 9.5,
-  "ZAMBIA", 25, -15,
-  "Sources: Armed Conflict Location & Event Data Project (ACLED), 
-  www.acleddata.com; IISS analysis", -6, -29
-) |>
+  "ZAMBIA", 25, -15) |>
+  st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+last_line_of_text <- tribble(
+  ~name, ~lon, ~lat,
+  "Sources: Armed Conflict Location & Event Data Project (ACLED), www.acleddata.com; IISS analysis", -6, -29) |> 
   st_as_sf(coords = c("lon", "lat"), crs = 4326)
 
 # FINAL MAP
@@ -291,12 +286,17 @@ base_map <- ggplot() +
   geom_sf_text(data = countries_auto,
                aes(label = toupper(NAME_ENGL)),
                fontface = "plain", 
-               size = 2.3, 
+               size = 3, #2.3
                lineheight = 0.9) +
   geom_sf_text(data = custom_positions,
                aes(label = name),
                fontface = "plain",
-               size = 2.3,
+               size = 3, #2.3
+               lineheight = 0.9) +
+  geom_sf_text(data = last_line_of_text,
+               aes(label = name),
+               fontface = "plain",
+               size = 2.5, #2.3
                lineheight = 0.9) +
   coord_sf(xlim = c(-27, 64), ylim = c(-31, 41), expand = FALSE) +
   theme_void() +
@@ -308,7 +308,7 @@ base_map <- ggplot() +
 
 -   Function to create country data
 -   I found myself repeating the same lines of code many, many times, so
-    I used Claude to help me build a function to avoid the repetition
+    I used Claude to help me build a function to avoid the repetition.
 
 ```{r BASE MAP - DATA CREATION FOR COUNTRY GRAPHS}
 create_country_data <- function(country_name, filtered_data, value_to_color) {
@@ -729,7 +729,7 @@ for (config in arc_configs) {
     then positioned them relative to the left and bottom edges of the
     boxes. This was fiddly, so I ended up measuring the margins, flag
     width, gap between the flags and plotting these for each box (you
-    can see this in the code for the other boxes below)
+    can see this in the code for the other boxes below as I changed approach.)
 
 ```{r BOXES - SAHEL BOX}
 create_sahel_box <- function() {
@@ -1164,7 +1164,9 @@ for (config in box_configs) {
 ### KEY
 
 -   This creates the grey legend arc plot data using the same method as
-    the other arc plots. \#### GREY ARC
+    the other arc plots.
+    
+#### GREY ARC
 
 ```{r KEY}
 grey_legend_data <- tibble(
@@ -1544,8 +1546,7 @@ create_peacekeeping_logos <- function() {
                       xmin = last_logo_x, xmax = last_logo_x + logo_width,
                       ymin = 0.5, ymax = 0.5 + logo_height) +
     annotate("text", x = last_logo_x + logo_width/2, y = 0.48, 
-             label = "Southern African\nDevelopment Community\nMission in 
-             Mozambique", hjust = 0.5, vjust = 1, size = 2, lineheight = 0.9) +
+             label = "Southern African\nDevelopment Community\nMission in Mozambique", hjust = 0.5, vjust = 1, size = 2, lineheight = 0.9) +
     
     coord_fixed(ratio = 582/833, xlim = c(0, 1), ylim = c(0, 1)) +
     theme_void() +
@@ -1575,18 +1576,221 @@ base_map <- base_map +
 
 ### PLOT FINAL MAP
 
-```{r PLOT FINAL MAP}
+```{r}
+# after fiddling for a VERY LONG time, I realised I could define these as variables
+fig.width = 11
+fig.height = 1.75 * fig.width
+```
+
+```{r PLOT FINAL MAP, fig.width=fig.width, fig.height=fig.height}
 base_map
 ```
 
 ## IMPROVEMENT
 
 ### RATIONALE FOR IMPROVEMENT
-TBC 12/01/26
+
+After recreating the map I was ready for a simpler graph type. I thought the initial map was very cluttered and difficult to read, privileging the form of the map over the story the data was trying to tell. My approach was to strip away the map and focus on getting the data across as cleanly and clearly as possible. With no map, I judged the positions of the countries and relations with each other and the external parties to the conflicts of lesser importance than the impacts and fatalities. I iterated through different versions of bar/column graphs until I found one I feel communicates the data clearly.
 
 ### IMPROVEMENT GRAPH
-TBC 12/01/26
 
-```{r IMPROVEMENT GRAPH}
+My initial idea was to plot the data for each metric as a separate
+graph, matching the scale on the x axis. I thought using the same colour
+scale as the original graph might relate the two, however I found it
+hard to read. I also realised that the statistic of total fatalities was
+important to the overall story the original told, so needed to include
+that as well.
 
+```{r IMPROVEMENT GRAPH, fig.width=8, fig.height=9}
+# IMPROVEMENT IDEA 1 - 3 GRAPHS
+# Prepare data for bar graphs
+bar_data_1 <- values_lookup |>
+  pivot_longer(
+    cols = c(human_impact, incidence, geopolitical_impact),
+    names_to = "metric",
+    values_to = "value"
+  ) |>
+  mutate(
+    color = map_chr(value, value_to_color),
+    metric = factor(metric, 
+                    levels = c("human_impact", "incidence", "geopolitical_impact"),
+                    labels = c("Human Impact", "Incidence", "Geopolitical Impact"))
+  )
+
+# Create the 3 stacked bar graphs
+improvement_plot_1 <- ggplot(bar_data_1, aes(x = reorder(COUNTRY, value), y = value, fill = color)) +
+  geom_col() +
+  scale_fill_identity() +
+  coord_flip() +
+  facet_wrap(~metric, ncol = 1) +
+  labs(x = NULL, y = "Impact") +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(face = "bold", size = 12),
+    axis.text.y = element_text(size = 9),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_blank()
+  )
+
+improvement_plot_1
+```
+
+I worked on a second graph, correcting the issues I had with the first
+attempt. As you can see below I didn't account for the difference in
+scale of the data between fatalities and the other metrics.
+
+```{r}
+# IMPROVEMENT IDEA 2 - 1 GRAPH
+# Prepare data for bar graphs
+bar_data_2 <- filtered_data |>
+  pivot_longer(
+    cols = c(human_impact, incidence, geopolitical_impact, total_fatalities),
+    names_to = "metric",
+    values_to = "value"
+  ) |>
+  mutate(
+    metric = factor(metric, 
+                    levels = c("human_impact", "incidence", "geopolitical_impact", "total_fatalities"),
+                    labels = c("Human Impact", "Incidence", "Geopolitical Impact", "total_fatalities")),
+    COUNTRY = factor(COUNTRY, levels = sort(unique(COUNTRY), decreasing = TRUE))
+  )
+
+# Create grouped graph
+improvement_plot_2 <- ggplot(bar_data_2, aes(x = COUNTRY, y = value, fill = metric)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  scale_fill_manual(
+    values = c(
+      "Human Impact" = "#E63946",
+      "Incidence" = "#457B9D",
+      "Geopolitical Impact" = "#2A9D8F",
+      "total_fatalities" = "black"
+    ),
+    name = NULL
+  ) +
+  coord_flip() +
+  labs(x = NULL, y = "Impact") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    axis.text.y = element_text(size = 10),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_blank()
+  )
+
+improvement_plot_2
+```
+
+To solve the scale problem, I decided to create two graphs and plot them
+side-by-side. I didn't think about the position of the legends and later had to adjust them.
+
+```{r}
+bar_data_3 <- filtered_data |>
+  pivot_longer(
+    cols = c(human_impact, incidence, geopolitical_impact, total_fatalities),
+    names_to = "metric",
+    values_to = "value"
+  ) |>
+  mutate(
+    metric = factor(metric, 
+                    levels = c("human_impact", "incidence", "geopolitical_impact", "total_fatalities"),
+                    labels = c("Human Impact", "Incidence", "Geopolitical Impact", "total_fatalities")),
+    COUNTRY = factor(COUNTRY, levels = sort(unique(COUNTRY), decreasing = TRUE))
+  )
+# Left plot
+bar_data_left <- bar_data_3 |> filter(metric != "total_fatalities")
+
+plot_left <- ggplot(bar_data_left, aes(x = COUNTRY, y = value, fill = metric)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  scale_fill_manual(
+    values = c("Human Impact" = "#E63946", "Incidence" = "#457B9D", "Geopolitical Impact" = "#2A9D8F"),
+    name = NULL) +
+  coord_flip() +
+  labs(x = NULL, y = "Impact") +
+  theme_minimal() +
+  theme(legend.position = "top", axis.text.y = element_text(size = 10))
+
+# Right plot
+bar_data_right <- bar_data_3 |> filter(metric == "total_fatalities")
+
+plot_right <- ggplot(bar_data_right, aes(x = COUNTRY, y = value, fill = metric)) +
+  geom_col(width = 0.7) +
+  scale_fill_manual(
+    values = c("total_fatalities" = "black"),
+    name = NULL,
+    labels = c("Total Fatalities")
+  ) +
+  coord_flip() +
+  labs(x = NULL, y = "Fatalities") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    axis.text.y = element_blank(), 
+    axis.ticks.y = element_blank()
+  )
+
+# Combine
+plot_left + 
+plot_right +
+plot_layout(widths = c(2, 1)) +
+  plot_annotation(
+    title = "Regional Armed Conflict in Sub-Suharan Africa",
+    theme = theme(plot.title = element_text(size = 14, face = "bold"))
+  )
+```
+
+This is my final graph for the recreation. I realised that the colours I had chosen were not decided on with colour blindness in mind, so I updated the palette to accomodate that idea.I also corrected the spacing of the legends so they didnt overlap.
+
+```{r fig.width=7, fig.height=7}
+bar_data_3 <- filtered_data |>
+  pivot_longer(
+    cols = c(human_impact, incidence, geopolitical_impact, total_fatalities),
+    names_to = "metric",
+    values_to = "value"
+  ) |>
+  mutate(
+    metric = factor(metric, 
+                    levels = c("human_impact", "incidence", "geopolitical_impact", "total_fatalities"),
+                    labels = c("Human Impact", "Incidence", "Geopolitical Impact", "total_fatalities")),
+    COUNTRY = factor(COUNTRY, levels = sort(unique(COUNTRY), decreasing = TRUE))
+  )
+# Left plot
+bar_data_left <- bar_data_3 |> filter(metric != "total_fatalities")
+
+plot_left <- ggplot(bar_data_left, aes(x = COUNTRY, y = value, fill = metric)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  scale_fill_viridis_d(name = NULL, option = "viridis") +
+  coord_flip() +
+  labs(x = NULL, y = "Impact") +
+  theme_minimal() +
+  theme(legend.position = "top", axis.text.y = element_text(size = 10))
+
+# Right plot
+bar_data_right <- bar_data_3 |> filter(metric == "total_fatalities")
+
+plot_right <- ggplot(bar_data_right, aes(x = COUNTRY, y = value, fill = metric)) +
+  geom_col(width = 0.7) +
+  scale_fill_manual(
+    values = c("total_fatalities" = "black"),
+    name = NULL,
+    labels = c("Total Fatalities")
+  ) +
+  coord_flip() +
+  labs(x = NULL, y = "Fatalities") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    legend.box.margin = margin(l = 5), # I had to plot the legends separately and combine them. This is to position Total fatalities so it doesn't overlap.
+    axis.text.y = element_blank(), 
+    axis.ticks.y = element_blank()
+  )
+
+# Combine
+plot_left + 
+plot_right +
+plot_layout(widths = c(2, 2)) +
+  plot_annotation(
+    title = "Regional Armed Conflict in Sub-Suharan Africa",
+    subtitle = "Impacts across 3 measures and Total fatalities",
+    theme = theme(plot.title = element_text(size = 14, face = "bold"))
+  )
 ```
