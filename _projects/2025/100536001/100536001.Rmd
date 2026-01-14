@@ -1,0 +1,905 @@
+---
+title: "Consumer Inflation From 2020 to 2025"
+description: "World map visualization of consumer inflation from 2020 to 2025"
+categories: "2025"
+author: Chih Hsuan Chang
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(out.width="100%", fig.align="center", fig.showtext=TRUE)
+```
+
+I have choose the graph from Visual Capitalist, "Consumer Inflation from 2020 to 2025". The dataset is from Deutsche Bank, record consumer inflation from 2020 to June 2025. This world map visualization includes elements of bubble map structure, texts and arrows, gradient scales that goes from thin to thick and the magnifying lenses on top of Europe and South East Asia.
+
+This map is likely done by Adobe Illustrator due to its extreme precise placement of text, numbers and bubbles. Nonetheless, I will try to use ggplot2 and other graph related packages to replicate it.
+
+![original graph](Consumer-Inflation_2020-2025.jpeg)
+
+### Packages
+
+```{r packages}
+library(readr)
+library(ggplot2)
+library(tidyverse)
+library(sf) # map structure
+library(scales) # making the scale
+library(rnaturalearth) # map info
+library(showtext) # fonts
+library(systemfonts)
+library(cowplot) # composite maps together
+```
+
+### Data Cleaning
+
+```{r data-cleaning}
+# import data
+inflation2025 <- read_csv("global inflation 2025_Deutsche Bank - Sheet1.csv")
+
+# clean data
+cum_inflation_2025 <- inflation2025 |> 
+  select(-`cum change since 2012 (%)`,
+         -`cum change since 2020 (%)`,
+         -`Rank based on change from 2012 Economy`) |> 
+  mutate(Economy = case_when(Economy == "United States" ~ "United States of America",
+                             Economy == "Czech Republic" ~ "Czechia",
+                             TRUE ~ Economy))
+
+# sf data object
+world_map <- ne_countries(scale = "medium", returnclass = "sf") |> 
+  filter(admin != "Antarctica")
+world_inflation <- world_map |> 
+  left_join(cum_inflation_2025, by = c("name" = "Economy")) |>
+  # change names that are shown/not shown on the map 
+  mutate(name = case_when(name == "South Africa" ~ "S. Africa", 
+                          name == "Turkey" ~ "Türkiye", 
+                          name == "United Kingdom" ~ "UK",
+                          name == "South Korea" ~ "S. Korea",
+                          name == "United Arab Emirates" ~ "UAE",
+                          name == "United States of America" ~ "U.S.",
+                          name %in% c(
+                            "Austria", "Netherlands", "Belgium", 
+                            "Luxembourg", "Portugal", "Singapore", 
+                            "Denmark", "Ireland") ~ "",
+                          TRUE ~ name))
+```
+
+### Fonts
+
+```{r fonts}
+font_add_google("Poppins", "poppins")
+font_add_google("Erica One", "erica")
+
+showtext_auto()
+```
+
+### The Gradient Scale on Top of the Map
+
+Since there is no faster way to create a scale bar that goes from thin to thick like the original graph, I decided to use a more robust method to create it from scratch.
+
+```{r gradient-scale}
+# bar legend
+vc_palette <- c("#53a6e8", "#6b9bd1", "#7B95C5","#8a8eb8", "#9B88AC","#ab809f", "#B87993","#c87284", "#D86C7B","#e56569", "#B0022A")
+limit_range <- c(0, 55)
+legend_data <- data.frame(x = seq(limit_range[1], limit_range[2], length.out = 500))
+legend_data$y_height <- 0.2 + (legend_data$x / 50) * 2
+
+legend_plot <- ggplot(legend_data) +
+  geom_segment(aes(x = x, xend = x, y = 0, yend = y_height, color = x), linewidth = 1) +
+  scale_color_gradientn(
+    colors = vc_palette,
+    limits = limit_range,
+    oob = scales::squish,
+  ) +
+  annotate("text", x = 1, y = -1, label = "0%", size = 2.5, fontface = "bold", color = "#333333") +
+  annotate("text", x = 10, y = -1, label = "10%", size = 2.5, fontface = "bold", color = "#333333") +
+  annotate("text", x = 20, y = -1, label = "20%", size = 2.5, fontface = "bold", color = "#333333") +
+  annotate("text", x = 30, y = -1, label = "30%", size = 2.5, fontface = "bold", color = "#333333") +
+  annotate("text", x = 40, y = -1, label = "40%", size = 2.5, fontface = "bold", color = "#333333") +
+  annotate("text", x = 50, y = -1, label = "50%", size = 2.5, fontface = "bold", color = "#333333") +
+  annotate("segment", x = 0, xend = 0, y = 0, yend = -0.3, color = "#333333") +
+  annotate("segment", x = 5, xend = 5, y = 0, yend = -0.3, color = "#333333") +
+  annotate("segment", x = 10, xend = 10, y = 0, yend = -0.3, color = "#333333") +
+  annotate("segment", x = 15, xend = 15, y = 0, yend = -0.3, color = "#333333") +
+  annotate("segment", x = 20, xend = 20, y = 0, yend = -0.3, color = "#333333") +
+  annotate("segment", x = 25, xend = 25, y = 0, yend = -0.3, color = "#333333") +
+  annotate("segment", x = 30, xend = 30, y = 0, yend = -0.3, color = "#333333") +
+  annotate("segment", x = 35, xend = 35, y = 0, yend = -0.3, color = "#333333") +
+  annotate("segment", x = 40, xend = 40, y = 0, yend = -0.3, color = "#333333") +
+  annotate("segment", x = 45, xend = 45, y = 0, yend = -0.3, color = "#333333") +
+  annotate("segment", x = 50, xend = 50, y = 0, yend = -0.3, color = "#333333") +
+  ylim(-1, 4) + 
+  xlim(10, 60) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-5, 4)) + 
+  scale_x_continuous(expand = c(0, 0)) +
+  theme_void() +
+  theme(legend.position = "none")
+
+scale_grob <- ggplotGrob(legend_plot)
+```
+
+### Numbers on Bubbles
+
+I have decide to create three maps separately to ensure there's no clash between the layers of bubbles and texts. The base bubble map, the EU lens map and the SEA lens map. Thus, I will create the bubble lists for the three maps separately. Each bubble is nudge to its designated placement on the map for the replication, which I have done manually. Notably, Türkiye and Argentina have bigger bubbles which is why I exclude them from the bubble_rest_list.
+
+```{r bubbles-number}
+# inside the lens
+bubble_list_eu <- tibble::tribble(
+  ~ name_label, ~ value_label,
+  "Hungary", "52%",
+  "Czechia", "41%",
+  "UK", "24%",
+  "Italy", "18%",
+  "Greece", "16%",
+  "Switzerland", "6%")
+bubble_list_sea <- tibble::tribble(
+  ~ name_label, ~ value_label,
+  "Philippines", "24%",
+  "Indonesia", "14%",
+  "Taiwan", "10%",
+  "Malaysia", "9%",
+  "Hong Kong", "8%",
+  "Thailand", "8%")
+bubble_geo_eu <- world_inflation |> 
+  right_join(bubble_list_eu, by = c("name" = "name_label")) |> 
+  st_point_on_surface()
+bubble_geo_sea <- world_inflation |> 
+  right_join(bubble_list_sea, by = c("name" = "name_label")) |> 
+  st_point_on_surface()
+
+# adjust bubble position
+row_greece <- which(bubble_geo_eu$name_label == "Greece")
+new_grc_coords <- st_point(c(21.65, 40.25))
+bubble_geo_eu$geometry[row_greece] <- st_sfc(new_grc_coords) |>  
+  st_set_crs(st_crs(bubble_geo_eu))
+st_geometry(bubble_geo_eu)[bubble_geo_eu$name == "Czechia"] <- st_sfc(
+  st_point(c(18.0, 50.0)), crs = st_crs(bubble_geo_eu))
+
+# outside of the lens
+bubble_list_rest <- tibble::tribble(
+  ~ name_label, ~ value_label,
+  "Chile", "34%",
+  "New Zealand", "23%",
+  "S. Korea", "15%",
+  "Israel", "13%",
+  "Qatar", "9%",
+  "Japan", "8%",
+  "UAE", "6%")
+bubble_geo_rest <- world_inflation |> 
+  right_join(bubble_list_rest, by = c("name" = "name_label")) |>
+  st_point_on_surface()
+
+# Argentina
+bubble_arg <- tibble::tribble(
+  ~ name_label, ~ value_label,
+  "Argentina", "2,614%")
+bubble_geo_arg <- world_inflation |> 
+  right_join(bubble_arg, by = c("name" = "name_label")) |>
+  st_point_on_surface()
+
+# Türkiye
+bubble_tur <- tibble::tribble(
+  ~ name_label, ~ value_label,
+  "Türkiye", "464%")
+bubble_geo_tur <- world_inflation |> 
+  right_join(bubble_tur, by = c("name" = "name_label")) |>
+  st_point_on_surface()
+
+# adjust the bubbles' position
+st_geometry(bubble_geo_rest)[bubble_geo_rest$name == "Qatar"] <- st_sfc(
+  st_point(c(51.2, 27.5)), crs = st_crs(bubble_geo_rest))
+st_geometry(bubble_geo_rest)[bubble_geo_rest$name == "UAE"] <- st_sfc(
+  st_point(c(54, 22)), crs = st_crs(bubble_geo_rest))
+st_geometry(bubble_geo_tur)[bubble_geo_tur$name == "Türkiye"] <- st_sfc(
+  st_point(c(44.0, 41.0)), crs = st_crs(bubble_geo_tur))
+st_geometry(bubble_geo_rest)[bubble_geo_rest$name == "New Zealand"] <- st_sfc(
+  st_point(c(160.0, -46.0)), crs = st_crs(bubble_geo_rest))
+st_geometry(bubble_geo_rest)[bubble_geo_rest$name == "Chile"] <- st_sfc(
+  st_point(c(-72.0, -23.0)), crs = st_crs(bubble_geo_rest))
+st_geometry(bubble_geo_arg)[bubble_geo_arg$name == "Argentina"] <- st_sfc(
+  st_point(c(-60.0, -39.0)), crs = st_crs(bubble_geo_arg))
+st_geometry(bubble_geo_sea)[bubble_geo_sea$name == "Malaysia"] <- st_sfc(
+  st_point(c(116.0, 5.0)), crs = st_crs(bubble_geo_sea))
+st_geometry(bubble_geo_sea)[bubble_geo_sea$name == "Indonesia"] <- st_sfc(
+  st_point(c(106.0, -6.6)), crs = st_crs(bubble_geo_sea))
+st_geometry(bubble_geo_sea)[bubble_geo_sea$name == "Philippines"] <- st_sfc(
+  st_point(c(120.0, 14.6)), crs = st_crs(bubble_geo_sea))
+```
+
+### Base Map + Scale + Base Countries' Bubbles - Plot1
+
+First I will assemble the gradient base map with the bubbles that are not in the lenses and the gradient scale bar using annotate_custom.
+
+```{r base-plot1}
+plot1 <- ggplot(world_inflation) +
+  # map Layer
+  geom_sf(aes(fill = `5-yr cum\nchange (%)`), color = "grey70", size = 0.2) +
+  # the Gradient Scale on the map
+  scale_fill_gradientn(
+    colors = vc_palette,
+    limits = limit_range, 
+    oob = scales::squish,
+    na.value = "#fffce9",
+  ) +
+  # the Gradient Bar
+  annotation_custom(
+    grob = scale_grob, 
+    xmin = -10500000, xmax = 10500000,
+    ymin = 6500000, ymax = 16000000
+  ) +
+  # bubbles rest
+  geom_point(
+    data = bubble_geo_rest,
+    stat = "sf_coordinates",
+    aes(geometry = geometry,
+        fill = `5-yr cum\nchange (%)`,
+        ),
+    size = 4.5,           # Adjust bubble size here
+    color = "#fffce9",    # The border of the bubble
+    shape = 21,         # Shape 21 allows both fill and color (border)
+    stroke = 0.15,        # Thickness of the white border
+  ) +
+  # text inside bubbles rest
+  geom_text(
+    data = bubble_geo_rest,
+    stat = "sf_coordinates",
+    aes(geometry = geometry, label = value_label),
+    color = "#fffce9",
+    size = 1.7,
+    fontface = "plain",
+    family = "poppins"
+  )+
+  # bubble Argentina
+  geom_point(
+    data = bubble_geo_arg,
+    stat = "sf_coordinates",
+    aes(geometry = geometry,
+        fill = `5-yr cum\nchange (%)`),
+    size = 11,           # Adjust bubble size here
+    color = "#fffce9",    # The border of the bubble
+    shape = 21,         # Shape 21 allows both fill and color (border)
+    stroke = 0.15,        # Thickness of the white border
+  ) +
+  # text inside bubble Argentina
+  geom_text(
+    data = bubble_geo_arg,
+    stat = "sf_coordinates",
+    aes(geometry = geometry, label = value_label),
+    color = "#fffce9",
+    size = 2.5,
+    fontface = "plain",
+    family = "poppins"
+  )+
+  # bubble Türkiye
+  geom_point(
+    data = bubble_geo_tur,
+    stat = "sf_coordinates",
+    aes(geometry = geometry,
+        fill = `5-yr cum\nchange (%)`),
+    size = 6,           # Adjust bubble size here
+    color = "#fffce9",    # The border of the bubble
+    shape = 21,         # Shape 21 allows both fill and color (border)
+    stroke = 0.15,        # Thickness of the white border
+  ) +
+  # text inside bubble Türkiye
+  geom_text(
+    data = bubble_geo_tur,
+    stat = "sf_coordinates",
+    aes(geometry = geometry, label = value_label),
+    color = "#fffce9",
+    size = 1.7,
+    fontface = "plain",
+    family = "poppins"
+  ) +
+  # theme and projection
+  coord_sf(crs = "+proj=robin") + # Robinson Projection
+  theme_void() + # Removes axes and standard grid
+  theme(
+    # background Colors
+    plot.background = element_rect(fill = "#fffce9", color = NA),
+    panel.background = element_rect(fill = "#fffce9", color = NA),
+    # legend Positioning
+    legend.position = "none"
+  ) +
+  labs(title = "Consumer Inflation",
+       subtitle = "2 0 2 0  -  2 0 2 5") +
+  theme(
+    plot.title = element_text(
+      hjust = 0.5,
+      face = "plain", 
+      size = 30, 
+      margin = margin(t = 10),
+      family = "erica"),
+    plot.subtitle = element_text(
+      hjust = 0.5,
+      face = "bold", 
+      size = 12, 
+      margin = margin(t = 4, b = 70),
+      family = "poppins",
+      ))
+
+print(plot1)
+```
+
+### Country Labels and Numbers
+
+For the country labels and numbers, I also separate them according to base, EU lens and SEA lens, so that I can work on the specific placement and avoid overlaps.
+
+```{r country and other number labels}
+country_label_base <- tibble::tribble(
+  ~ name_label,
+  "Argentina", "Türkiye", "Egypt", "Russia", "Colombia", "Chile", "Brazil",
+  "India", "Mexico", "S. Africa", "New Zealand", "Australia", "Canada", "S. Korea", 
+  "Saudi Arabia", "Israel", "Qatar", "Japan", "China", "UAE", "U.S.") 
+country_label_geo_base <- world_inflation |> 
+  right_join(country_label_base, by = c("name" = "name_label")) |> 
+  st_point_on_surface()
+# adjusting the position
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "Argentina"] <- st_sfc(
+  st_point(c(-36.0, -39.0)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "Türkiye"] <- st_sfc(
+  st_point(c(60.0, 41.0)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "Egypt"] <- st_sfc(
+  st_point(c(17.0, 27.1)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "Russia"] <- st_sfc(
+  st_point(c(102.0, 62.0)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "Colombia"] <- st_sfc(
+  st_point(c(-90.5, 4.1)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "Chile"] <- st_sfc(
+  st_point(c(-83.0, -23.0)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "Brazil"] <- st_sfc(
+  st_point(c(-46.0, -8.4)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "India"] <- st_sfc(
+  st_point(c(92.0, 22.35)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "Mexico"] <- st_sfc(
+  st_point(c(-117.0, 23.5)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "S. Africa"] <- st_sfc(
+  st_point(c(41.0, -29.0)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "New Zealand"] <- st_sfc(
+  st_point(c(137.0, -47.0)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "Australia"] <- st_sfc(
+  st_point(c(138.0, -26.0)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "Canada"] <- st_sfc(
+  st_point(c(-100.5, 56.0)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "S. Korea"] <- st_sfc(
+  st_point(c(127.0, 31.0)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "Saudi Arabia"] <- st_sfc(
+  st_point(c(30.0, 19.0)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "Israel"] <- st_sfc(
+  st_point(c(25.0, 34.0)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "Qatar"] <- st_sfc(
+  st_point(c(62.4, 29.0)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "China"] <- st_sfc(
+  st_point(c(107.0, 35.0)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "Japan"] <- st_sfc(
+  st_point(c(155.0, 42.5)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "UAE"] <- st_sfc(
+  st_point(c(64.0, 21.0)), crs = st_crs(country_label_geo_base))
+st_geometry(country_label_geo_base)[country_label_geo_base$name == "U.S."] <- st_sfc(
+  st_point(c(-94.0, 40.0)), crs = st_crs(country_label_geo_base))
+
+country_label_eu <- tibble::tribble(
+  ~ name_label,
+  "Spain", "France", "Finland", "Sweden", "Poland", "Germany", "Norway", "Hungary", "Czechia", "UK", "Italy", "Greece", "Switzerland") 
+country_label_geo_eu <- world_inflation |> 
+  right_join(country_label_eu, by = c("name" = "name_label")) |> 
+  st_point_on_surface()
+# adjusting the position
+st_geometry(country_label_geo_eu)[country_label_geo_eu$name == "Spain"] <- st_sfc(
+  st_point(c(3.0, 40.5)), crs = st_crs(country_label_geo_eu))
+st_geometry(country_label_geo_eu)[country_label_geo_eu$name == "France"] <- st_sfc(
+  st_point(c(-5.0, 46.2)), crs = st_crs(country_label_geo_eu))
+st_geometry(country_label_geo_eu)[country_label_geo_eu$name == "Finland"] <- st_sfc(
+  st_point(c(36.0, 61.0)), crs = st_crs(country_label_geo_eu))
+st_geometry(country_label_geo_eu)[country_label_geo_eu$name == "Sweden"] <- st_sfc(
+  st_point(c(17.0, 60.0)), crs = st_crs(country_label_geo_eu))
+st_geometry(country_label_geo_eu)[country_label_geo_eu$name == "Norway"] <- st_sfc(
+  st_point(c(6.0, 59.0)), crs = st_crs(country_label_geo_eu))
+st_geometry(country_label_geo_eu)[country_label_geo_eu$name == "Poland"] <- st_sfc(
+  st_point(c(26.5, 52.2)), crs = st_crs(country_label_geo_eu))
+st_geometry(country_label_geo_eu)[country_label_geo_eu$name == "Germany"] <- st_sfc(
+  st_point(c(9.5, 49.8)), crs = st_crs(country_label_geo_eu))
+st_geometry(country_label_geo_eu)[country_label_geo_eu$name == "Hungary"] <- st_sfc(
+  st_point(c(26.0, 46.0)), crs = st_crs(country_label_geo_eu))
+st_geometry(country_label_geo_eu)[country_label_geo_eu$name == "Czechia"] <- st_sfc(
+  st_point(c(25.5, 49.0)), crs = st_crs(country_label_geo_eu))
+st_geometry(country_label_geo_eu)[country_label_geo_eu$name == "UK"] <- st_sfc(
+  st_point(c(3.0, 54.7)), crs = st_crs(country_label_geo_eu))
+st_geometry(country_label_geo_eu)[country_label_geo_eu$name == "Italy"] <- st_sfc(
+  st_point(c(8.56, 41.87)), crs = st_crs(country_label_geo_eu))
+st_geometry(country_label_geo_eu)[country_label_geo_eu$name == "Greece"] <- st_sfc(
+  st_point(c(23.0, 41.0)), crs = st_crs(country_label_geo_eu))
+st_geometry(country_label_geo_eu)[country_label_geo_eu$name == "Switzerland"] <- st_sfc(
+  st_point(c(8.2, 45.0)), crs = st_crs(country_label_geo_eu))
+
+
+
+country_label_sea <- tibble::tribble(
+  ~ name_label,
+  "Philippines", "Indonesia", "Taiwan", "Malaysia", "Hong Kong", "Thailand")
+country_label_geo_sea <- world_inflation |> 
+  right_join(country_label_sea, by = c("name" = "name_label")) |> 
+  st_point_on_surface()
+# adjusting the position
+st_geometry(country_label_geo_sea)[country_label_geo_sea$name == "Taiwan"] <- st_sfc(
+  st_point(c(130.0, 23.82)), crs = st_crs(country_label_geo_sea))
+st_geometry(country_label_geo_sea)[country_label_geo_sea$name == "Philippines"] <- st_sfc(
+  st_point(c(130.88, 14.0)), crs = st_crs(country_label_geo_sea))
+st_geometry(country_label_geo_sea)[country_label_geo_sea$name == "Indonesia"] <- st_sfc(
+  st_point(c(116.5, -6.48)), crs = st_crs(country_label_geo_sea))
+st_geometry(country_label_geo_sea)[country_label_geo_sea$name == "Malaysia"] <- st_sfc(
+  st_point(c(126.69, 5.0)), crs = st_crs(country_label_geo_sea))
+st_geometry(country_label_geo_sea)[country_label_geo_sea$name == "Hong Kong"] <- st_sfc(
+  st_point(c(114.18, 18.5)), crs = st_crs(country_label_geo_sea))
+st_geometry(country_label_geo_sea)[country_label_geo_sea$name == "Thailand"] <- st_sfc(
+  st_point(c(111.00, 13.5)), crs = st_crs(country_label_geo_sea))
+
+number_label_base <- tibble::tribble(
+  ~ name_label,
+  "Egypt", "Russia", "Colombia", "Brazil", "India", "Mexico", "S. Africa",
+  "U.S.", "Australia", "Canada", "Saudi Arabia", "China") 
+number_label_geo_base <- world_inflation |> 
+  right_join(number_label_base, by = c("name" = "name_label")) |> 
+  mutate(`5-yr cum\nchange (%)` = paste0(`5-yr cum\nchange (%)`, "%")) |> 
+  st_point_on_surface()
+# adjust the position
+st_geometry(number_label_geo_base)[number_label_geo_base$name == "Russia"] <- st_sfc(
+  st_point(c(85.0, 62.0)), crs = st_crs(number_label_geo_base))
+st_geometry(number_label_geo_base)[number_label_geo_base$name == "Brazil"] <- st_sfc(
+  st_point(c(-57.0, -8.4)), crs = st_crs(number_label_geo_base))
+st_geometry(number_label_geo_base)[number_label_geo_base$name == "China"] <- st_sfc(
+  st_point(c(96.0, 35.0)), crs = st_crs(number_label_geo_base))
+st_geometry(number_label_geo_base)[number_label_geo_base$name == "Saudi Arabia"] <- st_sfc(
+  st_point(c(44.57, 23.0)), crs = st_crs(number_label_geo_base))
+st_geometry(number_label_geo_base)[number_label_geo_base$name == "U.S."] <- st_sfc(
+  st_point(c(-105.0, 40.0)), crs = st_crs(number_label_geo_base))
+st_geometry(number_label_geo_base)[number_label_geo_base$name == "Canada"] <- st_sfc(
+  st_point(c(-116.0, 56.0)), crs = st_crs(number_label_geo_base))
+st_geometry(number_label_geo_base)[number_label_geo_base$name == "Australia"] <- st_sfc(
+  st_point(c(123.0, -26.0)), crs = st_crs(number_label_geo_base))
+
+number_label_eu <- tibble::tribble(
+  ~ name_label,
+  "Spain", "France", "Finland", "Sweden", "Poland", "Germany", "Norway") 
+number_label_geo_eu <- world_inflation |> 
+  right_join(number_label_eu, by = c("name" = "name_label")) |> 
+  mutate(`5-yr cum\nchange (%)` = paste0(`5-yr cum\nchange (%)`, "%")) |> 
+  st_point_on_surface()
+# adjust the position
+st_geometry(number_label_geo_eu)[number_label_geo_eu$name == "Gremany"] <- st_sfc(
+  st_point(c(10.0, 60.0)), crs = st_crs(number_label_geo_eu))
+st_geometry(number_label_geo_eu)[number_label_geo_eu$name == "Norway"] <- st_sfc(
+  st_point(c(8.5, 61.0)), crs = st_crs(number_label_geo_eu))
+st_geometry(number_label_geo_eu)[number_label_geo_eu$name == "Finland"] <- st_sfc(
+  st_point(c(26.0, 62.0)), crs = st_crs(number_label_geo_eu))
+st_geometry(number_label_geo_eu)[number_label_geo_eu$name == "Poland"] <- st_sfc(
+  st_point(c(19.14, 53.0)), crs = st_crs(number_label_geo_eu))
+```
+
+### plot2 - plot1(base plot) + Country Labels and Numbers
+
+Now I will layer the base country and number on the base plot, plot1.
+
+```{r labels-plot2}
+plot2 <- plot1 +
+  # country names
+  geom_text(
+    data = country_label_geo_base,
+    stat = "sf_coordinates",
+    aes(geometry = geometry, label = name),
+    color = "#333333", 
+    size = 2,        # Adjust text size
+    fontface = "bold", # "plain", "bold", "italic"
+    family = "roboto",
+    inherit.aes = FALSE
+  ) +
+  # number labels
+  geom_text(
+    data = number_label_geo_base,
+    stat = "sf_coordinates",
+    aes(geometry = geometry, label = `5-yr cum\nchange (%)`),
+    color = "#fffce9", 
+    size = 1.6,        # Adjust text size
+    fontface = "plain", # "plain", "bold", "italic"
+    family = "poppins",
+    inherit.aes = FALSE
+  )
+print(plot2)
+```
+
+### Magnified EU and SEA and the Bubbles in the Lenses
+
+Build the magnifying lens function and add the bubble + number + country name layer on the lenses.
+
+```{r create-function}
+sf_use_s2(FALSE)
+
+create_lens_eu <- function(data, bubble_data, center_lon, center_lat, radius_km) {
+  
+  # cut the map to a rough square box first.
+  # create a bounding box +/- 25 degrees around the center.
+  buff <- 25 
+  bbox <- st_bbox(c(xmin = center_lon - buff, xmax = center_lon + buff, 
+                    ymin = center_lat - buff, ymax = center_lat + buff), 
+                  crs = st_crs(data))
+  
+  # suppress warnings for the crop
+  data_cropped <- suppressWarnings(st_crop(data, bbox))
+  
+  # define projection (Azimuthal Equidistant)
+  lens_crs <- paste0("+proj=aeqd +lat_0=", center_lat, " +lon_0=", center_lon)
+  
+  # create circle
+  center_pt <- st_sfc(st_point(c(center_lon, center_lat)), crs = 4326)
+  center_pt_proj <- st_transform(center_pt, lens_crs)
+  circle_border <- st_buffer(center_pt_proj, dist = radius_km * 1000)
+  data_proj <- st_transform(data_cropped, lens_crs)
+  data_proj <- st_make_valid(data_proj)
+  lens_data <- st_intersection(data_proj, circle_border)
+  lens_data <- st_collection_extract(lens_data, "POLYGON")
+  
+  # process Bubble Data (Transform -> Clip)
+  bubbles_proj_eu <- st_transform(bubble_geo_eu, lens_crs)
+  lens_bubbles_eu <- st_intersection(bubbles_proj_eu, circle_border)
+  
+  # create plot
+  ggplot() +
+    geom_sf(data = circle_border, fill = "#fffce9", color = NA) +
+    geom_sf(data = lens_data, 
+            aes(fill = `5-yr cum\nchange (%)`), 
+            color = "grey70", size = 0.25) +
+    geom_point(
+    data = bubble_geo_eu,
+    stat = "sf_coordinates",
+    aes(geometry = geometry,
+        fill = `5-yr cum\nchange (%)`),
+    size = 4.5,
+    color = "#fffce9",
+    shape = 21,
+    stroke = 0.15
+    ) +
+    # numbers inside bubbles
+    geom_text(
+    data = bubble_geo_eu,
+    stat = "sf_coordinates",
+    aes(geometry = geometry, label = value_label),
+    color = "#fffce9",
+    size = 1.5,
+    fontface = "plain",
+    family = "poppins",
+    ) +
+    # country labels
+    geom_text(
+    data = country_label_geo_eu,
+    stat = "sf_coordinates",
+    aes(geometry = geometry, label = name),
+    color = "#333333",
+    size = 1.6,
+    fontface = "bold",
+    family = "poppins",
+    ) +
+    # number labels
+    geom_text(
+    data = number_label_geo_eu,
+    stat = "sf_coordinates",
+    aes(geometry = geometry, label = `5-yr cum\nchange (%)`),
+    color = "#fffce9",
+    size = 1.6,
+    fontface = "plain",
+    family = "poppins",
+    ) +
+    # scale
+    scale_fill_gradientn(
+      colors = vc_palette,
+      limits = limit_range, 
+      oob = scales::squish,
+      na.value = "#fffce9"
+    ) +
+    # border
+    geom_sf(data = circle_border, fill = NA, color = "grey50", linewidth = 0.1) +
+    # theme
+    coord_sf(datum = NA) +
+    theme_void() +
+    theme(legend.position = "none"
+    ) 
+}
+
+create_lens_sea <- function(data, bubble_data, center_lon, center_lat, radius_km) {
+  
+  buff <- 25 
+  bbox <- st_bbox(c(xmin = center_lon - buff, xmax = center_lon + buff, 
+                    ymin = center_lat - buff, ymax = center_lat + buff), 
+                  crs = st_crs(data))
+  
+  data_cropped <- suppressWarnings(st_crop(data, bbox))
+
+  lens_crs <- paste0("+proj=aeqd +lat_0=", center_lat, " +lon_0=", center_lon)
+
+  center_pt <- st_sfc(st_point(c(center_lon, center_lat)), crs = 4326)
+  center_pt_proj <- st_transform(center_pt, lens_crs)
+  circle_border <- st_buffer(center_pt_proj, dist = radius_km * 1000)
+  data_proj <- st_transform(data_cropped, lens_crs)
+  data_proj <- st_make_valid(data_proj)
+  lens_data <- st_intersection(data_proj, circle_border)
+  lens_data <- st_collection_extract(lens_data, "POLYGON")
+
+  bubbles_proj_sea <- st_transform(bubble_geo_sea, lens_crs)
+  lens_bubbles_sea <- st_intersection(bubbles_proj_sea, circle_border)
+  
+  # create plot
+  ggplot() +
+    geom_sf(data = circle_border, fill = "#fffce9", color = NA) +
+    geom_sf(data = lens_data, 
+            aes(fill = `5-yr cum\nchange (%)`), 
+            color = "grey70", size = 0.25) +
+    # bubbles
+    geom_point(
+    data = bubble_geo_sea,
+    stat = "sf_coordinates",
+    aes(geometry = geometry,
+        fill = `5-yr cum\nchange (%)`),
+    size = 4.5,
+    color = "#fffce9",
+    shape = 21,
+    stroke = 0.15
+    ) +
+    # text inside bubbles
+  geom_text(
+    data = bubble_geo_sea,
+    stat = "sf_coordinates",
+    aes(geometry = geometry, label = value_label),
+    color = "#fffce9",
+    size = 1.5,
+    fontface = "plain",
+    family = "poppins"
+    ) +
+    # country labels
+    geom_text(
+    data = country_label_geo_sea,
+    stat = "sf_coordinates",
+    aes(geometry = geometry, label = name),
+    color = "#333333",
+    size = 1.6,
+    fontface = "bold",
+    family = "poppins"
+    ) +
+    # scale
+    scale_fill_gradientn(
+      colors = vc_palette,
+      limits = limit_range, 
+      oob = scales::squish,
+      na.value = "#fffce9"
+    ) +
+    # border
+    geom_sf(data = circle_border, fill = NA, color = "grey50", linewidth = 0.2) +
+    # theme
+    coord_sf(datum = NA) +
+    theme_void() +
+    theme(legend.position = "none"
+    ) 
+}
+```
+
+```{r lenses-making}
+p_lens_eu <- create_lens_eu(
+  data = world_inflation, 
+  bubble_data = bubble_geo_eu,
+  center_lon = 7, # 7
+  center_lat = 50, # 49
+  radius_km = 2000
+)
+p_lens_sea <- create_lens_sea(
+  data = world_inflation,
+  bubble_data = bubble_geo_sea,
+  center_lon = 113, 
+  center_lat = 9, 
+  radius_km = 2200
+)
+```
+
+### plot3 - plot2 + the Magnifying Lenses
+
+```{r lenses-plot3}
+plot_3 <- ggdraw(plot2) +
+  draw_plot(p_lens_eu, x = -0.047, y = 0.358, width = 1, height = 0.3, scale = 1.15) +
+  draw_plot(p_lens_sea, x = 0.27, y = 0.14, width = 1, height = 0.3, scale = 0.8)
+print(plot_3)
+```
+
+### final_plot - plot3 + the Texts and Arrows
+
+After plotting the base map, lenses and gradient scale bar, now it is the final step to add on the texts and arrows next to Argentina, the SEA lens using the geom_text and geom_curve, last but not least, the little description besides the gradient scale bar.
+
+```{r text_arrows-final_plot, preview=TRUE}
+texts <- tibble(label = c(
+  "Consumer Inflation Cumulative\nChange, 2020-2025",
+  "President Milei's fiscal\noverhaul has lowered\nArgentina's annualized\ninflation rate to 21%\nas of June 2025.",
+  "Post-pandemic inflation\ndidn't hit Asia as hard\nas it hit Europe."),
+  x = c(0.235, 0.43, 0.65), 
+  y = c(0.80, 0.16, 0.16),
+  hjust = c(0, 0, 0),
+  size = c(2.5, 1.5, 1.3),
+  font = "poppins",
+  fontface = c("bold", "italic", "italic"),
+  color = c("#333333", "#D86C7B", "#6b9bd1")
+)
+
+final_plot <- plot_3 +
+  geom_text(
+    data = texts,
+    aes(x = x, y = y, label = label, hjust = hjust),
+    color = texts$color,
+    size = texts$size,
+    fontface = texts$fontface,
+    family = "poppins",
+    lineheight = 0.9,
+    inherit.aes = FALSE
+  ) +
+  geom_curve(
+    aes(x = 0.425, y = 0.18, xend = 0.40, yend = 0.13),
+    curvature = 0.3,       # Negative = Curves Right (concave down)
+    color = "#D86C7B",
+    size = 0.3,
+    arrow = arrow(length = unit(0.01, "npc"), type = "closed"),
+    inherit.aes = FALSE
+  ) +
+  geom_curve(
+    aes(x = 0.69, y = 0.19, xend = 0.717, yend = 0.24),
+    curvature = -0.3,       # Negative = Curves Right (looks best for this angle)
+    color = "#6b9bd1",
+    size = 0.3,
+    arrow = arrow(length = unit(0.01, "npc"), type = "closed"),
+    inherit.aes = FALSE
+  )
+
+print(final_plot)
+```
+
+## Improvement
+
+While making the replica of this map, I find myself spending most of the time manually nudging every label on the map, which are not visually clear even after adjusting them manually. Thus, I decided to make a hex map divided by the continent to keep the geographical relevance for a map visualization, in each continent, countries are ranked by inflation rates on log scale to better represent the drastic difference with color.
+
+### Packages
+
+```{r alt library}
+library(tidyverse)
+library(ggplot2)
+library(paletteer)
+library(readr)
+```
+
+### Data Cleaning
+
+```{r alt data cleaning}
+inflation2025 <- read_csv("global inflation 2025_Deutsche Bank - Sheet1.csv")
+
+inflation_alt <- inflation2025 |> 
+  select(Economy, Inflation_Raw = `5-yr cum\nchange (%)`) |> 
+  mutate(
+    Inflation = as.numeric(str_remove_all(Inflation_Raw, ",")),
+    Inflation_Log = log10(Inflation),
+    Text_Color = ifelse(Inflation < 60, "black", "white"),
+    Label_Text = paste0(Economy, "\n", Inflation, "%")
+  ) |> 
+  mutate(Economy = case_when(Economy == "South Africa" ~ "S. Africa", 
+                          Economy == "Turkey" ~ "Türkiye", 
+                          Economy == "United Kingdom" ~ "UK",
+                          Economy == "South Korea" ~ "S. Korea",
+                          Economy == "United Arab Emirates" ~ "UAE",
+                          Economy == "United States" ~ "U.S.",
+                          Economy == "Czech Republic" ~ "Czechia",
+                          TRUE ~ Economy))
+
+# assign region
+inflation_alt <- inflation_alt %>%
+  mutate(Region = case_when(
+    Economy %in% c("US", "Canada", "Mexico", "Brazil", "Argentina", "Chile", "Colombia") ~ "Americas",
+    Economy %in% c("China", "Japan", "S. Korea", "Taiwan", "Hong Kong", "India", "Thailand", "Malaysia", "Singapore", "Indonesia", "Philippines", "Australia", "New Zealand") ~ "Asia Pacific",
+    Economy %in% c("Türkiye", "Israel", "Egypt", "Saudi Arabia", "Qatar", "UAE", "S. Africa") ~ "West Asia & Africa",
+    TRUE ~ "Europe"
+  ))
+```
+
+### building hexagons
+
+```{r hexagon}
+get_hex_grid_3wide <- function(n) {
+  width <- 3
+  i <- 0:(n-1)
+  col <- i %% width
+  row <- i %/% width
+  x <- col + ifelse(row %% 2 == 1, 0.5, 0)
+  y <- -row * 0.9 
+  data.frame(rank = i + 1, x_center = x, y_center = y)
+}
+
+center_data <- inflation_alt |> 
+  group_by(Region) |> 
+  arrange(desc(Inflation)) |> 
+  mutate(rank = row_number()) |> 
+  group_split() |> 
+  purrr::map_dfr(function(dat) {
+    coords <- get_hex_grid_3wide(nrow(dat))
+    inner_join(dat, coords, by = "rank")
+  })
+
+region_pos <- tibble(
+  Region = c("Americas", "Europe", "West Asia & Africa", "Asia Pacific"),
+  x_off = c(0, 7, 0, 3.5), 
+  y_off = c(2, 2, -2.5, 2)   
+)
+
+final_centers <- center_data |> 
+  inner_join(region_pos, by = "Region") |> 
+  mutate(
+    cx = x_center + x_off,
+    cy = y_center + y_off
+  )
+
+# function to create 6 vertices for a hexagon at (cx, cy)
+make_hexagon <- function(cx, cy, r = 0.55) {
+  angles <- seq(0, 2*pi, length.out = 7)[-7]
+  data.frame(
+    vx = cx + r * cos(angles),
+    vy = cy + r * sin(angles)
+  )
+}
+
+polygon_data <- final_centers |> 
+  group_by(Economy) |> 
+  do(make_hexagon(.$cx, .$cy, r = 0.55)) |> 
+  ungroup() |> 
+  left_join(final_centers, by = "Economy")
+
+region_titles <- final_centers %>%
+  group_by(Region) %>%
+  summarize(x = mean(cx), y = max(cy) + 1.2)
+```
+
+### final alternative plot
+
+```{r alt plot, fig.width=14, fig.height=10}
+alt_plot <- ggplot() +
+  geom_polygon(
+    data = polygon_data,
+    aes(x = vx, y = vy, group = Economy, fill = Inflation_Log),
+    color = "white", size = 0.5
+  ) +
+  geom_text(data = region_titles, aes(x = x, y = y, label = Region),
+            fontface = "bold", color = "#08306b", size = 7) +
+  geom_text(
+    data = final_centers,
+    aes(x = cx, y = cy, label = Economy, color = Text_Color), 
+    size = 4, fontface = "bold", nudge_y = 0.15
+  ) +
+  geom_text(
+    data = final_centers,
+    aes(x = cx, y = cy, label = paste0(Inflation, "%"), color = Text_Color), 
+    size = 4, nudge_y = -0.15
+  ) +
+  scale_color_identity() +
+  scale_fill_gradientn(
+    colors = paletteer_c("ggthemes::Blue", 30),
+    breaks = log10(c(10, 25, 50, 100, 500, 2500)),
+    labels = c("10%", "25%", "50%", "100%", "500%", "2500%"),
+    name = "5-Year Inflation (Log Scale)"
+  ) +
+  coord_fixed() + 
+  theme_void() + 
+  theme(
+    plot.title = element_text(size = 22, face = "bold", hjust = 0.5, color = "#08306b"),
+    plot.subtitle = element_text(size = 14, hjust = 0.5, color = "#4292c6"),
+    legend.position = "bottom",
+    legend.key.width = unit(2.5, "cm"),
+    plot.margin = margin(20, 20, 20, 20)
+  ) +
+  labs(
+    title = "Regional Inflation Rankings",
+    subtitle = "Countries ranked by 5-Year Cumulative Inflation (Log Scale)"
+  )
+
+print(alt_plot)
+```
