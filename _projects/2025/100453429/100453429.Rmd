@@ -1,7 +1,7 @@
 ---
-title: "Data visualization"
-description: |
-  Replication and improvement of the graph.
+title: "Comparing Causes of Death and their Media Coverage in the United States"
+description: | 
+  In this post I recreate a graph from Our World in Data that illustrates the causes of death in the United States in 2023 and their media coverage. I also present an alternative visualization of the data.
 categories: "2025"
 author: Eva Lambistos
 date: "`r Sys.Date()`"
@@ -11,40 +11,64 @@ output:
     toc: true 
 ---
 
-Distill is a publication format for scientific and technical writing, native to the web.
-Learn more about using Distill at <https://rstudio.github.io/distill>.
+```{r setup0, include=FALSE}
+knitr::opts_chunk$set(out.width = "100%", fig.align = "center", fig.showtext = TRUE)
+```
 
 
-## Replication  
+## Original graph 
+
+The graph illustrates the gap between the share of main causes of death in the United States in 2023 and their share of coverage by major US media outlets. It does so by comparing the distribution of mortality across causes with the distribution of media coverage in three major US news outlets: The New York Times, The Washington Post, and Fox News. The analysis includes the 12 most common causes of death in the United States in 2023, complemented by three additional causes—drug overdoses, homicides and terrorism. 
+
+The objective of this graph is to show how media attention does not always reflect real-world risks. In particular, it highlights that causes of death such as homicide and terrorism receive a disproportionately high level of media coverage relative to their actual contribution to mortality, while leading causes of death such as heart disease or cancer receive comparatively less attention. We can also observe that emphasising rare but dramatic causes of death is a trend common to all media outlets. Overall, the graph covers a broad sociological reflection on how media exposure shapes public perceptions of risk by giving more importance to emotionally salient events.
+
+The graph is structured as a set of four vertical stacked bar charts. One column displays the distribution of causes of death based on official mortality data, while the other three show the distribution of media coverage in The New York Times, The Washington Post, and Fox News. Each column represents the relative distribution of causes within its respective data source, with colored segments corresponding to specific causes of death and their percentage share as reported in the dataset; these percentages are calculated with respect to total mortality, including causes not explicitly shown in the figure. Causes are sorted based on their share in the US mortality data, with the same ordering used across all media coverage columns.
+
+An important methodological clarification is that, in this analysis, a 'media mention' is defined as a published article in one of the selected news outlets that mentions a specific cause of death (or related keywords) at least twice within the text. This definition tries to ensure that coverage reflects substantive references to a cause rather than isolated mentions. However, the methodological documentation provided by Our World in Data does not specify whether media mentions are associated with particular thematic, such as prevention, explanation of events, public health policy debates, etc. which removes the context of the importance of the mention. 
+
+Although the graphic communicates a relevant message, it presents several design limitations. Firstly, its overall structure makes comparison difficult. Secondly, by including several media outlets side by side, the visualization draws attention away from the main comparison, which is between media coverage and the official distribution of causes of death in the United States in 2023. In addition, the chart shows inconsistencies in the formatting of percentage labels, with some values displayed with decimals and others as whole numbers without clear justification, and the ordering of causes in the mortality column does not always follow a descending order.
+
+![Figure 1. What Americans die from and the causes of death the US media reports on. Source: Our World in Data](original_graph.png){.external width="100%"}
+
+The original visualization was published by Our World in Data in the article [Does the news reflect what we die from?](https://ourworldindata.org/does-the-news-reflect-what-we-die-from) (Ritchie, Acisu, & Mathieu, 2025). 
+
+## Replication 
+
+### Setup and data loading 
+
+Firstly, I load the packages used throughout the project and set some global options, such as fonts. I then import the dataset and standardize the cause names to avoid inconsistencies when recoding labels. 
+
+```{r setup-and-load-data, message = FALSE, warning = FALSE}
+
+library(tidyverse)
+library(ggtext) 
+library(ragg)
+library(sysfonts)
+library(grid)
+library(patchwork)
+
+font_add_google("Playfair Display", "playfair_sb", regular.wt = 600)
+font_add_google("Lato", "lato")
+knitr::opts_chunk$set(dev = "ragg_png")
+
+data <- read.csv("media_deaths_results.csv")
+data$cause <- tolower(trimws(data$cause)) 
+```
 
 ### Data preparation 
 
-I load the data and select the variables needed for the analysis, standardizing the names of the causes of death. I then reorder the causes according to their share of deaths and transform the dataset into long format to enable comparison between official mortality data and media coverage across different outlets. After that, I recode variables and create additional columns to control labels, ordering, and positioning in the visualization, preparing the data for the final chart. Finally, I define a custom color palette aligned with the visual language of the chart. 
+This section prepares the dataset for replicating the original Our World in Data figure. First, I keep only the variables required for the comparison: the share of deaths and the share of media mentions for each outlet. I then define the order of causes based on their mortality share in the US (with a manual swap to place Suicide and COVID-19). Next, I reshape the data into long format so each cause appears once per source. After recoding causes and sources into clearer labels, I create auxiliary variables that control the final appearance of the plot: "label", a conditional text label that shows percentages only when there is enough space, with specific exceptions to prevent overlaps; "size_label", a small adjustment to text size for selected segments; "x_pos", a fixed x-positions to place each stacked column at a specific location. Finally, I define a color palette to reproduce the original chart. 
 
-```{r}
-library(tidyverse)
-library(ggtext) 
-library(showtext)
-library(sysfonts)
-library(grid)
-library(ggplot2)
-library(patchwork)
-library(cowplot)
+```{r data-preparation}
+#Data preparation
 
-font_add("playfair_sb", "C:/Users/evala/Desktop/FONT/static/PlayfairDisplay-SemiBold.ttf")
-font_add_google("Lato", "lato")
-showtext_auto() 
-
-df <- read.csv("media_deaths_results.csv")
-df$cause <- tolower(trimws(df$cause)) 
-
-df <- df |> 
+df <- data |> 
   select(cause, year, deaths_share,
          nyt_share, wapo_share, fox_share) 
 
 cause_ordered <- df |>
   arrange(desc(deaths_share)) |>
-  pull(cause)
+  pull(cause) 
 
 pos_covid <- which(cause_ordered == "covid")
 pos_suicide <- which(cause_ordered == "suicide")
@@ -54,43 +78,29 @@ df_ord <- df |>
   mutate(cause_ordered = match(cause, cause_ordered)) |> 
   arrange(cause_ordered)
 
+cause_labels <- c(covid = "COVID-19", respiratory = "Lower respiratory diseases",
+  alzheimers = "Alzheimer's disease", kidney = "Kidney failure",
+  liver = "Liver disease", influenza = "Influenza / Pneumonia",
+  "heart disease" = "Heart disease", cancer = "Cancer", accidents = "Accidents",
+  stroke = "Stroke", diabetes = "Diabetes", suicide = "Suicide",
+  "drug overdose" = "Drug overdose", homicide = "Homicide",
+  terrorism = "Terrorism")
+
 df_long <- df_ord |> 
   pivot_longer(
     cols = c(deaths_share, nyt_share, wapo_share, fox_share),
     names_to = "source",
     values_to = "share")
 
-df_long <- df_long |>  
+df_long_lab <- df_long |>  
   mutate(
-    source = factor(
-      source,
-      levels = c("deaths_share", "nyt_share", "wapo_share", "fox_share"),
-      labels = c(
-        "Causes of death\nin the US in 2023",
-        "The New York Times",
-        "The Washington Post",
-        "Fox News")))
+  source = factor(
+    source,
+    levels = c("deaths_share", "nyt_share", "wapo_share", "fox_share"),
+    labels = c("Causes of death\nin the US in 2023", "The New York Times",
+               "The Washington Post", "Fox News")),
+  cause_label = recode(cause, !!!cause_labels)) |> 
 
-df_long_cl <- df_long |> 
-  mutate(cause_label = case_when(
-    cause == "covid"           ~ "COVID-19",
-    cause == "respiratory"     ~ "Lower respiratory diseases",
-    cause == "alzheimers"      ~ "Alzheimer's disease",
-    cause == "kidney"          ~ "Kidney failure",
-    cause == "liver"           ~ "Liver disease",
-    cause == "influenza"       ~ "Influenza / Pneumonia",
-    cause == "heart disease"   ~ "Heart disease",
-    cause == "cancer"          ~ "Cancer",
-    cause == "accidents"       ~ "Accidents",
-    cause == "stroke"          ~ "Stroke",
-    cause == "diabetes"        ~ "Diabetes",
-    cause == "suicide"         ~ "Suicide",
-    cause == "drug overdose"   ~ "Drug overdose",
-    cause == "homicide"        ~ "Homicide",
-    cause == "terrorism"       ~ "Terrorism",
-    TRUE ~ cause), .after = cause)
-
-df_long_lab <- df_long_cl |>
   mutate(
   label = case_when(
     share < 1.8 ~ "", 
@@ -105,7 +115,7 @@ df_long_lab <- df_long_cl |>
     paste0(cause_label, " (", round(share, 0), "%)"),
 
     source == "Causes of death\nin the US in 2023" ~    
-     paste0(cause_label, " (", sprintf("%.1f", share), "%)"),
+    paste0(cause_label, " (", sprintf("%.1f", share), "%)"),
 
     source != "Causes of death\nin the US in 2023" &   
     cause %in% c("homicide", "terrorism") ~
@@ -114,228 +124,159 @@ df_long_lab <- df_long_cl |>
     source != "Causes of death\nin the US in 2023" ~   
     paste0(cause_label, " (", sprintf("%.1f", share), "%)"),
     TRUE ~ ""
-    ), .after = cause_label,
+    ),
   
   size_label = case_when(
-    source != "Causes of death\nin the US in 2023" & cause == "suicide" ~ 10,
-    source != "Causes of death\nin the US in 2023" & cause == "cancer" ~ 10,
-    share >= 4 ~ 10, 
-    TRUE ~ 8
-    ))
+    source != "Causes of death\nin the US in 2023" &
+      cause %in% c("suicide", "cancer") ~ 2.5,
+    share >= 4 ~ 2.5,
+    TRUE ~ 2),
 
-df_long_lab <- df_long_lab |> 
-  mutate(x_pos = recode(source,
+  x_pos = recode(source,
     "Causes of death\nin the US in 2023" = 0.9,
     "The New York Times"              = 2.2,
     "The Washington Post"             = 3.15,
-    "Fox News"                        = 4.055
-  ))
+    "Fox News"                        = 4.05))
 
 owid_colors <- c(
-  "heart disease" = "#7087af",
-  "cancer"        = "#a05961",
-  "accidents"     = "#799a6a",
-  "stroke"        = "#c15d39",
-  "respiratory"   = "#c18143",
-  "alzheimers"    = "#ac336b",
-  "diabetes"      = "#df6373",
-  "kidney"        = "#33547c",
-  "liver"         = "#339d98",
-  "suicide"       = "#7ea189",
-  "covid"         = "#caa57b",
-  "influenza"     = "#bf8e96",
-  "drug overdose" = "#b577b0",
-  "homicide"      = "#79bda3",
-  "terrorism"     = "#466c3f")
+  "heart disease" = "#7087af", "cancer" = "#a05961", "accidents" = "#799a6a",
+  "stroke" = "#c15d39", "respiratory" = "#c18143", "alzheimers" = "#ac336b",
+  "diabetes" = "#df6373", "kidney" = "#33547c", "liver" = "#339d98",
+  "suicide" = "#7ea189", "covid" = "#caa57b", "influenza" = "#bf8e96",
+  "drug overdose" = "#b577b0", "homicide" = "#79bda3", "terrorism" = "#466c3f")
+
 ```
 
-### Graph replication 
+### Plotting the graph 
 
-The graph above highlights the gap between the main causes of death in the United States and the causes most frequently covered by major US media outlets. By comparing official mortality data with coverage from The New York Times, The Washington Post and Fox News, the visualization shows how media attention does not always reflect real-world risks. In particular, the graph highlights how deaths such as homicide and terrorism are vastly overrepresented in media coverage, while leading causes of death like heart disease or cancer receive comparatively less attention. 
+Now, I recreate the OWID visualization using stacked bars: each column displays the distribution of causes within a given data source, showing the composition of causes for (1) US mortality data in 2023 and (2–4) their media coverage by outlet. I use the label variable to place percentage labels inside the segments. I also add the title, arrows and text annotations, as well as a caption with data sources and key methodological notes. Finally, I remove axes and gridlines to match the clean infographic style of the original figure. 
 
-The original visualization was published by Our World in Data in the article Does the news reflect what we die from?
-
-Hannah Ritchie, Tuna Acisu, and Edouard Mathieu (2025) - “Does the news reflect what we die from?” Published online at OurWorldinData.org. Retrieved from: 'https://archive.ourworldindata.org/20251125-173858/does-the-news-reflect-what-we-die-from.html' [Online Resource] (archived on November 25, 2025).
-
-```{r, fig.width=35.1, fig.height=25.2, fig.dpi=100, fig.showtext=TRUE}
+```{r graph-replication, fig.width=9, fig.height=6.5, fig.showtext=TRUE}
+#Graph replication 
 
 ggplot(df_long_lab, aes(x = x_pos, y = share, fill = cause)) +
 
 geom_bar(aes(group = cause_ordered), stat = "identity", 
            width = 0.75, position = "stack") +
-  scale_fill_manual(values = owid_colors) +
+scale_fill_manual(values = owid_colors) +
 
 geom_text(
-    data = df_long_lab,
-    aes(label = label, size = size_label, group = cause_ordered),
-    position = position_stack(vjust = 0.5),
-    color = "white",
-    family = "lato",
-    fontface = "bold",
-    show.legend = FALSE,
-    lineheight = 1) +
-    scale_size_identity() +
+  aes(label = label, size = size_label, group = cause_ordered),
+  position = position_stack(vjust = 0.5),
+  color = "white", family = "lato", fontface = "bold", lineheight = 1,
+  show.legend = FALSE) +
+scale_size_identity() + 
 
 geom_text(
-  data = df_long_lab |> distinct(source, .keep_all = TRUE),
-  aes(
-    x = x_pos,
-    y = 104,
-    
+  data = df_long_lab |> distinct(source, .keep_all = TRUE), 
+  aes(x = x_pos, y = 104,
     label = ifelse(
-    as.character(source) == "Causes of death\nin the US in 2023",
+    as.character(source) == "Causes of death\nin the US in 2023", 
     "in the US in 2023",
     as.character(source)), 
     
     color = ifelse(source == "Causes of death\nin the US in 2023", 
                    "#6a3b8f",      
-                   "#b3391b")
-    ),
+                   "#b3391b")),
   inherit.aes = FALSE,
-  family = "lato",
-  size = 15,
-  hjust = 0.5,
-  vjust = 0.8) +
+  family = "lato", size = 3.75, 
+  hjust = 0.5, vjust = 0.8) +
 scale_color_identity() + 
 
-  
 geom_text(
-  data = df_long_lab |> 
-    distinct(source, .keep_all = TRUE) |> 
+  data = df_long_lab |> distinct(source, .keep_all = TRUE) |> 
     filter(source == "Causes of death\nin the US in 2023"),
-  aes(
-    x = x_pos,
-    y = 107.5,
-    label = "Causes of death"
-  ),
-  inherit.aes = FALSE,
-  family = "lato",
-  fontface = "bold",
-  size = 16,
-  hjust = 0.5,
-  color = "#6a3b8f"
-) +
+    aes(x = x_pos, y = 107.5, label = "Causes of death"),
+    inherit.aes = FALSE,
+    family = "lato", fontface = "bold", size = 4, 
+    hjust = 0.5, color = "#6a3b8f") +
 
 geom_text(
   data = data.frame(x = 0.2, y = 3.2),
   aes(x = x, y = y, label = "Homicide (<1%)"),
   inherit.aes = FALSE,
-  family = "lato",
-  fontface = "bold",
-  size = 8,
-  colour = "#79bda3",
-  hjust = 0.35,  
-  nudge_x = 0.1
-) +
+  family = "lato", fontface = "bold", size = 2, 
+  colour = "#79bda3", hjust = 0.35, nudge_x = 0.1) +
 
 geom_text(
   data = data.frame(x = 0.2, y = 1),
   aes(x = x, y = y, label = "Terrorism (<0.001%)"),
   inherit.aes = FALSE,
-  family = "lato",
-  fontface = "bold", 
-  size = 8,
-  colour = "#466c3f",
-  hjust = 0.49,
-  nudge_x = 0.1
-)+
+  family = "lato", fontface = "bold", size = 2, 
+  colour = "#466c3f", hjust = 0.49, nudge_x = 0.1) +
   
 annotate("text",
-  x = mean(df_long_lab$x_pos[df_long_lab$source != "Causes of death\nin the US in 2023"]),
+  x = mean(df_long_lab$x_pos
+           [df_long_lab$source != "Causes of death\nin the US in 2023"]),
   y = 108.75,
   label = "Media coverage of these causes of death in 2023 in…",
-  family = "lato",
-  fontface = "bold", 
-  size = 16,
-  color = "#b3391b",
-  hjust = 0.5
-) +
+  family = "lato", fontface = "bold",  size = 4, 
+  color = "#b3391b", hjust = 0.5) +
 
 annotate("curve",
-  x = 0.34, y = 125,     
-  xend = 0.5, yend = 106,     
-  curvature = 0.7,            
-  arrow = arrow(length = unit(1.3, "cm"), type = "open", ends = "last"),
-  color = "#6a3b8f",
-  linewidth = 2.5,
-  lineend = "butt"
-) +
+  x = 0.39, y = 125, xend = 0.5, yend = 106, curvature = 0.7,            
+  arrow = arrow(length = unit(0.325, "cm"), type = "open", ends = "last"),
+  color = "#6a3b8f", linewidth = 0.625, lineend = "butt") +
 
 annotate("curve",
-  x = 4.57, y = 117, 
-  xend = 4.50, yend = 97,    
-  curvature = -0.7,          
-  arrow = arrow(length = unit(1.3, "cm"), type = "open", ends = "last"),
-  color = "#b3391b",
-  linewidth = 2.5,
-  lineend = "butt"
-) +
-  
-coord_cartesian(ylim = c(0, 100), xlim = c(0.25, 4.6), clip = "off") + 
-  
+  x = 4.52, y = 116.2, xend = 4.50, yend = 97, curvature = -0.7,          
+  arrow = arrow(length = unit(0.325, "cm"), type = "open", ends = "last"), 
+  color = "#b3391b", linewidth = 0.625, lineend = "butt") +
+
+coord_cartesian(ylim = c(0, 100), xlim = c(0.25, 4.6), clip = "off") +
+
 labs(
   title = "What Americans die from",
   subtitle = "and the causes of death the US media reports on",
   caption = paste0(
-    "Note: Based on the share of causes of death in the US and the share of mentions for each of the causes in the New York Times, ",
+    "Note: Based on the share of causes of death in the US and the share of",
+    "mentions for each of the causes in the New York Times, ",
     "the Washington Post, and Fox News. All values are normalized to\n",
-    "100%, so the shares are relative to all deaths caused by the 12 most common causes + drug overdoses, ",
-    "homicides and terrorism. These causes account for more than 75% of deaths in the US.\n",
-    "A 'media mention' is a published article in one of the outlets which mentions the cause (e.g., 'influenza') or related keywords ",
+    "100%, so the shares are relative to all deaths caused by the 12 most",
+    "common causes + drug overdoses, homicides and terrorism. These causes",
+    "account for more than 75% of deaths in the US.\n",
+    "A 'media mention' is a published article in one of the outlets which",
+    "mentions the cause (e.g., 'influenza') or related keywords ",
     "(e.g., 'flu') at least twice.\n\n",
-    "Data sources: Media mentions from Media Cloud (2025); deaths data from the US CDC (2025) and Global Terrorism Index."
-  )
-)+ 
+    "Data sources: Media mentions from Media Cloud (2025); deaths data from",
+    "the US CDC (2025) and Global Terrorism Index."))+ 
 
- theme_minimal() +
-  theme(
-    legend.position = "none",
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-    panel.grid = element_blank(),
-    plot.background = element_rect(fill = "white", color = NA),
-    panel.background = element_rect(fill = "white", color = NA),
+theme_void() +
+theme(
+  legend.position = "none",
+  panel.background = element_rect(fill = "white", color = NA),
+  plot.background  = element_rect(fill = "white", color = NA),
+  
+  plot.title = element_text(
+    family = "playfair_sb", size = 22.25, color = "#6a3b8f",
+    hjust = 0.14, margin = margin(b = 5)), 
+  
+  plot.subtitle = element_text(
+    family = "playfair_sb", size = 22.25, color = "#b3391b",
+    hjust = 0.68, margin = margin(b = 25)), 
+  
+  plot.caption.position = "plot",     
+  plot.caption = element_text(
+    family = "lato", size = 6.95, colour = "#828282",
+    hjust = 0, lineheight = 1, margin = margin(t = 1.75)),
 
-    plot.title = element_text(
-      family = "playfair_sb",
-      size = 89,
-      color = "#6a3b8f",
-      hjust = 0.12, 
-      margin = margin(b = 15)),
-    
-    plot.subtitle = element_text(
-      family = "playfair_sb",
-      size = 89,
-      color = "#b3391b",
-      hjust = 0.68,  
-      margin = margin(b = 100)),   
-    
-    plot.caption.position = "plot",     
-    plot.caption = element_text(
-      family = "lato",
-      size = 27.8,  
-      colour = "#828282",
-      hjust = 0,                        
-      lineheight = 1,
-      margin = margin(t = 7)          
-  ),
-
-    plot.margin = margin(40, 38, 20, 63), 
-    panel.spacing.x = unit(c(2, 0.5, 0.5), "lines"))
+  plot.margin = margin(10, 10, 5, 16))
 ```
 
-## Improvement 
+## Alternative graph 
+
+For the alternative visualization, my main goal is to highlight the central message of the original graph: the mismatch between the actual causes of death in the United States in 2023 and their representation in the media. The media source I focused on is the US Collection (as called in the OWID article). The US Collection is a standardized set of more than 200 major US news outlets used to provide a representative sample of national news coverage. Although this media data is included in the OWID dataset, it was excluded from the original graph; incorporating it here helps better emphasize the main analytical focus of the visualization.
+
+The alternative graph is a dumbbell chart with a gap column, which displays two points connected by a line for each cause of death. The blue point represents the percentage of actual deaths in the United States in 2023, while the red point represents the percentage of media mentions in the US Collection related to that cause. This design reduces visual noise and allows for a clearer comparison between the two shares. To make the comparison more interpretable at first glance, I include a gap column that contains the difference between these two percentages as numeric labels. I compute this signed difference (diff_signed) for each cause (defined as US Collection share minus Causes of death in the US 2023 share) and use it to order causes in both the dumbbell plot and difference column. The gap column also encodes the coverage category with the label background, classifying causes into three groups: Undercoverage, Balanced, and Overcoverage. This adds complementary information to the continuous ordering by difference. To define these groups, a ±5% threshold is used; differences within this range are treated as balanced, as they represent small deviations. 
 
 ### Data preparation 
 
-I load the data and select the key variables, standardizing the names of the causes of death. I then reshape the dataset into long format to compare official death shares with US collection coverage. Next, I recode the variables to create more explanatory labels and order them according to the difference between actual deaths and media attention, from largest to smallest. This prepares the data for a clear comparison in the final visualization.
+In this case, I select the variables required for the alternative chart and pivot the data to long format to compare mortality shares with US Collection coverage. I recode causes and sources, compute a signed difference between coverage and actual deaths, and classify each cause as undercoverage, overcoverage, or balanced using a ±5% threshold. Finally, I order causes from most overcovered to most undercovered and fix this order with a factor.
 
-```{r}
-df <- read.csv("media_deaths_results.csv")
-df$cause <- tolower(trimws(df$cause))  
+```{r data-preparation2}
+#Data preparation 
 
-df_imp <- df |> 
+df_imp <- data |> 
   select(cause, year, deaths_share, us_share) 
 
 df_imp_long <- df_imp |> 
@@ -344,254 +285,195 @@ df_imp_long <- df_imp |>
     names_to = "source",
     values_to = "share")
 
-df_imp_long <- df_imp_long |>
+df_imp_long_ORD <- df_imp_long |>
   mutate(
-    source = factor(
-      source,
+    source = factor(source,
       levels = c("deaths_share", "us_share"),
-      labels = c(
-        "Causes of death\nin the US",
-        "US Collection")))
-
-df_imp_long <- df_imp_long |> 
-  mutate(cause_label = case_when(
-    cause == "covid"           ~ "COVID-19",
-    cause == "respiratory"     ~ "Lower respiratory diseases",
-    cause == "alzheimers"      ~ "Alzheimer's disease",
-    cause == "kidney"          ~ "Kidney failure",
-    cause == "liver"           ~ "Liver disease",
-    cause == "influenza"       ~ "Influenza / Pneumonia",
-    cause == "heart disease"   ~ "Heart disease",
-    cause == "cancer"          ~ "Cancer",
-    cause == "accidents"       ~ "Accidents",
-    cause == "stroke"          ~ "Stroke",
-    cause == "diabetes"        ~ "Diabetes",
-    cause == "suicide"         ~ "Suicide",
-    cause == "drug overdose"   ~ "Drug overdose",
-    cause == "homicide"        ~ "Homicide",
-    cause == "terrorism"       ~ "Terrorism",
-    TRUE ~ cause), .after = cause)
-
-df_imp_long_ORD <- df_imp_long |> 
+      labels = c("Causes of death\nin the US", "US Collection")),
+    cause_label = recode(cause, !!!cause_labels)) |>
+  
   group_by(cause_label) |> 
   mutate(
-    diff_signed = share[source == "Causes of death\nin the US"] -
-                  share[source == "US Collection"],
-    diff = abs(diff_signed),
+    diff_signed = share[source == "US Collection"] -
+      share[source == "Causes of death\nin the US"],
     coverage_type = case_when(
-      diff_signed > 5 ~ "Undercoverage",
-      diff_signed < -5 ~ "Overcoverage", 
+      diff_signed  < -5 ~ "Undercoverage",
+      diff_signed  > 5 ~ "Overcoverage", 
       TRUE ~ "Balanced")) |> 
   
   ungroup() |> 
-  arrange(diff) |> 
+  arrange(diff_signed) |> 
   mutate(
     cause_label = factor(cause_label, levels = unique(cause_label)))
-
-df_imp_long_ORD
-
-coverage_cols <- c(
-  "Overcoverage"  = "#E9C46A99",  
-  "Undercoverage" = "#F4A26199", 
-  "Balanced"      = "#B7E4C799") 
-
 ```
 
-### Graph improvement 
+### Plotting the graph  
 
-This two-group lollipop graph shows the differences between the actual share of deaths in the United States and the share of US Collection coverage devoted to each cause. By displaying the two values side by side for each cause and connecting them with a line, the visualization makes it easy to see where media attention diverges from real mortality risks. 
+As a final step, I construct the alternative visualization in two parts and combine them into a single figure. I first generate the dumbbell chart (p1a_deaths). In this panel, I add percentage labels and adjust their positions, apply color scales, and include annotations and an integrated caption to guide the reading and provide relevant methodological information. I also include a small legend for the coverage categories, which refers to the information displayed in the gap column. After that, I generate the lateral difference column (p2_diff). The final theme also aims to match the clean infographic style characteristic of Our World in Data graph. 
 
-```{r plot, fig.width=9.5, fig.height=7.5, fig.dpi=100, fig.showtext=TRUE}
+```{r graph-improvement, fig.width=9.7, fig.height=7.5, fig.showtext=TRUE}
+#Alternative graph  
 
+#Dumbbell Chart
 p1a_deaths <- df_imp_long_ORD |> 
-  ggplot(aes(
-      x = cause_label,
-      y = share,
-      group = cause_label,
-      color = source,
-      fill = source,
-      label = share)) +
+ggplot(aes(x = cause_label, y = share,
+    group = cause_label,
+    color = source,
+    fill = source,
+    label = share)) +
   
-  geom_line(
-    color = "gray45",
-    linewidth = 1.2,
-    alpha = .3) +
+geom_line(color = "gray65", linewidth = 1.4, alpha = .3) +
+geom_point(shape = 21, size = 3) +
   
-  geom_point(
-    shape = 21,
-    size = 3) +
+scale_fill_manual(values = c(
+  "Causes of death\nin the US" = "#3f7ef5", "US Collection" = "#FA8080")) +
+
+scale_color_manual(values = c(
+  "Causes of death\nin the US" = "#0b53dc", "US Collection" = "#AB0202")) + 
   
 geom_text(
   aes(
-    label = paste0(sprintf("%.1f", share), "%"),
-    color = source,
-    nudge_y = case_when(
+  label = paste0(sprintf("%.1f", share), "%"),
+  color = source,
+  nudge_y = case_when(
+    cause_label == "Influenza / Pneumonia" ~
+      if_else(source == "Causes of death\nin the US",  1.2, -1.2),
 
-      cause_label == "Influenza / Pneumonia" &
-        source == "Causes of death\nin the US" ~ 1.2,
-      cause_label == "Influenza / Pneumonia" &
-        source == "US Collection"              ~ -1.2,
+    cause_label == "Suicide" ~
+      if_else(source == "Causes of death\nin the US", -0.6,  0.6),
 
-      cause_label == "Suicide" &
-        source == "Causes of death\nin the US" ~ -0.6,
-      cause_label == "Suicide" &
-        source == "US Collection"              ~ 0.6,
+    cause_label %in% c("Kidney failure", "Accidents", "Liver disease") ~
+      if_else(source == "Causes of death\nin the US",  0.6, -0.6),
+    TRUE ~ 0)),
+  vjust = 2, family = "lato", size = 3) +
 
-      cause_label %in% c(
-        "Kidney failure",
-        "Accidents",
-        "Liver disease") &
-        source == "Causes of death\nin the US" ~ 0.6,
-
-      cause_label %in% c(
-        "Kidney failure",
-        "Accidents",
-        "Liver disease") &
-        source == "US Collection"              ~ -0.6,
-
-      TRUE ~ 0)),
-  vjust = 2.2,
-  family = "lato",
-  size = 3) +
+scale_y_continuous(labels = function(x) paste0(x, "%")) +
   
-  coord_flip() +
-  expand_limits(y = c(0, 35)) +
+coord_flip() + expand_limits(y = c(0, 35)) +
   
-  scale_fill_manual(
-    values = c(
-      "Causes of death\nin the US" = "#00AAEE",
-      "US Collection" = "#FA8080"))+
+labs(x = NULL, y = NULL, 
+  title = "Causes of Death vs. Media Coverage",
+  subtitle = paste0("Comparison between the share ",
+  "of <span style='color:#0b53dc;'>**causes of death in the US in ",
+  "2023**</span> and <span       style='color:#AB0202;'>",
+  "**coverage in the US Collection.**</span>"),
+  caption = paste0(
+  "Note: Based on the share of causes of death in the US and the share of",
+  " mentions for each of the causes in US Collection. The causes include",
+  " the 12 most common causes\nof death + drug overdoses, homicides, and",
+  " terrorism, which account for approximately 92% of all deaths in",
+  " the US in 2023. A 'media mention' is a published article in\n",
+  "the US Collection which mentions the cause at least twice. Data",
+  " sources: Media mentions from Media Cloud (2025); deaths data from",
+  " the US CDC (2025) and Global\nTerrorism Index.")) + 
   
-  scale_color_manual(
-    values = c(
-      "Causes of death\nin the US" = "#0259FF",
-      "US Collection" = "#A40202"))+ 
+annotate("text", x = "Homicide", y = 42.8,
+  label = "Homicide is the most\noverrepresented cause",
+  hjust = 1, vjust = 0.5, size = 3,
+  fontface = "italic",  family = "lato", color = "grey30")+
   
-  labs(
-    x = NULL,
-    y = NULL,
-    title = "Causes of Death vs. Media Coverage",
-    subtitle = "Comparison between <span style='color:#0259FF;'>**causes of death in the US in 2023**</span> and <span       style='color:#AB0202;'>**coverage in the US Collection.**</span>", 
-    caption = paste0(
-    "Note: Based on the share of causes of death in the US and the share of mentions for each of the causes in the New York Times, ",
-    "the Washington Post, and Fox News\n",
-    "All values are normalized to 100%, so the shares are relative to all deaths caused by the 12 most common causes + drug overdoses, ",
-    "homicides and terrorism. These\n",
-    "causes account for more than 75% of deaths in the US. A 'media mention' is a published article in one of the outlets which mentions the cause (e.g., 'influenza') or \n",
-    "related keywords (e.g., 'flu') at least twice.\n",
-    "Data sources: Media mentions from Media Cloud (2025); deaths data from the US CDC (2025) and Global Terrorism Index."
-  )) + 
-  
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(color = "gray", linewidth = .2),
-    panel.grid.minor = element_line(color = "gray", linewidth = .2),
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    axis.text = element_text(size = 9, color = "black", family = "lato"),
-    axis.ticks = element_blank(),
-    legend.position = "none",
-    
-    plot.tag = element_text(
-      size = 8,
-      face = "bold"
-    ),
-    
-    plot.title.position = "plot",
-    plot.title = element_text(
-      size = 16,
-      family = "playfair_sb",
-      hjust = 0,
-      color = "black",
-      margin = margin(l = 8, b = 5)
-    ),
-    
-    plot.subtitle = ggtext::element_markdown( 
-      size = 13,
-      family = "playfair_sb",
-      hjust = 0,
-      color = "black",
-      margin = margin(l = 8, b = 10)
-    ),
-    
-    plot.caption.position = "plot",
-    plot.caption = element_text(
-      size = 9,
-      family = "lato",
-      hjust = 0,
-      color = "grey60",
-      margin = margin(l = 8, t = 18)
-    ),
-    
-    plot.margin = unit(c(.7, .25, 1, .5), "cm"))
+annotate("text", x = "Heart disease", y = 39.55,
+  label = "Heart disease is the most\nunderrepresented cause",
+  hjust = 1, vjust = 0.5, size = 3,
+  fontface = "italic", family = "lato", color = "grey30")+
 
-#SEGUNDO GRÁFICO 
+annotate("rect", xmin = 4,  xmax = 6.7, ymin = 35.8, ymax = 46.9,
+  fill = "white", color = "grey45", linewidth = 0.2) +
+
+annotate("rect", xmin = 6, xmax = 6.35, ymin = 36.5, ymax = 38.0,
+  fill = "#fff089cc", color = NA) +
+  
+annotate("text", x = 6.175, y = 39.0, label = "Overcoverage",
+  hjust = 0, vjust = 0.5, size = 3.1, family = "lato") +
+
+annotate("rect", xmin = 5.15, xmax = 5.5, ymin = 36.5, ymax = 38.0,
+  fill = "#a6e393cc", color = NA) +
+  
+annotate("text", x = 5.325, y = 39.0, label = "Balance |diff|<5%",
+  hjust = 0, vjust = 0.5, size = 3.1, family = "lato") +
+
+annotate("rect", xmin = 4.3, xmax = 4.65, ymin = 36.5, ymax = 38.0,
+  fill = "#b2c4dacc", color = NA) +
+  
+annotate("text", x = 4.475, y = 39.0, label = "Undercoverage",
+  hjust = 0, vjust = 0.5, size = 3.1, family = "lato") +
+
+theme(
+  panel.background = element_rect(fill = "white"),
+  panel.grid.major = element_line(color = "gray", linewidth = .2),
+  panel.grid.minor = element_line(color = "gray", linewidth = .2),
+  panel.grid.major.x = element_blank(),
+  panel.grid.minor.x = element_blank(),
+  axis.text = element_text(size = 9, color = "black", family = "lato"),
+  axis.ticks = element_blank(),
+  legend.position = "none",
+  
+  plot.tag = element_text(size = 8, face = "bold"),
+  
+  plot.title.position = "plot",
+  plot.title = element_text(
+    size = 18, family = "playfair_sb", color = "black",
+    hjust = 0, margin = margin(l = 8, b = 5)),
+  
+  plot.subtitle = ggtext::element_markdown(
+    size = 14, family = "playfair_sb", color = "black",
+    hjust = 0, margin = margin(l = 8, b = 10)),
+  
+  plot.caption.position = "plot",
+  plot.caption = element_text(
+    size = 9, family = "lato", color = "grey60",
+    hjust = 0, margin = margin(l = 8, t = 18)),
+  
+  plot.margin = unit(c(.7, .25, 1, .5), "cm"))
+
+
+#Coverage difference column 
 p2_diff <- df_imp_long_ORD |> 
-  distinct(cause_label, diff, coverage_type) |> 
+  distinct(cause_label, diff_signed, coverage_type) |> 
   
-  ggplot(aes(x = cause_label, y = 17.5)) +
-  
+ggplot(aes(x = cause_label, y = 17.5)) +
   coord_flip(clip = "off") +
   
-  annotate(
-    "rect", 
-    xmin = 0.5, 
-    xmax = length(unique(df_imp_long_ORD$cause_label)) + 0.5, 
-    ymin = -Inf, 
-    ymax = Inf, 
-    fill = "white",
-    color = "black",
-    linewidth = 0.3
-  ) +
+geom_label(
+  aes(label = paste0(sprintf("%.1f", diff_signed), "%"),
+    fill  = coverage_type),
+  family = "lato", size = 3, color = "black", linewidth = 0,                         
+  label.padding = unit(0.15, "lines"), label.r = unit(0.15, "lines")) +  
   
-  geom_label(
-    aes(
-      label = paste0(sprintf("%.1f", diff), "%"),
-      fill  = coverage_type
-    ),
-    family = "lato",
-    size = 3,
-    color = "black",
-    linewidth = 0,                         
-    label.padding = unit(0.15, "lines"),
-    label.r = unit(0.15, "lines")
-  ) +
+annotate(
+  "text", x = -Inf, y = 15,
+  label = "Difference", size = 3.4, family = "lato", fontface = "bold",
+    color = "black", lineheight = 0.9, hjust = 0.5, vjust = 1.2) +
   
-  scale_fill_manual(
-    values = c(
-      "Undercoverage" = "#f5ab7ccc",
-      "Overcoverage"  = "#f7f394cc",
-      "Balanced"      = "#a6e393cc"
-    ),
-    guide = "none"
-  ) +
+scale_fill_manual(
+  values = c(
+    "Undercoverage" = "#b2c4dacc",
+    "Overcoverage"  = "#fff089cc",
+    "Balanced"      = "#a6e393cc"), guide = "none") +
   
-  expand_limits(y = c(0, 35)) +
-  scale_y_continuous(limits = c(0, 35)) +
-  
-  annotate(
-    "text",
-    x = -Inf,
-    y = 17.5,
-    label = "Difference",
-    hjust = 0.5,
-    vjust = 1.4,
-    size = 3.8,
-    family = "lato",
-    fontface = "bold",
-    color = "black"
-  ) +
-  
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid = element_blank(),
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-    legend.position = "none",
-    plot.margin = unit(c(0.7, 0.25, 1, 0), "cm")
-  )
 
+scale_y_continuous(limits = c(0, 35)) +
+
+theme_classic() + 
+theme(
+  panel.background = element_rect(fill = "white"),
+  panel.grid = element_blank(),
+  
+  axis.line.y = element_line(color = "grey60", linewidth = 0.2),
+  axis.line.x = element_blank(),
+  
+  axis.title = element_blank(),
+  axis.text = element_blank(),
+  axis.ticks = element_blank(),
+  legend.position = "none",
+  
+  plot.margin = unit(c(0.7, 0.25, 1, 0), "cm")
+)
+
+#Combined final plot 
 combined_plot <- p1a_deaths + p2_diff + plot_layout(widths = c(4, 0.4))
 combined_plot
 ```
+
+
+
