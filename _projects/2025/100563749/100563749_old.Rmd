@@ -1,0 +1,804 @@
+---
+title: "Abortion Access in the USA"
+description: "Distance to and congestion of abortion clinics in the USA post the overturning of Roe v. Wade" 
+categories: "2025"
+author: Clare McGarvey
+date: "`r Sys.Date()"
+output: 
+  distill::distill_article:
+    self-contained: false
+    toc: true 
+---
+
+# Graph Project - Abortion Access in the USA, Febuary 2023
+
+## FiveThirtyEight Replication
+
+On the 8th of March 2023, Aaron Bycoffe, Maggie Koerth, Elena Mejía and Amelia Thomson-DeVeaux published 'What Happens If North Carolina Bans Abortion? Or Ohio? Or Florida?' on American political analysis website FiveThirtyEight. The article stipulated on how access to abortion would continue to change after the overturning of Roe v. Wade in June of the prior year, which revoked the constitutional right to abortion and shifted abortion legislation to state control. At the time of publish, Utah had just announced they would ban abortions and Florida and other Republican-controlled states were looking like they may follow suit. The article produced a well-developed interactive graphic, that depicted the current state of abortion access and how it would change if different states were to restrict it too. The graph illustrated the driving distance to the closest clinic and the number of reproductive-age women that each clinic serves.
+
+I will attempt to replicate the static graph that illustrates the abortion access at the time of publish, with data provided as of February 11th 2023.
+
+![Original chart. Source: <FiveThirtyEight>](Original_Graph.png){.external width="100%"}
+
+### Setup
+
+```{r}
+library(tidyverse)
+library(sf) # for spacial plotting 
+library(tigris) # the official U.S. Census Bureau TIGER/Line shape files for county and state boundaries 
+library(ggplot2) # graphic package
+library(biscale) # bivariate thematic mapping
+options(tigris_use_cache = TRUE) # saving shape files locally 
+library(showtext) # to install a font
+library(cowplot) # to arrange plot and legends
+library(readxl) # read excel files
+library(grid)
+```
+
+Loading data
+
+```{r}
+abortion_access <- read_csv(file = "data/2025.07.01_abortionaccess_countyxmonth.csv")
+abortion_access <- tibble(abortion_access)
+str(abortion_access)
+```
+
+The dataset contains data on the driving distances to the nearest abortion facility of each county in the United States by month. It includes abortion access from January 1, 2009 to the most recent available data (last updated on August 18th 2025). The database was compiled by economics Professor Caitlin Myers for academic research purposes.
+
+The data will therefore be filtered to include only those observations from February 2023.
+
+```{r}
+access_feb2023 <- abortion_access |> 
+  filter(year == 2023 & month == 02)
+
+# checking to see how many county observations there are in the filtered dataset 
+access_feb2023 |> nrow()
+
+# checking to see if any counties appear more than once
+access_feb2023 |> 
+  count(origin_county_name) |> 
+  filter(n > 1)
+```
+
+### Loading the shape files and removing non-continental territories.
+
+These objects contain: - STATEFP and COUNTYFP: state and country FIPS codes - NAME: state/ county name - STUSPS: in state object, the two letter state abbreviation - geometry: geographic boundaries (polygons)
+
+```{r}
+non_continental <- c("02", "15", "60", "66", "69", "72", "78") # Alaska, Hawaii, American Samoa, Guam, Northern Mariana Islands, Puerto Rico, U.S. Virgin Islands
+
+counties <- counties(cb = TRUE, year = 2023) |> # Loading the county cartographic boundaries
+  st_as_sf() |> # Converting to a simple features file
+  filter(!STATEFP %in% non_continental) # Removing non-continental USA 
+
+states <- states(cb = TRUE, year = 2023) |> # Loading the state cartographic boundaries
+  st_as_sf() |> # Converting to an sf file
+  filter(!STATEFP %in% non_continental) # Removing non-continental USA 
+
+plot(st_geometry(counties))
+st_crs(counties)
+head(counties)
+
+nrow(counties)
+```
+
+### Merging the counties map data with the abortion access data from February 2023:
+
+```{r}
+# Merging the data from access_feb2023 that has a country with a corresponding FIPS code in the counties dataset, into the counties dataset
+map_data <- counties |> 
+  left_join(
+    access_feb2023,
+    by = c("GEOID" = "origin_fips_code")
+  )
+
+# Number of counties that didn't get matched
+map_data |> 
+  filter(is.na(dest_fips_code)) |> 
+  nrow()
+```
+
+### Checking variables for bivariate analysis
+
+```{r}
+summary(map_data$distance_origintodest)
+summary(map_data$dest_asp)
+
+class(map_data$distance_origintodest)
+class(map_data$dest_asp)
+```
+
+### Creating bi_class
+
+```{r}
+# creating classes
+map_data <- map_data |> 
+  filter(!is.na(distance_origintodest), !is.na(dest_asp)) |> 
+  bi_class(x = dest_asp, 
+           y = distance_origintodest,
+           style = "quantile",
+           dim = 3)
+```
+
+### Custom colour pallette
+
+Explained here: https://cran.r-project.org/web/packages/biscale/vignettes/bivariate_palettes.html
+
+```{r}
+custom_palette <- c(
+  "1-1" = "#f0efef", # low x, low y
+  "2-1" = "#dec4d8",
+  "3-1" = "#cb96c0", # high x, low y
+  "1-2" = "#bad8d9",
+  "2-2" = "#acb0c1", # medium x, medium y
+  "3-2" = "#9f87ae",
+  "1-3" = "#85c2c1", # low x, high y
+  "2-3" = "#7b9ead",
+  "3-3" = "#6f789c" # high x, high y
+)
+
+bi_pal(pal = custom_palette, dim = 3)
+```
+
+### Legend
+
+```{r}
+# Adding fonts
+font_add("LegendFont", "decimapro.ttf") # for legend
+font_add("TitleFont", "sequel-sans-heavy-body.ttf") # for title 
+showtext_auto()
+
+# Legend
+legend <- bi_legend(pal = custom_palette,
+                    dim = 3,
+                    xlab = "Congestion",  # using spaces to wrap the font to the left 
+                    ylab = "Distance", # and --> as the default arrow didn't work with the new font 
+                    size = 11,
+                    base_family = "LegendFont", # added font
+                    arrows = TRUE) 
+```
+
+Three additional explanatory legends
+
+```{r}
+# Distance
+distance_palette <- c(
+  "1-1" = "#f0efef", # low x, low y
+  "2-1" = "#fafbfc",
+  "3-1" = "#fafbfc", # high x, low y
+  "1-2" = "#bad8d9",
+  "2-2" = "#fafbfc", # medium x, medium y
+  "3-2" = "#fafbfc",
+  "1-3" = "#85c2c1", # low x, high y
+  "2-3" = "#fafbfc",
+  "3-3" = "#fafbfc" # high x, high y
+)
+
+# Distance Legend
+distance_legend <- bi_legend(pal = distance_palette,
+                    dim = 3,
+                    xlab = " ", 
+                    ylab = "LOW ---> HIGH", 
+                    size = 9,
+                    base_family = "LegendFont", # added font
+                    arrows = FALSE) 
+
+distance_legend
+
+# Congestion
+congestion_palette <- c(
+  "1-1" = "#f0efef", # low x, low y
+  "2-1" = "#dec4d8",
+  "3-1" = "#cb96c0", # high x, low y
+  "1-2" = "#fafbfc",
+  "2-2" = "#fafbfc", # medium x, medium y
+  "3-2" = "#fafbfc",
+  "1-3" = "#fafbfc", # low x, high y
+  "2-3" = "#fafbfc",
+  "3-3" = "#fafbfc" # high x, high y
+)
+
+# Congestion Legend
+congestion_legend <- bi_legend(pal = congestion_palette,
+                    dim = 3,
+                    xlab = "LOW ---> HIGH",  
+                    ylab = " ", 
+                    size = 9,
+                    base_family = "LegendFont", # added font
+                    arrows = FALSE) 
+
+congestion_legend
+
+# Both Metrics
+both_palette <- c(
+  "1-1" = "#f0efef", # low x, low y
+  "2-1" = "#fafbfc",
+  "3-1" = "#fafbfc", # high x, low y
+  "1-2" = "#fafbfc",
+  "2-2" = "#acb0c1", # medium x, medium y
+  "3-2" = "#fafbfc",
+  "1-3" = "#fafbfc", # low x, high y
+  "2-3" = "#fafbfc",
+  "3-3" = "#6f789c" # high x, high y
+)
+
+# Congestion Legend
+both_legend <- bi_legend(pal = both_palette,
+                    dim = 3,
+                    xlab = "LOW ---> HIGH", 
+                    ylab = "LOW ---> HIGH", 
+                    size = 9,
+                    base_family = "LegendFont", # added font
+                    arrows = FALSE) 
+
+both_legend
+
+```
+
+#### Need to add "Distance" and "Congestion" labels above
+
+### Arranging Legend
+
+```{r}
+# Function to combine the legends and title 
+legend_with_title <- function(legend_plot, title_text) {
+  plot_grid(
+    ggdraw() +
+      draw_label(
+        title_text, # adding title 
+        fontfamily = "TitleFont",
+        size = 12,
+        hjust = 0.5), # centred 
+    legend_plot, # adding legend 
+    ncol = 1, # one column (vertical alignment)
+    rel_heights = c(0.25, 1) # relative heights: title, legend 
+  )
+}
+
+# Using the function to create the three legend blocks
+distance_block <- legend_with_title(
+  distance_legend,
+  "Distance increases")
+
+congestion_block <- legend_with_title(
+  congestion_legend,
+  "Congestion increases")
+
+both_block <- legend_with_title(
+  both_legend,
+  "Both metrics\nincrease")
+
+# Aligning the three blocks in a row 
+explanatory_legends <- plot_grid(
+  distance_block,
+  congestion_block,
+  both_block,
+  nrow = 1, # one row
+  align = "h") # horizontally aligned 
+
+# Stacking the legend with the title 
+how_to_read_full <- plot_grid(
+  ggdraw() +
+    draw_label(
+      "HOW TO READ THIS MAP", # top-most (sub)title 
+      fontfamily = "TitleFont",
+      fontface = "bold",
+      size = 12
+    ),
+  explanatory_legends, # three explanatory legends 
+  ggdraw() +
+    draw_label(
+      "What happens if more states ban abortion?", # main title 
+      fontfamily = "TitleFont",
+      fontface = "bold",
+      size = 20
+    ),
+  ncol = 1,
+  rel_heights = c(
+    0.35, # top sub-title ("How to read") 
+    1, # explanatory legends 
+    0.4) # title 
+)
+
+
+```
+
+### Final Plot
+
+```{r}
+map <- ggplot() + 
+  # Counties, fill and borders 
+  geom_sf(data = map_data,
+          mapping = aes(fill = bi_class), # bi-class crated earlier of distance and asp 
+          colour = "white", # county lines 
+          size = 0.0005, # thinning the county lines 
+          show.legend = FALSE) +
+  # State lines
+  geom_sf(data = states,
+          fill = NA, # states are transparent - filled by county above 
+          colour = "white", # state lines
+          size = 0.2,
+          show.legend = FALSE) + 
+  # Colour scale 
+  bi_scale_fill(pal = custom_palette, # new colour palette
+                dim = 3) + 
+  # Coordinate system: using the EPSG: 5070 (Albers Equal Area) which curves the map like in the original
+  coord_sf(crs = st_crs(5070), 
+           datum = NA) + # removing latitude/ longitude lines
+  # Theme 
+  theme_minimal() + 
+  theme(
+    plot.margin = margin( # removing the extra margin space - for formatting later
+      t = 0, # top
+      r = 0, # right
+      b = 0, # bottom
+      l = 0) # left
+  )
+
+
+map
+```
+
+### Formatting with legend
+
+```{r}
+# Combining both legends with the map
+final_plot_wlegend <- plot_grid(
+  how_to_read_full, # how to read top legend
+  legend, # bi-variate legend
+  map, # map 
+  ncol = 1, # one column (stacked vertically)
+  rel_heights = c( # relative size of each block 
+    0.28,  # how-to-read block (title + mini legends)
+    0.12,  # original legend
+    0.60   # map
+  )
+)
+
+final_plot_wlegend
+```
+
+### Saving
+
+#### doesn't save with all legends?
+
+```{r}
+ggsave(
+  "final_plot_wlegend.png",
+  final_plot_wlegend,
+  bg = "white",
+  dpi = 300,
+  width = 12,
+  height = 14)
+```
+
+## Improvements
+
+### August 2025
+
+Filtering the data to include only those observations from the most recent observations.
+
+```{r}
+# Most recent observations
+access_aug2025 <- abortion_access |> 
+  group_by(origin_fips_code) |> 
+  slice_max(order_by = year * 100 + month,  # converting date into YYYYMM in order to compare 
+            with_ties = FALSE) |> # only one observation (should only be one observation for each month anyway)
+  ungroup()
+
+# checking to see how many county observations there are in the filtered dataset 
+access_aug2025 |> nrow()
+# same as in access_feb2025 
+```
+
+#### Merging the counties map data with the abortion access data from August 2025:
+
+```{r}
+# Merging the data from access_feb2023 that has a country with a corresponding FIPS code in the counties dataset, into the counties dataset
+improved_map_data <- counties |> 
+  left_join(
+    access_aug2025,
+    by = c("GEOID" = "origin_fips_code")
+  )
+
+# Number of counties that didn't get matched
+improved_map_data |> 
+  filter(is.na(dest_fips_code)) |> 
+  nrow()
+```
+
+#### Map Aug 2025
+
+```{r}
+# Map dataset
+map_data_aug2025 <- improved_map_data |> 
+  filter(!is.na(dest_asp), !is.na(distance_origintodest)) |> 
+  bi_class(
+    x = dest_asp,
+    y = distance_origintodest, 
+    style = "quantile",
+    dim = 3
+  )
+
+# Plotting map 
+map_aug2025 <- ggplot() + 
+  # Counties, fill and borders 
+  geom_sf(data = map_data_aug2025,
+          mapping = aes(fill = bi_class), # bi-class crated earlier of distance and asp 
+          colour = "white", # county lines 
+          size = 0.0005, # thinning the county lines 
+          show.legend = FALSE) +
+  # State lines
+  geom_sf(data = states,
+          fill = NA, # states are transparent - filled by county above 
+          colour = "white", # state lines
+          size = 0.2,
+          show.legend = FALSE) + 
+  # Colour scale 
+  bi_scale_fill(pal = custom_palette, # new colour palette
+                dim = 3) + 
+  # Coordinate system: using the EPSG: 5070 (Albers Equal Area) which curves the map like in the original
+  coord_sf(crs = st_crs(5070), 
+           datum = NA) + # removing latitude/ longitude lines
+  # Theme 
+  theme_minimal() 
+
+map
+map_aug2025
+
+summary(map_data$distance_origintodest)
+summary(map_data_aug2025$distance_origintodest)
+
+summary(map_data$dest_asp)
+summary(map_data_aug2025$dest_asp)
+
+all.equal(
+  map_data$bi_class,
+  map_data_aug2025$bi_class)
+
+all.equal(
+  access_feb2023 |> arrange(origin_fips_code),
+  access_aug2025 |> arrange(origin_fips_code))
+
+```
+
+### Travel Time Graph
+
+#### Adding fuel and median household income data
+
+Income data is only available for 2022.
+
+Income: https://www.ers.usda.gov/data-products/county-level-data-sets/county-level-data-sets-download-data Gasoline: https://www.eia.gov/petroleum/gasdiesel/
+
+```{r}
+# Fuel
+fuel <- read_xls(path = "data/gasprices_region.xls",
+                 sheet = "Data 1", # using regular conventional gas prices
+                 skip = 2) 
+
+# Filtering for August 2025
+fuel <- fuel |> 
+  filter(
+    month(Date) == 8,
+    year(Date) == 2025)
+
+# Tidying fuel data
+fuel <- fuel |> pivot_longer(
+  cols = 2:21,
+  names_to = "Area",
+  values_to = "Price"
+)
+
+# Creating a dataset for fuel averages for August 2025 
+fuel_aug2025 <- fuel |> 
+  filter(Date >= as.Date("2025-08-01") & Date <= as.Date("2025-08-31")) |> 
+  group_by(Area) |> 
+  summarize(Avg_Gas_Price_Aug2025 = mean(Price, na.rm = TRUE)) |> 
+  ungroup()
+
+# Income
+income <- read.csv(file = "data/Unemployment_Income2023.csv")
+
+# Filtering for median income only
+income <- income |> 
+  filter(str_detect(Attribute, regex("income", ignore_case = TRUE)))
+```
+
+#### Merging Datasets
+
+Using PADD regions as they are used in the fuel dataset.
+
+```{r}
+padd_mapping <- tibble(
+  State_Name = c(
+    # PADD 1A (New England) - 6 states
+    "Connecticut", "Maine", "Massachusetts", "New Hampshire", "Rhode Island", "Vermont",
+    # PADD 1B (Central Atlantic) - 6 states
+    "Delaware", "District of Columbia", "Maryland", "New Jersey", "New York", "Pennsylvania",
+    # PADD 1C (Lower Atlantic) - 6 states
+    "Florida", "Georgia", "North Carolina", "South Carolina", "Virginia", "West Virginia",
+    # PADD 2 (Midwest) - 15 states
+    "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Michigan", "Minnesota", 
+    "Missouri", "Nebraska", "North Dakota", "Ohio", "Oklahoma", "South Dakota", 
+    "Tennessee", "Wisconsin",
+    # PADD 3 (Gulf Coast) - 6 states
+    "Alabama", "Arkansas", "Louisiana", "Mississippi", "New Mexico", "Texas",
+    # PADD 4 (Rocky Mountain) - 5 states
+    "Colorado", "Idaho", "Montana", "Utah", "Wyoming",
+    # PADD 5 (West Coast) - 7 states
+    "Alaska", "Arizona", "California", "Hawaii", "Nevada", "Oregon", "Washington"
+  ),
+  State = c(
+    # PADD 1A
+    "CT", "ME", "MA", "NH", "RI", "VT",
+    # PADD 1B
+    "DE", "DC", "MD", "NJ", "NY", "PA",
+    # PADD 1C
+    "FL", "GA", "NC", "SC", "VA", "WV",
+    # PADD 2
+    "IL", "IN", "IA", "KS", "KY", "MI", "MN", "MO", "NE", "ND", "OH", "OK", "SD", "TN", "WI",
+    # PADD 3
+    "AL", "AR", "LA", "MS", "NM", "TX",
+    # PADD 4
+    "CO", "ID", "MT", "UT", "WY",
+    # PADD 5
+    "AK", "AZ", "CA", "HI", "NV", "OR", "WA"
+  ),
+  Area = c(
+    # PADD 1A - 6 repetitions
+    rep("Weekly New England (PADD 1A) Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)", 6),
+    # PADD 1B - 6 repetitions
+    rep("Weekly Central Atlantic (PADD 1B) Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)", 6),
+    # PADD 1C - 6 repetitions
+    rep("Weekly Lower Atlantic (PADD 1C) Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)", 6),
+    # PADD 2 - 15 repetitions
+    rep("Weekly Midwest Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)", 15),
+    # PADD 3 - 6 repetitions
+    rep("Weekly Gulf Coast Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)", 6),
+    # PADD 4 - 5 repetitions
+    rep("Weekly Rocky Mountain Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)", 5),
+    # PADD 5 - 7 repetitions
+    rep("Weekly West Coast Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)", 7)
+  )
+)
+```
+
+```{r}
+# Adding PADD regions to income data
+income <- income |> 
+  left_join(padd_mapping, by = "State")
+
+# Adding fuel prices
+income_and_fuel <- income |> 
+  left_join(fuel_aug2025, by = "Area")
+
+# Tidying dataset 
+income_and_fuel <- income_and_fuel |> 
+  pivot_wider(
+    values_from = Value,
+    names_from = Attribute
+  )
+
+# Making FIPs code's compatible between income_and_fuel and map_data
+income_and_fuel <- income_and_fuel |> 
+  mutate(
+    FIPS_Code = as.character(FIPS_Code), # changing to character to match map_data
+    FIPS_Code = str_pad(FIPS_Code, # padding with zeros on the left to ensure all values are 5 digits, matching map_data format
+                        width = 5, 
+                        side = "left", 
+                        pad = "0") 
+  )
+  
+improved_map_data <- map_data |> 
+  left_join(
+    income_and_fuel,
+    by = c("GEOID" = "FIPS_Code")
+  )
+```
+
+### Calculating cost of travel
+
+```{r}
+improved_map_data <- improved_map_data |> 
+  mutate(
+    mpg = 25, # using 25 m/g as an average: https://afdc.energy.gov/data/10661 
+    gallons_needed = (distance_origintodest * 2) / mpg, # * 2 for a return trip
+    total_gas_cost = gallons_needed * Avg_Gas_Price_Aug2025, 
+    travel_cost = total_gas_cost / Median_Household_Income_2022
+  )
+
+# Travel cost is the cost of travel as a ratio of the median household income of the region. 
+```
+
+### Bi-variate Map with Travel Cost
+
+#### Checking variables for bivariate analysis
+
+```{r}
+class(improved_map_data$distance_origintodest)
+class(improved_map_data$dest_asp)
+```
+
+#### Creating bi_class
+
+```{r}
+# creating classes
+improved_map_data <- improved_map_data |> 
+  filter(!is.na(dest_asp), !is.na(travel_cost)) |> 
+  bi_class(
+    x = dest_asp,
+    y = travel_cost, 
+    style = "quantile",
+    dim = 3
+  )
+```
+
+#### Legend
+
+```{r}
+# Adding fonts
+font_add("LegendFont", "decimapro.ttf") # for legend
+font_add("TitleFont", "sequel-sans-heavy-body.ttf") # for title 
+showtext_auto()
+
+# Legend
+improved_legend <- bi_legend(pal = custom_palette,
+                    dim = 3,
+                    xlab = "Congestion -->  ",  # using spaces to wrap the font to the left 
+                    ylab = "Relative Travel Cost -->     ", # and --> as the default arrow didn't work with the new font 
+                    size = 6,
+                    base_family = "LegendFont", # added font
+                    arrows = TRUE) 
+```
+
+#### Final plot
+
+```{r}
+improved_map <- ggplot() + 
+  geom_sf(data = improved_map_data,
+          mapping = aes(fill = bi_class),
+          colour = "white", 
+          size = 0.0005, # thinning the county lines 
+          show.legend = FALSE) +
+  geom_sf(data = states,
+          fill = NA,
+          colour = "white",
+          size = 0.2,
+          show.legend = FALSE) + 
+  bi_scale_fill(pal = custom_palette, # new colour palette
+                dim = 3) + 
+  coord_sf(crs = st_crs(5070),
+           datum = NA) + # removing latitude/ longitude lines
+  theme_minimal() + 
+  theme(
+    # panel.grid = element_blank() # ensuring grid lines are removed 
+    plot.margin = margin( # adding more white space to the top of the map for the legend
+      t = 60, # top
+      r = 10, # right
+      b = 10, # bottom
+      l = 10) # left
+  )
+
+# Combine map and legend
+final_improved_plot <- ggdraw() +
+  draw_plot(improved_map, 0, 0, 1, 1) +
+  draw_plot(improved_legend, 
+            x = 0.5, 
+            y = 1, 
+            width = 0.22, 
+            height = 0.22,
+            hjust = 0.5, # centre legend horizontally 
+            vjust = 1) # anchors legend at the top edge
+
+map
+final_improved_plot
+```
+
+##### No new insights
+
+#### Saving
+
+```{r}
+ggsave("final_improved_plot.png", final_improved_plot, bg = "white", dpi = 300)
+```
+
+## Bubble Map
+
+### Preparing Data
+
+```{r}
+# Finding total number of women served by each clinic
+# Creating a new dataset with the loc id, FIPs code, total women served, average service population and number of counties served
+clinic_service_areas <- improved_map_data |> 
+  st_drop_geometry() |> # removing spatial information 
+  filter(!is.na(dest_loc_id)) |> 
+  group_by(dest_loc_id, dest_fips_code) |> # grouping by location and county
+  summarise(
+    total_women_served = sum(origin_population, na.rm = TRUE), # number of women served by the clinic 
+    avg_service_pop = (first(dest_asp)), # average service population of each clinic 
+    counties_served = n(), # number of counties the clinic serves 
+    .groups = "drop"
+  )
+
+# Geographic coordinates of clinic locations
+# Creating a dataset with all the geographical data plus the information on clinic service areas
+clinic_locations <- counties |> 
+  filter(GEOID %in% clinic_service_areas$dest_fips_code) |> # keeping only those counties with clinics 
+  st_centroid() |> # getting the central point of each county
+  left_join(
+    clinic_service_areas,
+    by = c("GEOID" = "dest_fips_code")
+  )
+```
+
+### Map
+
+```{r}
+improved_bubble_map <- ggplot() + 
+  # Base map, with travel cost as a gradient colour
+  geom_sf(data = improved_map_data,
+          mapping = aes(fill = travel_cost),
+          colour = "white", # border colours 
+          size = 0.0005) + # border thickness 
+  # State borders
+  geom_sf(data = states,
+          fill = NA,
+          colour = "white",
+          size = 0.3) +
+  # Bubbles
+  geom_sf(data = clinic_locations,
+          mapping = aes(size = total_women_served), # size is proportional to the number of women the clinic serves
+          shape = 21, # circle with border
+          fill = alpha("#dec4d8", 0.6), # fill colour, 60% opaque 
+          colour = "#cb96c0", # border colour 
+          stroke = 0.5) + # border size
+  # Gradient for travel cost
+  scale_fill_gradient2(
+    low = "#bad8d9", # low travel cost
+    high = "#438584",
+    # high = "#547887", # high travel cost
+    # midpoint = median(improved_map_data$travel_cost, # centring at the median
+                      # na.rm = TRUE),
+    name = "Travel Cost\n(% of median county\nhousehold income)",
+    labels = scales::percent_format(accuracy = 0.001)
+  ) +
+  # Bubble size
+  scale_size_continuous(
+    name = "Women Served\nper Clinic",
+    range = c(1, 50), # minimum and maximum bubble sizes
+    labels = scales::comma, # formatting the legend with commas for readability 
+    breaks = c(10000, 100000, 500000, 1000000, 5000000) # values shown in legend
+  ) +
+  # Coordinate system
+  coord_sf(crs = st_crs(5070), # EPSG code for Conus Albers projection
+           datum = NA) + # removing grid lines 
+  # Labels
+  labs(
+    title = "Abortion Access in the USA:\nTravel Cost and Clinic Service Areas"
+    # subtitle = "Background color = travel cost burden\nBubble size = total women served by each clinic location"
+  ) +
+  # Theme
+  theme_minimal() +
+  theme(
+    legend.position = "right", # legend on right
+    plot.title = element_text(size = 30, 
+                              face = "bold",
+                              hjust = 0.5), # Other face options: "plain", "italic", "bold.italic"
+    plot.subtitle = element_text(size = 15,
+                                 hjust = 0.5),
+    legend.key.size = unit(0.8, "cm")
+  )
+
+min(clinic_service_areas$total_women_served)
+max(clinic_service_areas$total_women_served)
+
+improved_bubble_map
+
+```
+
+### Saving
+
+```{r}
+ggsave("improved_bubble_map.png", improved_bubble_map, bg = "white", dpi = 300)
+```
+
