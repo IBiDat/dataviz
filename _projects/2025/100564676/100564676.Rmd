@@ -40,7 +40,7 @@ library(ggtext)
 library(patchwork)
 
 # Font rendering and management
-sysfonts::font_add_google("Source Sans 3", "source")
+sysfonts::font_add_google("Roboto Condensed", "roboto_condensed")
 showtext::showtext_auto()
 ```
 
@@ -215,7 +215,7 @@ plot_2 <- ggplot(summary_df_2) +
   geom_col(
     aes(launch_year, plot_value, fill = agency_stack, alpha = outcome),
     width = 1,
-    position = position_stack(reverse = TRUE)
+    position = position_stack(reverse = TRUE),
   ) +
   scale_fill_manual(values = stack_palette_2, guide = "none") +
   scale_alpha_manual(values = c(success = 1, fail = 0.80), guide = "none") +
@@ -234,6 +234,7 @@ Because a gap was inserted in Step 2, the commercial boundaries are shifted down
 These boundaries are then drawn using `geom_segment()` as horizontal lines across each year, improving legibility without changing the underlying data.
 
 ```{r plot3, fig.width=7.5, fig.height=8}
+
 # state boundaries (positive)
 state_outline <- summary_df_2 %>%
   filter(provider_side == "state", agency_stack != "commercial_gap") %>%
@@ -251,17 +252,17 @@ comm_outline <- summary_df_2 %>%
   summarise(plot_value = sum(plot_value), .groups = "drop") %>%
   arrange(launch_year, agency_stack) %>%
   group_by(launch_year) %>%
-  mutate(y = -axis_gap + cumsum(plot_value)) %>%   # <- 핵심: gap만큼 아래로
+  mutate(y = -axis_gap + cumsum(plot_value)) %>%
   ungroup() %>%
   filter(!agency_stack %in% c("commercial_SpaceX", "commercial_ULA"))
 
 plot_3 <- plot_2 +
   geom_segment(
     data = bind_rows(state_outline, comm_outline),
-    aes(x = launch_year - 0.5, xend = launch_year + 0.5, y = y, yend = y),
+      aes(x = launch_year - 0.5, xend = launch_year + 0.5, y = y, yend = y),
     inherit.aes = FALSE,
     color = "white",
-    linewidth = 0.4
+    linewidth = 0.3
   )
 
 plot_3
@@ -289,6 +290,7 @@ x_max <- 2018
 decades <- c(1950, 1960, 1970, 1980, 1990, 2000, 2010)
 
 x_bounds <- decades - 0.5
+x_bounds <- x_bounds[x_bounds >= x_min]
 x_ticks  <- c(1957, 1964, 1974, 1984, 1994, 2004, 2014, 2018)
 x_labels <- c("1957", "1960s", "1970s", "1980s", "1990s", "2000s", "2010s", "18")
 
@@ -317,7 +319,7 @@ y_right_levels <- c(20, 40)
 pad_left  <- 0.40
 pad_right <- 0.40
 
-underline_gap <- 5
+underline_gap <- 3.2
 
 x_left_text  <- x_min - 3.5
 x_right_text <- x_max + 3.5
@@ -381,15 +383,15 @@ right_guides2 <- tidyr::crossing(
 # -----------------------
 plot_4 <- plot_3 +
   # decade boundary lines
-  geom_vline(xintercept = x_bounds, color = "white", linewidth = 0.4) +
+  geom_vline(xintercept = x_bounds, color = "white", linewidth = 0.3) +
 
   # x-axis ticks
   geom_segment(
     data = tibble(x = x_bounds, y = axis_y, yend = axis_y - tick_h),
     aes(x = x, xend = x, y = y, yend = yend),
     inherit.aes = FALSE,
-    color = "grey60",
-    linewidth = 0.4
+    color = "grey40",
+    linewidth = 0.3
   ) +
 
   # x-axis labels
@@ -397,7 +399,7 @@ plot_4 <- plot_3 +
     data = tibble(x = x_ticks, lab = x_labels),
     aes(x = x, y = axis_y - tick_h - x_label_pad, label = lab),
     inherit.aes = FALSE,
-    size = 3.2,
+    size = 3,
     color = "black"
   ) +
 
@@ -406,16 +408,16 @@ plot_4 <- plot_3 +
     data = left_guides2,
     aes(x = x_line, xend = xend, y = y_line, yend = y_line),
     inherit.aes = FALSE,
-    color = "grey70",
-    linewidth = 0.4
+    color = "grey40",
+    linewidth = 0.3
   ) +
   geom_text(
     data = left_guides2,
     aes(x = x_text, y = y, label = label),
     inherit.aes = FALSE,
     hjust = 0, vjust = 1,
-    size = 3,
-    color = "grey70"
+    size = 2.8,
+    color = "grey40"
   ) +
 
   # RIGHT guides (underline + label)
@@ -423,16 +425,16 @@ plot_4 <- plot_3 +
     data = right_guides2,
     aes(x = x_line, xend = xend, y = y_line, yend = y_line),
     inherit.aes = FALSE,
-    color = "grey70",
-    linewidth = 0.4
+    color = "grey40",
+    linewidth = 0.3
   ) +
   geom_text(
     data = right_guides2,
     aes(x = x_text, y = y_pos, label = label),
     inherit.aes = FALSE,
     hjust = 1, vjust = 1,
-    size = 3,
-    color = "grey70"
+    size = 2.8,
+    color = "grey40"
   ) +
 
   coord_cartesian(clip = "off", xlim = c(x_min - 5, x_max + 5)) +
@@ -471,15 +473,15 @@ plot_5 <- plot_4 +
       margin = margin(b = 2)
     ),
     plot.subtitle = element_text(
-      size = 9, color = "grey40",
+      size = 9, #color = "grey40",
       hjust = 0,
       margin = margin(b = 10)
     ),
     plot.caption = element_text(
-      size = 6, color = "grey60",
+      size = 8.5, color = "grey60",
       hjust = 0,
-      lineheight = 1.15,
-      margin = margin(t = 10)
+      lineheight = 1
+      #margin = margin(t = 5)
     )
   )
 
@@ -497,13 +499,13 @@ Finally, two narrative callouts are added: one explaining why Soviet launch coun
 ```{r plot6, fig.width=7.5, fig.height=8}
 plot_6 <- plot_5 +
   ## State launch providers (▲)
-  annotate("text", x = 2004, y = 59, label = "\u25B2", size = 3) +
-  annotate("text", x = 2004, y = 50, label = "State launch\nproviders", 
-           fontface = "bold", size = 2.5) +
+  annotate("text", x = 2004, y = 55, label = "\u25B2", size = 4) +
+  annotate("text", x = 2004, y = 46, label = "State launch\nproviders", 
+           fontface = "bold", size = 3) +
   ## Commercial launch providers (▼)
-  annotate("text", x = 1980, y = -31, label = "\u25BC", size = 3) +
-  annotate("text", x = 1980, y = -21, label = "Commercial\nlaunch providers", 
-           fontface = "bold", size = 2.5)
+  annotate("text", x = 1980, y = -29, label = "\u25BC", size = 4) +
+  annotate("text", x = 1980, y = -20, label = "Commercial\nlaunch providers", 
+           fontface = "bold", size = 3)
 
 block_labels <- tibble::tribble(
   ~x, ~y, ~lab,            ~fill,        ~col,
@@ -512,9 +514,9 @@ block_labels <- tibble::tribble(
   1988, 30, "USSR",          "#E53E3E",   "white",
   1992, 30, "Russia",        "#E53E3E",   "white",
   2015, 14, "China",         "#7B1E1E",   "white",
-  2000, -13, "Other US companies", "#9fb6d1", "black",
-  2010, -13, "ULA",                "#81a0c4", "black",
-  2016, -10, "SpaceX",             "#2073a6", "white"
+  2000, -13, "Other US companies", "#9fb6d1", "white",
+  2010, -13, "ULA",                "#81a0c4", "white",
+  2015.7, -10.5, "SpaceX",             "#2073a6", "white"
   
 )
 
@@ -527,8 +529,8 @@ plot_6 <- plot_6 +
       colour = I(col)       
     ),
     linewidth = 0,           
-    label.padding = unit(0.25, "lines"),
-    size = 2,
+    label.padding = unit(0.20, "lines"),
+    size = 2.5,
     fontface = "bold",
     inherit.aes = FALSE
   )
@@ -546,8 +548,10 @@ plain_labels <- tibble::tribble(
 plot_6 <- plot_6 +
   geom_text(
     data = plain_labels,
-    aes(x, y, label = lab, colour = col),
-    size = 2,
+    aes(
+      x, y, label = lab, colour = col),
+    linewidth = 0,
+    size = 2.3,
     fontface = "bold",
     inherit.aes = FALSE
   ) +
@@ -568,7 +572,7 @@ soviet_text <- paste(
 plot_6 <- plot_6 +
   geom_label(
     data = tibble::tibble(
-      x = 1978,   
+      x = 1979,   
       y = 74,
       lab = soviet_text
     ),
@@ -577,7 +581,7 @@ plot_6 <- plot_6 +
     colour = "#3a1f1f",        
     label.size = 0,            
     label.padding = unit(0.6, "lines"),
-    size = 2,
+    size = 2.5,
     lineheight = 1.1,
     inherit.aes = FALSE
   )
@@ -596,7 +600,7 @@ plot_6 <- plot_6 +
     "text",
     x = 1972, y = 142, label = fail_note,
     hjust = 0, vjust = 1,
-    size = 2, colour = "grey40",
+    size = 2.5, colour = "grey30",
     lineheight = 0.8
   )
 
@@ -614,10 +618,10 @@ With these callouts, the chart becomes more than a record of launch volume: it l
 ```{r plot7, fig.width=7.5, fig.height=8}
 events <- tibble::tribble(
   ~x0, ~y0, ~x1, ~y1, ~label, 
-  1957,  2, 1957, 5, "<b>Sputnik</b><br>First man-made<br>satellite",
-  1961,  41, 1961, 46, "<b>Yuri<br>Gagarin</b><br>First person<br>in space",
+  1957,  2, 1957, 5, "<b>Sputnik</b><br>First man-<br>made<br>satellite",
+  1961,  45, 1961, 50, "<b>Yuri<br>Gagarin</b><br>First person<br>in space",
   1965, 105, 1965,105, "<b>Alexei Leonov</b><br>First spacewalk",
-  1969,  15, 1969, 15, "Apollo 11<br>First crewed<br>Moon landing",
+  1969,  15, 1969, 22, "Apollo 11<br>First crewed<br>Moon landing",
   1986,  8, 1986, 15, "<b>Challenger</b><br>explosion",
   2003,  1, 2003, 13, "<b>Columbia</b><br>accident",
   2018,  38, 2018, 62, "<b>Soyuz MS-10</b><br>Failed to carry<br>crew to International<br>Space Station on<br>October 11th"
@@ -648,11 +652,11 @@ plot_7 <- plot_6 +
 
   ggtext::geom_richtext(
     data = events,
-    aes(x = x1 - 2, y = y1 + 5, label = label),
+    aes(x = x1 - 2, y = y1 + 7, label = label),
     hjust = 0, vjust = 0.5,
     fill = NA, label.color = NA,
     size = 2,
-    lineheight = 1,
+    lineheight = 1.2,
     inherit.aes = FALSE
   )
 
@@ -661,53 +665,68 @@ plot_7
 
 ## Chart Improvement
 
-This final section re-examines the same launch dataset through a different lens: **composition over time**, rather than absolute launch counts alone. The data is reshaped to calculate, for each year, the share (%) of launches contributed by each provider group, shown separately for state and commercial actors. To complement this view, a rescaled line is overlaid to indicate changes in the total number of launches, allowing composition and scale to be interpreted together.
+This section reframes the launch dataset to emphasize composition over time rather than raw counts. The data is first aggregated by year and provider group, using sum(launches) to ensure that launch volumes are correctly combined before any ratios are computed. Each year is then converted into a within-year share (0–100%), producing a stacked area chart where the vertical total always equals 1 and the changing thickness of each band reflects relative dominance.
 
-The resulting stacked area charts reveal how the balance among major spacefaring nations evolves over time in the state panel, while the commercial panel highlights the growing dominance of leading private firms alongside shifts among smaller players. A shaded band marks the Cold War period (1957–1991) in the state chart, providing historical context for changes in both market structure and launch intensity.
+To avoid gaps and ensure stable stacking across years, missing year–group combinations are filled with zeros via tidyr::complete(). Shares are recalculated after completion, so that every year has a full set of categories (including those with zero launches), keeping the area geometry consistent. In parallel, yearly totals are separately computed and then rescaled to a 0–1 range (roughly 0.02–0.98) so they can be overlaid as a line on the same axis. This line preserves information about overall launch intensity while the stacked areas show market composition.
 
-Compared with the original mirrored stacked bars—which emphasize absolute launch volumes and mission outcomes—this alternative visualization makes it easier to identify **relative dominance within each year**, while the overlaid line preserves information about overall growth or decline in launch activity. Together, these elements offer a clearer view of how the space race has transitioned from a geopolitically driven competition to a market-driven expansion.
+Two panels are produced: one for state actors and one for commercial actors, using consistent factor ordering and manual palettes. In the state panel, a mid-plot annotation marks the Cold War period (1957–1991), providing historical context for shifts in both total activity and relative shares.
 
-```{r improvement}
-# 1) Data processing: yearly shares within each side
+```{r improvement1, fig.width=7.5, fig.height=6}
+
 share_state <- summary_df %>%
   filter(provider_side == "state") %>%
   mutate(agency_group = str_remove(agency_stack, "^state_")) %>%
-  count(launch_year, agency_group, name = "n") %>%
+  group_by(launch_year, agency_group) %>%
+  summarise(n = sum(launches), .groups = "drop") %>%  
   group_by(launch_year) %>%
   mutate(share = n / sum(n)) %>%
   ungroup() %>%
   mutate(agency_group = factor(agency_group, levels = state_levels))
 
+share_state_fixed <- share_state %>%
+  tidyr::complete(launch_year, agency_group, fill = list(n = 0)) %>%
+  group_by(launch_year) %>%
+  mutate(share = if (sum(n) == 0) 0 else n / sum(n)) %>%
+  ungroup()
+
 share_comm <- summary_df %>%
   filter(provider_side == "commercial") %>%
   mutate(agency_group = str_remove(agency_stack, "^commercial_")) %>%
-  count(launch_year, agency_group, name = "n") %>%
+  group_by(launch_year, agency_group) %>%
+  summarise(n = sum(launches), .groups = "drop") %>%
   group_by(launch_year) %>%
   mutate(share = n / sum(n)) %>%
   ungroup() %>%
   mutate(agency_group = factor(agency_group, levels = commercial_levels))
 
-x_min <- min(summary_df$launch_year, na.rm = TRUE)
-x_max <- max(summary_df$launch_year, na.rm = TRUE)
+share_comm_fixed <- share_comm %>%
+  tidyr::complete(launch_year, agency_group, fill = list(n = 0)) %>%
+  group_by(launch_year) %>%
+  mutate(share = if (sum(n) == 0) 0 else n / sum(n)) %>%
+  ungroup() %>%
+  mutate(agency_group = factor(agency_group, levels = commercial_levels))
 
-# 1-2) Yearly totals (for overlay line)
+# =========================================================
+# Total launches line (rescaled 0~1)
+# =========================================================
+
 year_totals <- summary_df %>%
   group_by(launch_year, provider_side) %>%
   summarise(total = sum(launches), .groups = "drop")
 
-state_total <- year_totals %>% filter(provider_side == "state")
-comm_total  <- year_totals %>% filter(provider_side == "commercial")
+state_line <- year_totals %>%
+  filter(provider_side == "state") %>%
+  mutate(total01 = rescale(total, to = c(0.02, 0.98)))
 
-# rescale totals to 0~1 so they can be overlaid on the share axis
-state_line <- state_total %>%
-  mutate(total01 = scales::rescale(total, to = c(0.02, 0.98)))
+comm_line <- year_totals %>%
+  filter(provider_side == "commercial") %>%
+  mutate(total01 = rescale(total, to = c(0.02, 0.98)))
 
-comm_line <- comm_total %>%
-  mutate(total01 = scales::rescale(total, to = c(0.02, 0.98)))
+# =========================================================
+# State plot
+# =========================================================
 
-
-# 2) State area + total launches (rescaled) line
-p_state <- ggplot(share_state, aes(x = launch_year, y = share, fill = agency_group)) +
+p_state <- ggplot(share_state_fixed, aes(x = launch_year, y = share, fill = agency_group)) +
   geom_area(linewidth = 0) +
   geom_line(
     data = state_line,
@@ -716,47 +735,39 @@ p_state <- ggplot(share_state, aes(x = launch_year, y = share, fill = agency_gro
     linewidth = 0.6,
     alpha = 0.9
   ) +
-  annotate(
-    "text",
-    x = x_max - 2, y = 0.93,
-    label = "Total launches (rescaled)",
-    hjust = 1, vjust = 1,
-    size = 3, color = "grey35"
-  ) +
-  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1), limits = c(0, 1)) +
   scale_x_continuous(limits = c(x_min, x_max), expand = c(0, 0)) +
   scale_fill_manual(values = base_palette[state_levels], drop = FALSE) +
   labs(title = "State launch providers", x = NULL, y = NULL, fill = NULL) +
-  theme_minimal(base_size = 11) +
-  theme(
-    panel.grid.minor = element_blank(),
-    plot.title = element_text(face = "bold"),
-    legend.position = "right"
-  )
-
-# 3) Cold War shading (state only)
-cold_war <- tibble(xmin = 1957, xmax = 1991, ymin = -Inf, ymax = Inf)
+  theme_minimal(base_size = 8) +
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold"),
+        legend.position = "none")
 
 p_state <- p_state +
-  geom_rect(
-    data = cold_war,
-    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
-    inherit.aes = FALSE,
-    fill = "grey70",
-    alpha = 0.18
+  # ── Cold War (overlay in middle of plot) ─────────────
+  annotate(
+    "segment",
+    x = 1957, xend = 1991,
+    y = 0.5, yend = 0.5,
+    linewidth = 0.3,
+    colour = "grey30",
+    arrow = arrow(ends = "both", length = unit(0.15, "cm"))
   ) +
   annotate(
     "text",
-    x = 1974, y = 0.96,
+    x = (1957 + 1991) / 2,
+    y = 0.55,
     label = "Cold War",
-    hjust = 0.5, vjust = 1,
-    size = 4, color = "grey30",
+    size = 2.5,
     fontface = "bold"
   )
 
+# =========================================================
+# Commercial plot
+# =========================================================
 
-# 4) Commercial area + total launches (rescaled) line
-p_comm <- ggplot(share_comm, aes(x = launch_year, y = share, fill = agency_group)) +
+p_comm <- ggplot(share_comm_fixed, aes(x = launch_year, y = share, fill = agency_group)) +
   geom_area(linewidth = 0) +
   geom_line(
     data = comm_line,
@@ -765,27 +776,87 @@ p_comm <- ggplot(share_comm, aes(x = launch_year, y = share, fill = agency_group
     linewidth = 0.6,
     alpha = 0.9
   ) +
-  annotate(
-    "text",
-    x = x_max - 2, y = 0.93,
-    label = "Total launches (rescaled)",
-    hjust = 1, vjust = 1,
-    size = 3, color = "grey35"
-  ) +
-  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1), limits = c(0, 1)) +
   scale_x_continuous(limits = c(x_min, x_max), expand = c(0, 0)) +
   scale_fill_manual(values = base_palette[commercial_levels], drop = FALSE) +
   labs(title = "Commercial launch providers", x = NULL, y = NULL, fill = NULL) +
-  theme_minimal(base_size = 11) +
+  theme_minimal(base_size = 8) +
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold"),
+        legend.position = "none")
+
+# =========================================================
+# Final plot
+# =========================================================
+
+improve_plot_1 <- p_state / p_comm + 
+  plot_layout(heights = c(1, 1))
+improve_plot_1
+```
+
+## Additional Improvement
+
+A second improvement introduces a more interpretable structure by grouping actors into country-level facets. Instead of separating state vs. commercial into different charts, this version defines a facet_country variable that maps each agency_stack category to a national bloc (e.g., “United States” includes state_United States as well as major US commercial providers like SpaceX/ULA/Other US companies). Rows with no mapping are excluded, and factor levels are fixed so facet ordering is stable.
+
+Within each facet, the plot keeps the same color mapping (fill = agency_stack) but adds a clearer outcome encoding through two stacked area layers:
+
+Success launches are drawn first as the solid stacked area. Fail launches are drawn on top using the same fill colors but with reduced opacity (alpha = 0.35), so failures appear as a translucent overlay rather than a separate palette.
+
+A horizontal baseline at y = 0 is added for reference, and facet_wrap() arranges the country panels in a 2-column layout. Overall, this version makes it easier to compare how each country’s ecosystem is composed (state + domestic commercial) and how its mission outcomes (success vs. fail) evolve over time—without forcing the reader to reconcile two separate charts or legends.
+
+```{r improvement2, fig.width=7.5, fig.height=6}
+
+facet_levels <- c("United States", "USSR/Russia", "European", "Japan", "China", "India")
+
+plot_df <- summary_df %>%
+  mutate(
+    facet_country = case_when(
+      agency_stack %in% c("state_United States",
+                          "commercial_SpaceX", "commercial_ULA", "commercial_Other US companies") ~ "United States",
+      agency_stack %in% c("state_USSR/Russia",
+                          "commercial_Russian companies") ~ "USSR/Russia",
+      agency_stack %in% c("state_European",
+                          "commercial_Arianespace") ~ "European",
+      agency_stack %in% c("state_Japan",
+                          "commercial_Mitsubishi") ~ "Japan",
+      agency_stack %in% c("state_China") ~ "China",
+      agency_stack %in% c("state_India") ~ "India",
+      TRUE ~ NA_character_
+    ),
+    facet_country = factor(facet_country, levels = facet_levels)
+  ) %>%
+  filter(!is.na(facet_country)) %>%
+  mutate(agency_stack = droplevels(agency_stack))
+
+# ---- success / fail ----
+improve_plot_2 <-
+  ggplot(plot_df, aes(x = launch_year, y = plot_value, fill = agency_stack)) +
+  geom_hline(yintercept = 0, linewidth = 0.4, color = "grey40") +
+  # success
+  geom_area(
+    data = ~ dplyr::filter(.x, outcome == "success"),
+    position = "stack",
+    color = NA
+  ) +
+  # fail (same color, translucent)
+  geom_area(
+    data = ~ dplyr::filter(.x, outcome == "fail"),
+    position = "stack",
+    alpha = 0.35,
+    color = NA
+  ) +
+  facet_wrap(~ facet_country, ncol = 2) +
+  scale_x_continuous(limits = c(x_min, x_max), expand = c(0, 0)) +
+  scale_fill_manual(values = stack_palette, drop = TRUE) +
+  labs(x = NULL, y = NULL, fill = NULL) +
+  theme_minimal(base_size = 12) +
   theme(
     panel.grid.minor = element_blank(),
-    plot.title = element_text(face = "bold"),
-    legend.position = "right"
+    legend.position = "none"
   )
 
+improve_plot_2
+```
 
-# 5) Final plot
-final_plot <- p_state / p_comm + plot_layout(heights = c(1, 1))
-final_plot
-
+```{}
 ```
