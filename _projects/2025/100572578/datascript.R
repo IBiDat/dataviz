@@ -4,14 +4,14 @@ library(readxl)
 library(dplyr)
 library(tidyr)
 
-assess_data_1 <- read_xlsx(path = "~/1. UC3M/Semester 1/2. Data visualisation/dataviz/_projects/2025/100572578/100572578_files/Data/CAT_AssessmentData_AUS.xlsx",
+assess_data_1 <- read_xlsx("CAT_AssessmentData_AUS.xlsx",
                            skip = 23)
-
-effort_share <- read_xlsx(path = "~/1. UC3M/Semester 1/2. Data visualisation/dataviz/_projects/2025/100572578/100572578_files/Data/CAT_AssessmentData_AUS.xlsx",
+?read_xlsx
+effort_share <- read_xlsx(path = "CAT_AssessmentData_AUS.xlsx",
                           skip = 21,
                           sheet = "EffortSharing")
 
-country_1 <- read_xlsx(path = "~/1. UC3M/Semester 1/2. Data visualisation/dataviz/_projects/2025/100572578/100572578_files/Data/Countryemissions_AUSdata.xlsx")
+country_1 <- read_xlsx(path = "Countryemissions_AUSdata.xlsx")
 
 #extract fair share data needed
 country_1 <- country_1 |>
@@ -216,12 +216,7 @@ dom_data <- country_1 |>
          year <= 2030,
          year >= 2024,
          scenario == "1.5C compatible") |>
-  select(year, emissions, scenario) |>
-  add_row(
-    year = c(2023),
-    emissions = c(454.97),
-    scenario = "1.5C compatible - ref line",
-    .before = 1)
+  select(year, emissions, scenario)
 
 # panels for 1.5 compatible - equity/ fair share
 fair_data <- country_1 |>
@@ -230,8 +225,8 @@ fair_data <- country_1 |>
          scenario == "1.5C compatible") |>
   select(year, emissions, scenario) |>
   add_row(
-    year = c(2023, 2024),
-    emissions = c(294.41,294.41),
+    year = 2024,
+    emissions = 294.41,
     scenario = "1.5C compatible - missing data",
     .before = 1)
 
@@ -265,4 +260,139 @@ bar_ratings <-  country_1 |>
   ungroup()
 
 
+###############################################################
+# Improvement 2 data
+library(cowplot)
+# Read the data with proper header
+df <- read_excel("CAT_19122025_CountryAssessmentData_DataExplorer.xlsx",
+                 sheet = "Assessment",
+                 skip = 18)
+
+
+current_policy <- df |>
+  filter(Scenario == "Current Policy, Max" |
+           Scenario == "Current Policy, Min" |
+           Scenario == "Historical" &
+           Sector == "Economy-wide, excluding LULUCF") |>
+  select(Country, Scenario, `2021`:`2030`) |>
+  pivot_longer(cols = `2021`:`2030`,
+               names_to = "year",
+               values_to = "emissions") |>
+  pivot_wider(names_from = Scenario,
+              values_from = emissions) |>
+  mutate(year = as.numeric(year)) |>
+  group_by(Country, year) |>
+  mutate(
+    midpoint = coalesce((`Current Policy, Max` + `Current Policy, Min`) / 2,
+                        Historical)) |>
+  ungroup()
+# Get boundaries
+boundaries <- df |>
+  filter(Scenario %in% c("1.5C compatible", "Almost sufficient",
+                         "Insufficient", "Highly insufficient")) |>
+  filter(Indicator == "Equity boundaries (absolute)") |>
+  select(Country, Scenario, `2030`) |>
+  pivot_wider(names_from = Scenario,
+              values_from = `2030`)
+# Combine and apply rating cats
+ratings <- current_policy |>
+  left_join(boundaries, by = "Country") |>
+  filter(Country != "UKR") |>
+  group_by(Country, year) |>
+  mutate(
+    Rating = factor(case_when(
+      midpoint <= `1.5C compatible` ~ "1.5C compatible",
+      midpoint <= `Almost sufficient` ~ "Almost sufficient",
+      midpoint <= `Insufficient` ~ "Insufficient",
+      midpoint <= `Highly insufficient` ~ "Highly insufficient",
+      .default = as.character("Critically insufficient")),
+      levels = c("1.5C compatible", "Almost sufficient",
+                 "Insufficient", "Highly insufficient",
+                 "Critically insufficient"),
+      ordered = TRUE),
+    within_cat = case_when(
+      Rating == "1.5C compatible" ~
+        (midpoint/`1.5C compatible`) * 100,
+      Rating == "Almost sufficient" ~
+        (midpoint - `1.5C compatible`) /
+        (`Almost sufficient` - `1.5C compatible`) * 100,
+      Rating == "Insufficient" ~
+        (midpoint - `Almost sufficient`) /
+        (`Insufficient` - `Almost sufficient`)* 100,
+      Rating == "Highly insufficient" ~
+        (midpoint - `Insufficient`) /
+        (`Highly insufficient` - `Insufficient`) * 100,
+      Rating == "Critically insufficient" ~
+        (midpoint - `Highly insufficient`) /
+        ((midpoint + 100) - `Highly insufficient`))) |>
+  ungroup()
+# Arrange country and limit dataset
+final_ratings <- ratings |>
+  filter(
+    Country %in% (ratings |>
+                    filter(year == 2030) |>
+                    slice_max(order_by = midpoint, n = 30) |>
+                    pull(Country))) |>
+  group_by(year) |>
+  mutate(ranked_emitters = rank(-midpoint)) |>
+  ungroup() |>
+  group_by(Country) |>
+  mutate(rating_num = first(as.numeric(Rating)[year == 2030]),
+         within_cat2030 = within_cat[year == 2030]) |>
+  arrange(rating_num, within_cat2030) |>
+  ungroup() |>
+  select(!within_cat2030)
+# apply order to
+factor <- final_ratings |>
+  mutate(Country = forcats::fct_inorder(Country))
+# Function to create gradient colors
+create_gradient_colour <- function(rating, within_cat) {
+  # Normalize to 0-1 scale (darker = worse within category)
+  intensity <- within_cat/100
+  if (rating == "1.5C compatible") {
+    # Light green to dark green
+    colorRampPalette(c("#E8F5E9",
+                       "#C8E6C9",
+                       "#A5D6A7",
+                       "#FFF9C4"))(1000)[round(intensity * 999) + 1]
+  } else if (rating == "Almost sufficient") {
+    # Light yellow to dark amber
+    colorRampPalette(c("#FFF9C4",
+                       "#FFE082",
+                       "#FFCC80"))(1000)[round(intensity * 999) + 1]
+  } else if (rating == "Insufficient") {
+    # Light orange to dark orange
+    colorRampPalette(c("#FFCC80",
+                       "#FFB74D",
+                       "#EF9A9A"))(1000)[round(intensity * 999) + 1]
+  } else if (rating == "Highly insufficient") {
+    # Light red to dark red
+    colorRampPalette(c("#EF9A9A",
+                       "#E57373",
+                       "#EF5350"))(1000)[round(intensity * 999) + 1]
+  } else (
+    colorRampPalette(c("#EF5350", "#C62828"))(1000)[round(intensity * 999) + 1])
+}
+# calculate column width and plot values to show width
+positions <- factor |>
+  filter(year == 2030) |>
+  mutate(column_width = scales::rescale(ranked_emitters,
+                                        to = c(1.8, 0.5), from = c(1,30)),
+         x_end = cumsum(column_width),
+         x_start = lag(x_end, default = 0),
+         x_center = (x_start + x_end) / 2) |>
+  select(Country, column_width, x_end, x_start, x_center)
+# Apply gradient colors
+factor <- factor |>
+  rowwise() |>
+  mutate(
+    gradient_colour = create_gradient_colour(Rating, within_cat)) |>
+  ungroup() |>
+  left_join(positions, by = "Country")
+
+final <- factor |>
+  select(c(Country, year, Rating,
+           gradient_colour,
+           ranked_emitters,
+           x_start, x_end, x_center))
 
