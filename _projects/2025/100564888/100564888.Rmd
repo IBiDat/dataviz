@@ -1,7 +1,11 @@
 ---
 title: "Energy Production between 2004 and 2014"
 description: |
- This tutorial will replicate and improve a map full of pie charts. It is a perfect example of an information saturated visualization, since it uses a map to represent the total electric energy production as of 2014 by province, its energy sources and the production variation between 2004 and 2014. The objective of this tutorial is to demostrate that, most of the times, less is more. 
+ This tutorial will replicate and improve a map full of pie charts. It is a
+ perfect example of an information saturated visualization, since it uses a
+ map to represent the total electric energy production as of 2014 by province,
+ its energy sources and the production variation between 2004 and 2014. The
+ objective of this tutorial is to demostrate that, most of the times, less is more. 
 categories: "2025"
 author: Noah Emanuel Fürup
 date: "`r Sys.Date()`"
@@ -11,7 +15,7 @@ output:
     toc: true
 ---
 
-![](Original Map.jpg)
+![](original-map.png)
 
 ```{r libraries}
 #| message: FALSE
@@ -32,7 +36,7 @@ The map that I'll replicate and improve is part of the National Atlas of Spain m
 
 There are three elements represented in this map. The colors within the provinces represent how much variation in terms of energy production there has been made in each province between 2004 and 2014. The pie charts represent both the amount of energy that is produced in each of the 52 provinces by the size of the pie chart and the source of this energy.
 
-# The Data
+## The Data
 
 The data that is needed to produce this map is available in the following website: [CNIG](https://centrodedescargas.cnig.es/CentroDescargas/busquedaRedirigida.do?ruta=PUBLICACION_CNIG_DATOS_VARIOS/aneTematico/Espana_Produccion-de-energia-electrica_2004-2014_mapa_15612_spa.pdf).
 
@@ -96,7 +100,7 @@ electricity_
 
 The variation of energy production between 2004 and 2014 is being placed inside the Type variable. Furthermore, in the original visualization the variation is represented in intervals of Megawatts per hour. Therefore we have to add a new variable that corresponds to the brackets of the variation legend.
 
-```{r variation category}
+```{r variation-category}
 #| message: FALSE
 
 category_variation <- electricity_ |> 
@@ -129,8 +133,8 @@ The data folder also has two stringfiles to create the maps of Spain and the Can
 ```{r stringfiles}
 #| message: FALSE
 
-peninsula <- st_read("se89_10_admin_prov_a_x_20140101.shp")
-canary_islands <- st_read("se89_10_admin_prov_a_y_20140101.shp")
+peninsula <- st_read("map/se89_10_admin_prov_a_x_20140101.shp")
+canary_islands <- st_read("map/se89_10_admin_prov_a_y_20140101.shp")
 
 electricity_peninsula <- peninsula |>
   left_join(electricity, by = c("rotulo" = "Province")) |> 
@@ -151,11 +155,11 @@ neighbours <- gisco_get_countries(
   resolution = "10")
 ```
 
-# Replication of the map
+## Replication of the map
 
 Now that we have all the data necessary for our map, we can start plotting the background map, that features the variation in energy from 2004 to 2014. To do that, we have to use geom_sf(), the function that creates geometric objects. Since we want the lines to be black and slightly thick, we'll specify that directly in the geom_sf() function.
 
-```{r first plot}
+```{r first-plot}
  map_replica <-
    ggplot(electricity_peninsula) +
   geom_sf(data = neighbours,
@@ -169,7 +173,7 @@ Now that we have all the data necessary for our map, we can start plotting the b
 
 There are three noticeable things right of the bat: the framing, the colors and the background, The framing is like that because it plots all pieces of land of the countries that where plotted, meaning that also places that are far of Spain will be plotted. To change the coordinates where the limits of the plot will be, we have to use coord_sf.
 
-```{r coordinates fix}
+```{r coordinates-fix}
 map_replica <- map_replica +
     coord_sf(
     xlim = c(-13, 5.5),
@@ -180,7 +184,7 @@ map_replica
 
 To change the background, we have to first eliminate the theme that is there and replace with our own. We want a grey background, a black frame and the sea (interpreted by ggplot as the "panel.background") to be blue.
 
-```{r background and aspect ratio}
+```{r background-and-aspect-ratio}
 frame <- tibble(
   x = c(-12.5, 5, 5, -12.5, -12.5),
   y = c(34.75, 34.75, 44.4, 44.4, 34.75))
@@ -268,7 +272,7 @@ electricity_canary <- electricity_canary |>
 
 In order to do the pie charts, we have to drop the geometries that we had in the table to avoid issues in the pivot we have to perform. Getting the coefficient to get the radius was really a matter of trial and error. Since we eventually will have to do the same for the Canary Islands, we'll perform the same code for the Canary Islands table.
 
-```{r Untidying the dataset}
+```{r Untidying-the-dataset}
 untidy_peninsula <- electricity_peninsula |>        
    st_drop_geometry() |>                          
    pivot_wider(
@@ -288,7 +292,7 @@ untidy_canary <- electricity_canary |>
 
 Alright, now the fun part. If we plotted the pie charts now, it won't look like the original graph, since not all pie charts are centered. We need to change ever so slightly the position some of the pie charts up front. The coefficients are done by trial and error.
 
-```{r moving the pie charts}
+```{r moving-the-pie-charts}
 untidy_peninsula <- untidy_peninsula |>
   mutate(
     longitude_moved = case_when(
@@ -346,7 +350,7 @@ map_replica
 
 After this, let's do the pie charts.
 
-```{r pie charts without right colours}
+```{r pie-charts-without-right-colours}
 map_replica <- map_replica +
     geom_scatterpie(data = untidy_peninsula |> filter(Province != "Tarragona"), 
                     aes(x = longitude_moved, y = latitude_moved, r = radius),
@@ -362,7 +366,7 @@ map_replica
 
 Obviously they are in the wrong color, so we have to create the second legend of the map. This one is more difficult because it has a custom geometric figure in the legend. After trying to change the colors' form to a triangule, I figured that it's better to annotate it manually, since it isn't possible to convert these squares to triangules. In order to have the colors and the triangules, we have to create the legend without actually having it featured in the map.
 
-```{r pie chart colors}
+```{r pie-chart-colors}
 map_replica <-
   map_replica + 
   scale_fill_manual(
@@ -456,7 +460,7 @@ map_replica
 
 It's time for the final legend, the one for the pie charts. For this, we need to prepare the radius of each circle, where position of each circle will be, the top of the circle to put the dotted points and the numbers that each circle represents.
 
-```{r legend pie charts}
+```{r legend-pie-charts}
 radius <- c(
     sqrt(  209944.0 / pi) * 0.00031,
     sqrt( 1504064.7 / pi) * 0.00031,
@@ -511,7 +515,7 @@ map_replica
 
 After having done the three legends, we can start doing the Canary Islands plot in the bottom-left. We'll start by doing the plot of the map separately.
 
-```{r canary islands map}
+```{r canary-islands-map}
 canary_islands <- ggplot(electricity_canary) +
   geom_sf(aes(fill = Energy_Variation),
           color = "black", size = 0.2) +
@@ -541,7 +545,7 @@ canary_islands
 
 Looking at the original map, there is a box that separates the islands from the peninsula. We have to do that by hand with geom_polygon() to create the grey area and geom_path() to create the black lines, including the one that separates both provinces.
 
-```{r canary box}
+```{r canary-box}
 canary_box_outer <- tibble(
   x = c(-13.2, -13.2, -13.8, -14.05, -18.35),  
   y = c(27.5, 29.65, 29.65, 29.3, 29.3))
@@ -584,7 +588,7 @@ canary_islands
 
 The pie charts will be added as we did before.
 
-```{r canary islands pie charts}
+```{r canary-islands-pie-charts}
 
 canary_islands <- canary_islands + 
   new_scale_fill() +
@@ -622,7 +626,7 @@ canary_islands
 
 After having put all the features we need, we can grob the visualization to add it again to the replica. In order to get the coordinates, we'll have to do it by hand again.
 
-```{r add canary islands to the main map}
+```{r add-canary-islands-to-the-main-map}
 
 canary_grob <- ggplotGrob(canary_islands)
 
@@ -638,7 +642,7 @@ map_replica
 
 At last, we can put the three final touches of our replica: the scale of the map, the source of teh visualization and the title. The position of the scale's texts will be infered having the frame as reference.
 
-```{r Other details}
+```{r other-details}
 #| warning: false
 map_replica <- map_replica +
 annotation_scale(
@@ -662,7 +666,7 @@ map_replica
 
 To finish off, we'll put the title and the sources of the map where they correspond.
 
-```{r}
+```{r final, preview=TRUE}
 #| warning: false
 map_replica <-
 map_replica +
@@ -688,7 +692,7 @@ map_replica
 
 We have finally finished the replication. As we can see, it looks really similar to the original and I'm really pleased with how it came about, given the difficulty of the replication. Nevertheless, there are slight differences that need to be acknowledged. First of, the positions of both the pie chart's legend and of the Canary Islands panel are more to the left than in the original. This is due to the difficulties of putting it exactly where it needs to be, specially in the case of the pie chart's legend. It's definitely possible to make completely accurate, but the amount of time it requires is exponential. Personally I'm pleased with the positioning I managed. Secondly, the triangules are not exactly as the original ones, which have a flatter semicircle. Same as before, given the amount of detail required for the whole visualization, it looks similar enough. Finally, the letters of the sources are a bit small, but given the scaling of the variation legend, there is no more space to make it bigger.
 
-# Improvement
+## Improvement
 
 There is a lot to improve upon in this visualization. The main issue of the map is how saturation with information it is. It's trying to be too many things, specifically three: it tries to visualize evolution of energy production by province, energy sources and total production. Wanting to provide all this information in a map makes it almost impossible to be clear. Or main objective will be to make a really simple graph in comparison.
 
