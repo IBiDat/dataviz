@@ -1,0 +1,980 @@
+---
+title: "R&D investment spending. West vs East"
+description: |
+  This work  tries to replicate the graph exposed in the WSJ article "How the West Can Win a Global Power Struggle". Hence, GDP and investment in R&D is presented for a set of countries of the East and West block.
+author: Luis Miguel Herrera-Corrales
+date: "`r Sys.Date()`"
+categories: "2025"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(out.width="100%", fig.align="center")
+```
+
+## Context
+
+This work aims to replicate a graph presented by the [Wall Street
+Journal (WSJ), in the year
+2022](https://www.wsj.com/world/how-the-west-can-win-a-global-power-struggle-11647615557).
+In that graph, data on Gross Domestic Product (GDP), in trillions and
+Research & Development expenditure (R&D) is presented for a set of
+countries in the year 2019. Those countries are then divided into two
+blocks, East and West, being the former build by data on the US, the EU,
+Japan and others, while the latter is conformed by China and Russia.
+Data is retrieved from the International Monetary Fund (IMF) database
+and the OECD database.
+
+```{r original-graph, echo=FALSE, out.width="100%", fig.align="center", fig.cap="Original chart. Source: WSJ"}
+knitr::include_graphics("GDP-GERD graph.jpeg")
+```
+
+## Data loading and read in R
+
+Data has been retrieved from the original sources the WSJ article
+exposed, thus being the IMF database for the GDP data and the OECD
+database for the R&D data. After major cleansing in Excel, data is
+exported in R as .csv, in order to perform minor changes and select
+countries to replicate the graph.
+
+In what is related with OECD database, from where data on R&D has been
+recovered from the [Main Science and Investigation Institute
+(MSTI)](https://data-explorer.oecd.org/vis?lc=en&df%5Bds%5D=dsDisseminateFinalDMZ&df%5Bid%5D=DSD_MSTI%40DF_MSTI&df%5Bag%5D=OECD.STI.STP&dq=.A.G%2BT_RS)
+
+In what is related with GDP data, recovered from the [IMF
+database](https://data.imf.org/en/datasets/IMF.RES:WEO) based on the
+World Economic Outlook (WEO). Both need to be loaded to be able to
+start.
+
+```{r Database loading}
+# library (readr) or
+gedr_data <- readr::read_delim("gedr_data.csv", delim = NULL, 
+                               show_col_types = FALSE)
+gdp_data <- read.csv("gdp_data.csv", sep = ";")
+```
+
+Even after some initial cleansing of the database in Excel, it is
+required to select the countries and columns of interest to graph. As
+long there are two graph that in the last step will be merged (one for
+GDP and other for R&D), I prefer to work with two separated databases
+rather than with one, in order to avoid misunderstandings.
+
+```{r Data cleaning and country selection for gdp_data}
+library(tidyverse)
+# 1st: I build a variable of countries selected. Note that China and China (
+# People´s Republic of) refers to the same country, as they are coded different
+# in both databases)
+
+selected_countries <- c(
+  "China", "Russia", "North Korea", "United States", "Japan", "Canada", 
+  "Australia","Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", 
+  "Czech Republic", "Denmark","Estonia", "Finland", "France", "Germany", 
+  "Greece", "Hungary", "Ireland", "Italy","Latvia", "Lithuania", "Luxembourg", 
+  "Malta", "Netherlands", "Poland", "Portugal","Romania", "Slovak Republic", 
+  "Slovenia", "Spain", "Sweden", "China (People’s Republic of)")
+# 2nd: I filter gdp_data for selected countries and variables of interest,
+# among other features. I use gdp_data as a base database, and gdp_data_ as a 
+# modified database.
+gdp_data_ <- gdp_data |> 
+  filter(Country %in% selected_countries,
+         stringr::str_detect(Subject.Descriptor, "current"),# for GDP data on current prices
+         stringr::str_detect(Units, "parity"),
+         stringr::str_detect(Scale, "Billions"))
+# 3rd: Modify gdp_data_ to convert non-numeric columns into numeric cols.
+# This is specially relevant for Date columns, that are displayed in XYEAR form
+# and as chr.
+gdp_data_ <- gdp_data_ |>
+  drop_na(all_of(paste0("X", 1990:2023))) |> 
+  mutate(across(
+    X1990:X2023,
+    ~ as.numeric(gsub(",", "", .x))  # remove commas, convert to numeric
+  )) |>
+  pivot_longer(
+    cols = X1990:X2023,
+    names_to = "year",
+    values_to = "gdp") |>
+  mutate(
+    year = as.integer(sub("X", "", year)))
+```
+
+R&D database also needs to be cleaned, and only variables of interest
+selected.
+
+```{r Data cleaning and country selection for gedr_data}
+# 1st: I clean and select countries in gedr_data. As in the previous, I use
+# gedr_data as a base dataset, and a gedr_data_ as a modified one, in order to
+# prevent misunderstandings and limit error losses.
+gedr_data_ <- gedr_data |> 
+  dplyr::select(`Reference area`, Measure, TIME_PERIOD, OBS_VALUE) |> 
+   filter(
+    `Reference area` %in% selected_countries,
+    str_detect(Measure, "GERD"),
+    TIME_PERIOD == 2019)
+```
+
+The first part of the cleaning and selection procedure is now done.
+However, as the original graph groups countries in blocks (EAST-WEST),
+and some other features (EU countries) can´t be extracted from the
+original databases, some work still needs to be done. Hence, some
+variables are created, such as eu_countries, west_allies, group or
+region.
+
+```{r EU_countries, group and region variables add in original databases}
+# # 1st: I build a variable of eu_countries.
+
+# Ensure names match your dataset (e.g., "Slovakia" vs "Slovak Republic")
+eu_countries <- c(
+  "Austria","Belgium","Bulgaria","Croatia","Cyprus","Czech Republic","Denmark",
+  "Estonia","Finland","France","Germany","Greece","Hungary","Ireland","Italy",
+  "Latvia","Lithuania","Luxembourg","Malta","Netherlands","Poland","Portugal",
+  "Romania","Slovak Republic","Slovenia","Spain","Sweden")
+
+# Explicitly defining Western allies to prevent them from being "lost"
+west_allies <- c("United Kingdom", "Canada", "Australia", "Korea", "Israel", "Norway", "Switzerland")
+
+# 1. Processing GDP Data. Add a group and region
+gdp_data_ <- gdp_data_ |>
+  mutate(
+    group = case_when(
+      Country == "United States" ~ "U.S.",
+      Country == "Japan"         ~ "Japan",
+      Country == "China"         ~ "China",
+      Country == "Russia"        ~ "Russia",
+      Country %in% eu_countries  ~ "EU",
+      TRUE                       ~ "Other" # This captures allies and aligned countries
+    ),
+    region = case_when(
+      # Define who belongs to the "WEST" side of the graph
+      group %in% c("U.S.", "Japan", "EU") | Country %in% west_allies ~ "WEST",
+      # Define who belongs to the "EAST" side (adjust list based on your data)
+      group %in% c("China", "Russia") ~ "EAST",
+
+      TRUE ~ "WEST" 
+    )
+  ) |>
+  # IMPORTANT: You must sum the values so "EU" is the total of all 27 countries
+  group_by(year, region, group) |>
+  summarise(gdp = sum(gdp, na.rm = TRUE), .groups = "drop")
+# Replicates the process with GEDR
+gedr_data_ <- gedr_data_ |> 
+  mutate(
+    group = case_when(
+      `Reference area`== "United States" ~ "U.S.",
+       `Reference area`== "Japan" ~ "Japan",
+      `Reference area` == "China (People’s Republic of)" ~ "China",
+      `Reference area` == "Russia" ~ "Russia",
+      `Reference area`%in% eu_countries ~ "EU",
+      TRUE ~ "Other"),
+    region = case_when(
+      group %in% c("U.S.", "Japan", "EU", "Other") ~ "WEST",
+      group %in% c("China", "Russia") ~ "EAST"))
+```
+
+## Original Graph Replication
+
+Now we are ready to start plotting our graph and try to replicate the
+original WSJ graph.
+
+Firstly, we need to divide the whole graph into four different graphs,
+that in the end will be merged. That is to say, in the whole graph there
+are four different graphs, two corresponding to GDP and two
+corresponding to R&D. Concerning the GDP graphs, the blue one represents
+the GDP in trillions of the WEST block, that is to say the US, the EU,
+Japan, and other countries allied, such as Australia. On the other hand,
+the gold part of the graph replicates the GDP in trillions of the EAST
+block, meaning China and Russia, among others more difficult to know in
+base of the WSJ journal. It is needed to say that the gold part of the
+graph in GDP, is mirrored, so we need some prior transformations in our
+edited dataset (gdp_data\_) to corectly plot it. The following chunk
+shows the mutation of the dataset to be able to plot the EAST block
+data.
+
+```{r EAST block data mirroring}
+gdp_data_$gdp_mirror <- 
+  ifelse(gdp_data_$region == "EAST",
+                               -gdp_data_$gdp,
+                               gdp_data_$gdp)
+```
+
+Now we are able to start plotting and replicating the graph. The
+following chunk starts to replicate the GDP part of the graph with the
+most basic version of our graph. Firstly, we will display our axis to
+then start plotting the data.
+
+```{r First step ggplot + aes}
+p <- 
+  ggplot(
+  gdp_data_,
+  aes(x = year, y = gdp_mirror, fill = group))
+
+print(p)
+```
+
+Once the code is run, we can see how our axis seem to be correct.
+Although they will be latter transformed, and labels year and gdp_mirror
+will be eliminated in future stages, before is needed to include some
+data.
+
+```{r Second step p + geom_area}
+p <- 
+  p + geom_area(color = "white", linewidth = .6)
+
+print(p)
+```
+
+Now we can see that our data is looking more similar to the graph we
+want to replicate. However, colors are not grouped by block, labels
+still there and the axis are not still the ones as in the WSJ article,
+so these changes are needed.
+
+```{r Third step p + scale_x_continuous scale_y_continuous}
+p <- 
+  p + scale_x_continuous( # I create a vector of years to adequate it to WSJ.
+    breaks = c(1990, 1995, 2000, 2005, 2010, 2015, 2020),
+    labels = c("'90", "'95", "2000", "'05", "'10", "'15", "'20")) +
+  
+  scale_y_continuous( # This vector is needed to not have negative numbers in EAST)
+    breaks = seq(-70000, 70000, 10000),
+    labels = c("$70","$60","50","40", "30", "20", "10", "0", "10", "20", "30", "$40",
+               "50", "60", "$70"),
+    position = "right",
+    expand = c(0,0))
+print(p)
+```
+
+Now we can see how our graph is increasingly being more similar to the
+WSJ one. However, colors are still different, and not grouped by block.
+Moreover, labels are not present in the original WSJ graph, and some add
+no information, such as year.
+
+```{r Fourth step replicate WSJ colors and eliminate labels}
+p <- 
+  p + scale_fill_manual(values = c(
+    "U.S."   = "#94cced",
+    "EU"     = "#94cced",
+    "Japan"  = "#94cced",
+    "Other"  = "#94cced",
+    "China"  = "#e0c461",
+    "Russia" = "#e0c461")) +
+  
+  labs(
+    title = "Gross domestic product, in trillions",
+    x = NULL,
+    y = NULL)
+
+print(p)
+```
+
+After this step, the replication graph seems much more similar to the
+WSJ original. Now colors are the same, and axis replicate, within data,
+the ones of the original graph. In what is more, the title has been
+added, although it needs to be modified and placed in bold. Added to
+that, the group label is not present in the original one, and add few if
+any information. Besides, these labels will be added to be plotted
+within the graph, so there is no utility in keeping it.
+
+```{r Fifth step Group label elimination, labels and title modification}
+p <- 
+  p + theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    axis.title = element_blank(),
+    legend.position = "none",
+    plot.margin = margin(5, 10, 5, 5),
+    plot.title = element_text(size = 11, face = "bold")) +
+  
+  annotate("text", x = 2010, y = 28000, label = "Other", size = 3.5, color = "black") +
+  annotate("text", x = 2010, y = 20000, label = "Japan", size = 3.5, color = "black") +
+  annotate("text", x = 2010, y = 16000, label = "EU", size = 3, color = "black") +
+  annotate("text", x = 2010, y = 8000, label = "U.S.", size = 3.5, color = "black") +
+  annotate("text", x = 2020, y = 5000, label = "WEST", size = 7, color = "white",
+           fontface = "bold", family = "Bale") +
+  annotate("text", x = 2010, y = -1500, label = "Russia", size = 3.5, color = "black") +
+  annotate("text", x = 2010, y = -10000, label = "China", size = 3.5, color = "black") +
+  annotate("text", x = 2020, y = -10000, label = "EAST", size = 7, color = "white",
+           fontface = "bold", family = "Bale")
+
+print(p)
+```
+
+Now we can see we almost replicated the original graph. However, some
+major differences will be noted, such as the small portion of GDP the EU
+has. This is perhaps caused by differences in original dataset and our
+dataset. However, this seems a pretty accurate replication of our
+original graph, even taking into account these differences. By now, we
+will leave this graph stored as p, and start building the R&D graph, to
+then merge them with patchwork.
+
+In what is related with R&D graph, two different graphs, one for WEST
+data and other for EAST data need to be built to then be merged. To make
+this process easier, I group gedr_data\_ by group and region. This can
+be done in gedr_data\_ but in order to not miss information I prefer to
+build a gedr_grouped and work from this results. In what is more, since
+two graphs are going to be done, I prefer to build a variable with
+colors rather than to repeat them twice.
+
+```{r gedr_grouped and colors variable}
+gedr_grouped <- gedr_data_ |> 
+  group_by(region, group) |> 
+  summarise(gerd = sum(OBS_VALUE), .groups = "drop")
+
+gedr_grouped$group <- factor(
+  gedr_grouped$group, levels = c("Other", "Japan", "EU", "U.S.", "Russia", 
+                                  "China"))
+fill_cols <- c(
+  "U.S."   = "#94cced",
+  "EU"     = "#94cced",
+  "Japan"  = "#94cced",
+  "Other"  = "#94cced",
+  "China"  = "#e0c461",
+  "Russia" = "#e0c461"
+)
+```
+
+Now we can filter this data to build ordered different datasets for WEST
+and EAST, with data ordered from the lowest to the highest, and labels
+centered.
+
+```{r west_data and east_data building}
+west_data <- filter(gedr_grouped, region == "WEST") |> 
+  arrange(desc(group)) |> # to order data in descending order
+  mutate(
+    cumsum_gerd = cumsum(gerd), # to build the stacked bar
+    label_pos = cumsum_gerd - gerd/2 # to place the labels in the center.
+  )
+
+east_data <- filter(gedr_grouped, region == "EAST") |> 
+  arrange(desc(group)) |> # idem as before
+  mutate(
+    cumsum_gerd = cumsum(gerd), # idem as before
+    label_pos = cumsum_gerd - gerd/2 # idem as before
+  )
+```
+
+Now we can start plotting each graph separately, starting from the WEST
+one.
+
+```{r p_west initial steps}
+p_west <- 
+  ggplot(west_data, aes(x = 1, y = gerd, fill = group)) +
+  geom_bar(color = "white", width = 0.8, stat = "identity")
+# stat = "identity" is used to display data on the dataset as it is.
+print(p_west)
+```
+
+We can see that the initial steps of the process may lead us to
+replicate in a very precise manner the original WSJ graph. However,
+major changes need to be made, as including replicating colors, place
+names of the countries within the bars, eliminate the group label, place
+the y-axis in the right side or write the title.
+
+```{r p_west major changes process}
+p_west <- p_west + 
+  geom_text(aes(y = label_pos, label = group), 
+            color = "black", size = 3) +
+  scale_fill_manual(values = fill_cols) +
+  scale_y_continuous(
+    breaks = c(0, 10, 30, 50),
+    labels = c("", "10", "30", "$50"),
+    position = "right", 
+    expand = c(0, 0)) +
+  scale_x_continuous(limits = c(0.5, 1.5)) +
+  labs(
+    title = "Gross domestic expenditure\non research and development\nin 2019, trillions"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = "none",
+    plot.title = element_text(size = 11, face = "bold", lineheight = 1.1),
+    plot.margin = margin(5, 5, 2, 10)
+  )
+print(p_west)
+```
+
+Once done this, it seems that the resulting graph is a pretty accurate
+replication of the original WSJ we can repeat in the east part of the
+graph. In order to make it easier to read and faster to run, the
+following chunk imitates the process of the previous west graph at once.
+Note that, as they will be merged and the west part *(the blue one)* is
+placed at the top, when building the east part of the graph no title is
+needed.
+
+```{r p_east building graph}
+p_east <- ggplot(east_data, aes(x = 1, y = gerd, fill = group)) +
+  geom_bar(color = "white", width = 0.8, stat = "identity") +
+  geom_text(aes(y = label_pos, label = group), 
+            color = "black", size = 3) +
+  scale_y_continuous(
+  breaks = c(0, 1, 3),
+  labels = c("", "1", "$3"),
+  position = "right",
+  expand = c(0, 0)) +
+  scale_x_continuous(limits = c(0.5, 1.5)) +
+  scale_fill_manual(values = fill_cols) +
+  theme_minimal(base_size = 11) +
+  theme(
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = "none",
+    plot.margin = margin(2, 5, 5, 10)
+  )
+print(p_east)
+```
+
+Now, we can merge them with patchwork to see the result when trying to
+replicate the whole right part of the WSJ journal. The following chunk
+libraries **patchwork**, that needs to be priorly installed, to then
+merge both of them. Note that the formula is used to place the east bars
+*(the gold ones)* below the west bars *(the blue ones)*, as in the WSJ.
+
+```{r patchwork and p_west/p_east merge}
+library(patchwork)
+p_gedr <- p_west / p_east + plot_layout(heights = c(.77, .33))
+print(p_gedr)
+
+```
+
+Once we have both parts of the original graph, being the GDP part that
+is placed in the left part of the graph and the R&D part that is placed
+in the right part of the graph, it is possible to merge them, add a
+general title and the notes placed in the original bottom part of the
+GDP part.
+
+```{r p-p_gedr-merged, preview=TRUE}
+final_graph <- p + p_gedr +
+  plot_layout(widths = c(3, 1)) +
+  plot_annotation(
+    title = "The Western Advantage",
+    subtitle = "The U.S. and its democratic, market-based allies in Europe and Asia together generate far more economic\noutput and spend much more on research and development than China, Russia and countries aligned with\nthem.",
+    caption = "Note: GDP is converted from local currency to dollars at market exchange rates. Research and development spending is for\n2019, converted from local currency to dollars at purchasing power parity.\nSources: IMF (GDP); OECD (expenditure on R&D)",
+    theme = theme(
+      plot.title = element_text(size = 18, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      plot.caption = element_text(size = 10, hjust = 0, color = "gray40", 
+                                  margin = margin(t = 15))
+    )
+  )
+
+print(final_graph)
+```
+
+*Limitations and furher improvement:* It has been imposible, after
+numerous trials, to solve the mismatch between the original EU data and
+the replication EU data. This might have been provoked by differences in
+dataset exact sources, name mismatches not found when building
+eu_countries or code errors when building the graph.
+
+## Edited graph
+
+Having done the previous, this graph can be redone in a cleaner, fancier
+and more understandable way. Firstly, the original graph have some
+perhaps minor areas of improvement, such as color differences. By
+plotting different variants of blue and gold, not only blocks but also
+countries are able to be differentiated. In what is more, the GDP type
+of graph correctly shows the overall evolution through almost two
+decades, but makes it difficult to see annual differences. Because of
+this, a new graph, with stacked bars plotted in form of pyramid, is
+built for the GDP data. In what is more, and for reader ease, the R&D
+data is displayed horizontally, to make it more alike to the GDP data.
+Once done this, both are merged with the same labels as the original
+one.
+
+Said this, the first chunk prepares gdp_data\_ to plot the edited
+version of this graph. Note that, as long now we have a mirrored graph,
+it is needed to build a negative *(mirrored)* variable for the EAST
+block, which is going to be in the left side of the graph. It can be
+done in only one line of code, but is preferred to do it separately for
+reader´s ease.
+
+```{r data preparation for GDP edited graph}
+pyramid_gdp_data <- gdp_data_ |>
+  group_by(year, region, group) |>
+  summarise(gdp = sum(gdp, na.rm = TRUE), .groups = "drop")
+# Create a mirrored data for EAST (build negative values on the left)
+pyramid_gdp_data <- pyramid_gdp_data |>
+  mutate(
+    gdp_display = ifelse(region == "EAST", -gdp, gdp))
+```
+
+Once done this, and in order to assure order is mantained, we need to
+order the column group in this new dataset pyramid_gdp_data. Moreover,
+since as said different tones of blue and gold would make the graph
+easier to read, the fill_cols variable needs to be redone, in order to
+save time at plotting colors. After different steps of trial and error,
+colors chosen are the ones displayed in the following.
+
+```{r group column ordering and colors reelection}
+pyramid_gdp_data$group <- factor(pyramid_gdp_data$group, 
+                             levels = c("Other", "Japan", "EU", "U.S.", 
+                                        "Russia", "China"))
+# Redefine colors
+fill_cols <- c(
+  "U.S."   = "#94cced",
+  "EU"     = "#6baed6",
+  "Japan"  = "#4292c6",
+  "Other"  = "#2171b5",
+  "China"  = "#e0c461",
+  "Russia" = "#d4a940")
+```
+
+Now, all steps to be able to start plotting have been covered. The
+following chunk shows the inital steps for the pyramid GDP data to be
+plotted.
+
+```{r ppyramid-start, fig.width=16, fig.height=11}
+p_pyramid <- ggplot(pyramid_gdp_data, aes(x = gdp_display, y = as.factor(year), 
+                                      fill = group)) +
+  geom_col(color = "white", linewidth = 0.3, position = "stack")
+print(p_pyramid)
+```
+
+Now, we can see some initial intuition of the graph that is intended to
+improve the original WSJ one. However, some major changes need to be
+made, clean Y-axis and make the X-axistwo sided positive.
+
+```{r ppyramid-axis, fig.width=16, fig.height=11}
+ p_pyramid<- p_pyramid +
+  # X-axis cleansing
+  scale_x_continuous(
+    breaks = seq(-70000, 70000, 10000),
+    labels = c("$70", "60", "50", "40", "30", "20", "10", "0", "10", "20", "30",
+               "40", "50", "60", "$70"),
+    expand = c(0, 0),
+    limits = c(-72000, 72000)
+  ) +
+  
+  # Y-axis cleansing
+  scale_y_discrete(
+    breaks = as.character(seq(1990, 2023, 1)),
+    labels = c("1990", rep("", 4), "'95", rep("", 4), "'00", rep("", 4), "'05", 
+               rep("", 4), "'10", rep("", 4), 
+               "'15", rep("", 4), "'20", "", "", "'23"),
+    position = "right"
+  )
+
+print(p_pyramid)
+```
+
+Moreover, and as said, new colors need to be plotted, axis labels can be
+eliminated and both region and country labels need to be added within
+the graph. Note that, for reader´ease country names have been included
+in the side of its block.
+
+```{r ppyramid-colors-labels-axis, fig.width=16, fig.height=11}
+p_pyramid <- p_pyramid +
+  # Colors
+  scale_fill_manual(values = fill_cols) +
+  
+  # Labels and annotations
+  labs(
+    title = "Gross Domestic Product by Year (1990-2023), in billions",
+    x = NULL,
+    y = NULL
+  ) +
+  
+  # Add region labels at the bottom (1990 level) in black
+  annotate("text", x = 35000, y = "1990", label = "WEST", 
+           size = 8, color = "black", fontface = "bold") +
+  annotate("text", x = -35000, y = "1990", label = "EAST", 
+           size = 8, color = "black", fontface = "bold") +
+  annotate("text", x = -65000, y = "2010", label = "China", size = 6, 
+           color = "#e0c461", fontface = "bold") +
+  annotate("text", x = -65500, y = "2005", label = "Russia", size = 6, 
+           color = "#d4a940", fontface = "bold") +
+  annotate("text", x = 65000, y = "2010", label = "US", size = 6, 
+           color = "#94cced", fontface = "bold") +
+  annotate("text", x = 65000, y = "2005", label = "EU", size = 6, 
+           color = "#6baed6", fontface = "bold") +
+  annotate("text", x = 65000, y = "2000", label = "Japan", size = 6, 
+           color = "#4292c6", fontface = "bold") +
+  annotate("text", x = 65000, y = "1995", label = "Other", size = 6, 
+           color = "#2171b5", fontface = "bold")
+
+print (p_pyramid)
+```
+
+Now the graph seems much more WSJ stylish and clean. Lastly, it is time
+to add theme_minimal to make the graph even cleaner, remove group label
+on the side and finally add a black vertical line at 0 to make graph
+readability even more straightforward.
+
+```{r ppyramid-theme, fig.width=16, fig.height=11}
+p_pyramid <- p_pyramid +
+  # theme_minimal and group label drop
+  theme_minimal(base_size = 15) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_line(color = "gray85"),
+    legend.position = "none", 
+    plot.title = element_text(size = 12, face = "bold"),
+    plot.subtitle = element_text(size = 12),
+    plot.margin = margin(10, 10, 10, 10),
+    axis.text = element_text(size = 8),
+    axis.text.y = element_text(hjust = 1)
+  ) +
+  
+  # Add a vertical line at zero
+  geom_vline(xintercept = 0, color = "black", linewidth = 0.8)
+
+print(p_pyramid)
+
+```
+
+Regarding the R&D graph, little changes aside from color changes are
+thought to be needed. However, and to make readability more useful, the
+EAST gold part is now mirrored, with one black horizontal line built as
+a threshold between both blocks. The following chunk exposes the
+neccessary changes to mirror R&D graph for the EAST part, and the whole
+construction of the new R&D graph. As in the original p_gedr, the graph
+is divided in two parts *(WEST and EAST)*, and then merged with
+patchwork.
+
+```{r GERD-modification, fig.width=16, fig.height=11}
+gedr_grouped <- gedr_data_ |> 
+  group_by(region, group) |> 
+  summarise(gerd = sum(OBS_VALUE), .groups = "drop") #Perhaps already done, but
+                                                     # to ensure it
+
+gedr_grouped$group <- factor(
+  gedr_grouped$group, levels = c("Other", "Japan", "EU", "U.S.", "Russia", 
+                                 "China"))
+west_data <- filter(gedr_grouped, region == "WEST") %>%
+  arrange(desc(group)) %>%
+  mutate(
+    cumsum_gerd = cumsum(gerd),
+    label_pos = cumsum_gerd - gerd/2
+  )
+
+p_west <- ggplot(west_data, aes(x = 1, y = gerd, fill = group)) +
+  geom_bar(color = "white", width = 0.8, stat = "identity") +
+  geom_text(aes(y = label_pos, label = group), 
+            color = "black", size = 3) +
+  scale_fill_manual(values = fill_cols) +
+  scale_y_continuous(
+    breaks = c(0, 10, 30, 50),
+    labels = c("", "10", "30", "50"),
+    position = "right", 
+    expand = c(0, 0)) +
+  scale_x_continuous(limits = c(0.5, 1.5)) +
+  labs(
+    title = "Gross domestic expenditure\non research and development\nin 2019, trillions"
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = "none",
+    plot.title = element_text(size = 15, face = "bold", lineheight = 1.1),
+    plot.margin = margin(5, 5, 0, 10)  # Changed bottom margin to 0
+  )
+
+# --- EAST PANEL ---
+east_data <- filter(gedr_grouped, region == "EAST") %>%
+  arrange(desc(group)) %>%
+  mutate(
+    cumsum_gerd = cumsum(gerd),
+    label_pos = cumsum_gerd - gerd/2,
+    gerd_neg = -gerd,
+    cumsum_neg = -cumsum_gerd,
+    label_pos_neg = -label_pos
+  )
+
+p_east <- ggplot(east_data, aes(x = 1, y = gerd_neg, fill = group)) +
+  geom_bar(color = "white", width = 0.8, stat = "identity") +
+  geom_segment(aes(x = 0.6, xend = 1.4, y = 0, yend = 0), 
+               color = "black", linewidth = 1) +
+  geom_text(aes(y = label_pos_neg, label = group), 
+            color = "black", size = 3) +
+  scale_y_continuous(
+    breaks = c(-3, -1, 0),
+    labels = c("$3", "1", ""),
+    position = "right",
+    expand = c(0, 0)) +
+  scale_x_continuous(limits = c(0.5, 1.5)) +
+  scale_fill_manual(values = fill_cols) +
+  theme_minimal(base_size = 15) +
+  theme(
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = "none",
+    plot.margin = margin(0, 5, 5, 10)  
+  )
+
+# --- COMBINE WEST AND EAST---
+p_gedr <- p_west / p_east + plot_layout(heights = c(.77, .33))
+print(p_gedr)
+```
+
+Finally, both the R&D and the GDP *(p_pyramid)* parts are merged with
+patchwork, including titles and captions as in the original.
+
+```{r edited-graph, fig.width=16, fig.height=11}
+edited_graph <- p_pyramid + p_gedr +
+  plot_layout(widths = c(3, 1)) +
+  plot_annotation(
+    title = "The U.S. and its democratic, market-based allies in Europe and Asia together generate far more economic\noutput and spend much more on research and development than China, Russia and countries aligned with\nthem.",
+    caption = "Note: GDP is converted from local currency to dollars at market exchange rates. Research and development spending is for\n2019, converted from local currency to dollars at purchasing power parity.\nSources: IMF (GDP); OECD (expenditure on R&D)",
+    theme = theme(
+      plot.title = element_text(size = 15, margin = margin(b = 10)),
+      plot.caption = element_text(size = 10, hjust = 0, color = "gray40", 
+                                  margin = margin(t = 10)))
+  )
+print(edited_graph)
+```
+
+## Final Graph
+
+To ease graph readability and after some comments on the prior graph,
+some minor changes have been provided. Firstly, final datasets for both
+GEDR and GDP is done, to be able to build a scale to align both graphs.
+
+```{r final_gdp_data and final_gedr_data}
+# ------------------------------------------------------------------------------
+#                             Dataset changes
+# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+#          GDP Dataset modification to plot West in the left. 
+# ------------------------------------------------------------------------------
+final_gdp_data <- gdp_data_ |>
+  group_by(year, region, group) |>
+  summarise(gdp = sum(gdp, na.rm = TRUE), .groups = "drop") |>
+  mutate(
+    # WEST negative → left
+    gdp_display = ifelse(region == "WEST", -gdp, gdp),
+    
+    # Reverse stacking order ONLY for WEST
+    group_stack = if_else(
+      region == "WEST",
+      fct_rev(group),
+      group
+    )
+  )
+
+# Factor levels
+final_gdp_data$group_stack <- factor(
+  final_gdp_data$group_stack,
+  levels = c("China", "Russia", "U.S.", "EU", "Japan", "Other")
+)
+# ------------------------------------------------------------------------------
+#                                GEDR dataset changes
+# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+#                Dataset changes needed to plot it horizontally
+# ------------------------------------------------------------------------------
+final_gedr_data <- gedr_data_ |>
+  group_by(region, group) |>
+  summarise(gerd = sum(OBS_VALUE), .groups = "drop") |>
+  mutate(
+    gerd_display = ifelse(region == "WEST", -gerd, gerd)
+  )
+
+final_gedr_data$group <- factor(
+  final_gedr_data$group,
+  levels = c("Other", "Japan", "EU", "U.S.", "Russia", "China")
+)
+```
+
+Once this is done, a scale factor is needed to try to align both graphs
+one above the another, and added to the GEDR final dataset, as is the
+one placed above.
+
+```{r Scale-factor}
+# ------------------------------------------------------------------------------
+#     Find the maximum absolute values for proper scaling
+# ------------------------------------------------------------------------------
+max_gdp <- max(abs(final_gdp_data$gdp_display), na.rm = TRUE)
+max_gerd <- max(abs(final_gedr_data$gerd_display), na.rm = TRUE)
+
+# Calculate scaling factor to align R&D with GDP axis
+scale_factor <- max_gdp / max_gerd
+
+# Apply to final_gedr_data:
+final_gedr_data <- final_gedr_data |> 
+  mutate(
+    gerd_scaled = gerd_display * scale_factor,
+    year_label = "2019"
+  )
+```
+
+That said,blocks WEST and EAST have been side-changed in the GDP graph,
+not only because of numbers provided but also by reader´s eye custom.
+Moreover, the R&D graph has been plotted horizontally at above the GDP
+graph, aligned at 0, to make easier the comparison between both graphs,
+blocks and countries. Said that, other minor changes such as recoloring
+when readability was not as favorable as required have been implemented.
+
+```{r GDP-final, fig.width=16,fig.height=11}
+# ------------------------------------------------------------------------------
+#                             Graph
+# ------------------------------------------------------------------------------
+p_pyramid <- ggplot(
+  final_gdp_data,
+  aes(
+    x = gdp_display,
+    y = as.factor(year),
+    fill = group_stack
+  )
+) +
+  geom_col(
+    color = "white",
+    linewidth = 0.3,
+    position = "stack"
+  ) +
+
+  # X-axis
+  scale_x_continuous(
+    breaks = seq(-70000, 70000, 10000),
+    labels = c("$70", "60", "50", "40", "30", "20", "10", "0",
+               "10", "20", "30", "40", "50", "60", "$70"),
+    expand = c(0, 0),
+    limits = c(-72000, 72000)
+  ) +
+
+  # Y-axis
+  scale_y_discrete(
+    breaks = as.character(seq(1990, 2023, 1)),
+    labels = c(
+      "1990", rep("", 4), "'95", rep("", 4), "'00", rep("", 4),
+      "'05", rep("", 4), "'10", rep("", 4),
+      "'15", rep("", 4), "'20", "", "", "'23"
+    ),
+    position = "right"
+  ) +
+
+  # Colors
+  scale_fill_manual(values = fill_cols) +
+
+  # Labels
+  labs(
+    title = "Gross Domestic Product by Year (1990–2023), in trillions",
+    x = NULL,
+    y = NULL
+  ) +
+
+  # Region labels
+  annotate("text", x = -35000, y = "1993", label = "WEST",
+           size = 10, fontface = "bold") +
+  annotate("text", x =  35000, y = "1993", label = "EAST",
+           size = 10, fontface = "bold") +
+
+  # Country labels (unchanged logic)
+  annotate("text", x =  25000, y = "2010", label = "China",
+           size = 8, color = "#e0c461", fontface = "bold") +
+  annotate("text", x =  25000, y = "2005", label = "Russia",
+           size = 8, color = "#d4a940", fontface = "bold") +
+  annotate("text", x = -45000, y = "2010", label = "US",
+           size = 8, color = "#94cced", fontface = "bold") +
+  annotate("text", x = -45000, y = "2005", label = "EU",
+           size = 8, color = "#6baed6", fontface = "bold") +
+  annotate("text", x = -45000, y = "2000", label = "Japan",
+           size = 8, color = "#4292c6", fontface = "bold") +
+  annotate("text", x = -45000, y = "1995", label = "Other",
+           size = 8, color = "#2171b5", fontface = "bold") +
+
+  # Theme
+  theme_minimal(base_size = 20) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_line(color = "gray85"),
+    legend.position = "none",
+    plot.title = element_text(size = 20, face = "bold"),
+    axis.text = element_text(size = 15),
+    axis.text.y = element_text(hjust = 1)
+  ) +
+
+  # Zero line
+  geom_vline(xintercept = 0, linewidth = 0.8)
+
+p_pyramid
+```
+
+Hence, the process is repeated with GERD graph, to plot it horizontally.
+
+```{r GEDR changes and final graph}
+# ------------------------------------------------------------------------------
+#                       West data and Graph
+# ------------------------------------------------------------------------------
+p_gerd <- ggplot(
+  final_gedr_data,
+  aes(x = gerd_scaled, y = year_label, fill = group)
+) +
+  geom_col(
+    color = "white",
+    linewidth = 0.3,
+    position = position_stack(),
+    width = 0.6
+  ) +
+  
+  # Scale to match GDP visually, but with meaningful R&D labels
+  scale_x_continuous(
+    # Create breaks at clean intervals of 5 extending to 60
+    breaks = c(-55, -50, -45, -40, -35, -30, -25, -20, -15, -10, -5, 0, 5) * scale_factor,
+    labels = c("$55", "50", "45", "30", "35", "30", "25", "20", "15", "10", "5", "0", "$5"),
+    limits = c(-72000, 72000)
+  ) +
+  
+  scale_fill_manual(values = fill_cols) +
+  
+  labs(
+    title = "Gross domestic expenditure on research and development, 2019 (billions)",
+    x = NULL,
+    y = NULL
+  ) +
+  
+  theme_minimal(base_size = 20) +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.y = element_blank(),
+    axis.text.x = element_text(size = 15),
+    legend.position = "none",
+    plot.title = element_text(size = 20, face = "bold"),
+    plot.margin = margin(10, 10, 5, 10)
+  ) +
+  
+  # Zero line to match GDP graph
+  geom_vline(xintercept = 0, linewidth = 0.8)
+
+```
+
+Lastly, both graphs are merged and aligned in this last step.
+
+```{r final-plot, fig.width=16, fig.height=11}
+final_plot <- (p_gerd / p_pyramid) + 
+  plot_layout(heights = c(1, 12)) + # Adjusted height ratio for better visibility
+  plot_annotation(
+    title = "The Western Advantage",
+    subtitle = "The U.S. and its democratic, market-based allies in Europe and Asia together generate far more economic\noutput and spend much more on research and development than China, Russia and countries aligned with\nthem.",
+    caption = "Note: GDP is converted from local currency to dollars at market exchange rates. Research and development spending is for\n2019, converted from local currency to dollars at purchasing power parity.\nSources: IMF (GDP); OECD (expenditure on R&D)",
+    theme = theme(
+      plot.title = element_text(size = 18, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      plot.caption = element_text(size = 10, hjust = 0, color = "gray40", 
+                                  margin = margin(t = 15))
+    )
+  )
+final_plot
+```
+
+*Limitations and further improvement:* Although both graphs are aligned
+at 0, because of the data nature numbers slightly differ (label \$50 in
+the upper graph, and number 50 in the lower graph are not exactly
+aligned). Moreover, colors are flipped in the upper graph compared with
+the lower one. Because of the width of the bars, it has been decided not
+to plot any names, in order not to add redundant info. However, no
+midpoint is reached and when looking at it, the viewer might be confused
+at identifying which country expends most on research and development.
+Moreover, GERD is showed for year 2019, while GDP is available for year
+2023, so there is a time-mismatch as there is no available data for GERD
+in 2023.

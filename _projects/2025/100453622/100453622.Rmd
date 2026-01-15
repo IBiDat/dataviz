@@ -1,0 +1,1089 @@
+---
+title: "Protests motives distribution across spanish regions"
+description: |
+  Map graph with pie charts from Spanish National Atlas (ANE) that shows
+  protests motives distribution across spanish provinces in 2022. The
+  represented data comes from the 2022 statistical yearbook on protests
+  published by the Spanish Ministry of Interior. 
+categories: "2025"
+author: Alicia Mira-Guirao
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: true
+---
+
+## Introduction
+
+The statistical yearbooks on protests from the Spanish Ministry of Interior are official publications that collect and systematize diverse information about the Ministry's different areas of competence, such as the exercise of fundamental rights like participating in demonstrations and public gatherings.
+
+This analysis examines the Spanish protest distribution across provinces trough motive categories. I chose to work with this dataset because I found the data particularly interesting for understanding territorial variations in protest activity.
+
+### Original Chart
+
+The original graphic is an pie-chart map in which a distinctive color represents different protest motives. In addition, the pie-chart size vary depending on the number of protests for each region. The graph contains some texts specifying characteristics from the collected data (for example, data for Catalonia and the Basque Country is not available because it is under competence of their regional governments).
+
+![Pie-chart map. Source: Atlas Nacional de España (ANE)](Gráfico original.jpg){.external width="100%"}
+
+## Replication
+
+### Libraries
+
+The first step is to load all the libraries that will be used.
+
+```{r Libraries}
+library(tidyverse)
+library(tidytext)
+library(readxl)
+library(sf)
+library(giscoR)
+library(mapSpain)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(grid)
+library(showtext)
+```
+
+### Fonts
+
+Next, necessary fonts for the replicated graph have to be loaded from Google fonts.
+
+```{r Fonts}
+showtext_auto() 
+
+font_add_google(name = "Lexend Deca", 
+                family = "Lexend")
+```
+
+### Data Import
+
+Obtaining the data was not a difficult step since it is publicly available on the Ministry of Interior website with its respective statistical yearbook inform. 
+
+The main issue with I faced with the data was dealing with the “Other Motives” category. A footnote explains that this category includes “migration, drug trafficking, terrorism, nationalism and 1st of may -related matters.” But, in reality, this category does not contain only those specific types of protests. It actually includes many other protest motives that are not published anywhere. I realized this while working with the database and seeing that, to create those pie-charts, those least frequent protest categories – migration, drug trafficking (...) – were incorporated into the “Others”category, but nowhere is it publicly explained what the “Other” category includes itself, apart from that motives added later. 
+
+This is a significant problem, as “Other Motives” represents the second most frequent category nationwide, and its composition remains unclear.
+
+```{r Data Import}
+protests <- read_excel("ReplicationDataBase.xlsx", 
+                   sheet = "TABLA 1-3-7",
+                   skip = 1) # skipping the title
+
+prov <- esp_get_prov()
+
+neighbors <- gisco_get_countries(
+  country = c("Portugal", "France", "Morocco", "Algeria", "Andorra"))
+
+# Adding those that are left because they are named differently in INE
+protests <- protests |>
+  mutate(
+    `Comunidad autónoma y provincia` = recode(
+      `Comunidad autónoma y provincia`,
+      "Murcia, Región de" = "Murcia",
+      "Navarra, Comunidad Foral de" = "Navarra",
+      "Madrid, Comunidad de"    = "Madrid",
+      "Asturias, Principado de"  = "Asturias"
+    )
+  )
+
+# Filtering only provinces
+data_prov <- protests %>%
+  filter(`Comunidad autónoma y provincia` %in% prov$ine.prov.name)
+
+# Jonning shapefile with filtered dataframe
+protest_prov <- prov %>%
+  left_join(data_prov, 
+            by = c("ine.prov.name" = "Comunidad autónoma y provincia"))
+
+# Creating data for canary islands map
+canarias_data <- protest_prov %>%
+  filter(ine.prov.name %in% c("Palmas, Las", "Santa Cruz de Tenerife"))
+
+# Creating data for peninsula and baleares map
+peninsula_data <- protest_prov %>%
+  filter(!ine.prov.name %in% c("Palmas, Las", "Santa Cruz de Tenerife"))
+```
+
+Once I imported the data, I uploaded through the function gisco_get_countries() spanish neighbour countries that, even they do not cointain any info, appear in the map to locate Spain on the globe. Then, I filtered only the provinces and left-joined it with their shapefiles so we can get the geometry of each region with its respective protest information inside the same dataset. After that, I separated data of the peninsula and Baleares islands from the Canary islands, since different maps for each will have to be created.
+
+Next I obtained the centroides of each province for pie-charts and then I moved them as in the original graph, summing or subtracting coordenates, since most of them are not exactly in the center of the area:
+
+```{r}
+peninsula_data <- peninsula_data |>
+  mutate(
+    centroide = st_centroid(geometry),
+    x = st_coordinates(centroide)[,1],
+    y = st_coordinates(centroide)[,2],
+
+    x = case_when(
+      ine.prov.name == "Segovia" ~ x + 0.2,
+      ine.prov.name == "Toledo" ~ x - 0.45,
+      ine.prov.name == "Pontevedra" ~ x - 0.2,
+      ine.prov.name == "Sevilla" ~ x - 0.05,
+      ine.prov.name == "Granada" ~ x - 0.4,
+      ine.prov.name == "Almería" ~ x + 0.1,
+      ine.prov.name == "Murcia" ~ x + 0.1,
+      ine.prov.name == "Alicante/Alacant" ~ x + 0.25,
+      ine.prov.name == "Castellón/Castelló" ~ x + 0.25,
+      ine.prov.name == "Valencia/València" ~ x + 0.4,
+      ine.prov.name == "Balears, Illes" ~ x - 0.3,
+      ine.prov.name == "Guadalajara" ~ x + 0.2,
+      ine.prov.name == "Ceuta" ~ x + 0.35,
+      ine.prov.name == "Melilla" ~ x + 0.25,
+      TRUE ~ x                                 
+    ),
+    y = case_when(
+      ine.prov.name == "Segovia" ~ y + 0.35,
+      ine.prov.name == "Coruña, A" ~ y + 0.1,
+      ine.prov.name == "Pontevedra" ~ y - 0.3,
+      ine.prov.name == "Navarra" ~ y + 0.25,
+      ine.prov.name == "Sevilla" ~ y + 0.25,
+      ine.prov.name == "Granada" ~ y - 0.15,
+      ine.prov.name == "Almería" ~ y - 0.1,
+      ine.prov.name == "Murcia" ~ y - 0.25,
+      ine.prov.name == "Asturias" ~ y + 0.2,
+      ine.prov.name == "Cantabria" ~ y + 0.2,
+      ine.prov.name == "Alicante/Alacant" ~ y - 0.2,
+      ine.prov.name == "Valencia/València" ~ y + 0.1,
+      ine.prov.name == "Ceuta" ~ y - 0.1,
+      ine.prov.name == "Melilla" ~ y + 0.1,
+      TRUE ~ y                                  ))
+
+canarias_data <- canarias_data |>
+  mutate(
+    centroide = st_centroid(geometry),
+    x = st_coordinates(centroide)[,1],
+    y = st_coordinates(centroide)[,2],
+
+    x = case_when(ine.prov.name == "Palmas, Las" ~ x - 0.2,
+      ine.prov.name == "Santa Cruz de Tenerife" ~ x - 0.3,
+            TRUE ~ x                                 ),
+     y = case_when(
+      TRUE ~ y                                  ))
+```
+
+I renamed the "Other Motives" category by adding an asterisk, as shown in the original graph. I created a vector containing all protest motives and regrouped them so that the least frequent categories are counted under "Other motives". I also created a vector following the same order as the original legend, and another one establishing their respective colors:
+
+```{r}
+# Renaming names legend from the dataset as in the original graph 
+names(peninsula_data)[39] <- "Otras motivaciones*"
+names(canarias_data)[39] <- "Otras motivaciones*"
+
+# Creation of a vector of protest motives
+motivo_cols <- c(
+  "Temas laborales",
+  "Temas de inmigración",
+  "Asuntos vecinales",
+  "Contra la droga y la delincuencia",
+  "Apoyo a grupos terroristas",
+  "Libertad de presos de grupos terroristas",
+  "Contra el terrorismo",
+  "Enseñanza",
+  "Temas nacionalistas", 
+  "Contra medidas políticas y legislativas",
+  "Sanidad",
+  "Agrarias",
+  "Ecologistas",
+  "Contra la violencia de género",
+  "1º de Mayo",
+  "Otras motivaciones*"
+)
+
+# Regrouping motives as in the graphic
+motivo_cols <- case_when(
+  motivo_cols %in% c(
+    "Temas de inmigración",
+    "Contra la droga y la delincuencia",
+    "Contra el terrorismo",
+    "Libertad de presos de grupos terroristas",
+    "Apoyo a grupos terroristas",
+    "Temas nacionalistas",
+    "1º de Mayo",
+    "Otras motivaciones*"
+  ) ~ "Otras motivaciones*",
+  TRUE ~ motivo_cols
+)
+
+# Ordering motives as in the legend from the graph 
+orden_deseado <- c(
+  "Temas laborales",
+  "Asuntos vecinales",
+  "Enseñanza",
+  "Contra medidas políticas\ny legislativas",
+  "Sanidad",
+  "Agrarias",
+  "Ecologistas",
+  "Contra la violencia\nde género",
+  "Otras motivaciones*"
+)
+
+# Colors for each motive
+colores_motivos <- c(
+  "Temas laborales" = "#de5424",              
+  "Asuntos vecinales" = "#e0945d",            
+  "Enseñanza" = "#63a4bc",                    
+  "Contra medidas políticas\ny legislativas" = "#848ab5",
+  "Sanidad" = "#95bb9e",                     
+  "Agrarias" = "#ebd98c",                     
+  "Ecologistas" = "#b7c27e",                
+  "Contra la violencia\nde género"= "#a47297",
+  "Otras motivaciones*" = "#8a898a"        
+)
+```
+
+After that, I created data frames containing specific data for the peninsula and Baleares pie-charts in order to calculate proportions for each province, due to pie-charts size tell us the number of protest happenned:
+
+```{r}
+# Turning characteres into numeric in order to calculate proportions
+peninsula_data <- peninsula_data %>%
+  mutate(across(
+    .cols = all_of(c(motivo_cols, "Total")),
+    ~ as.numeric(.)
+  ))
+
+canarias_data <- canarias_data %>%
+  mutate(across(
+    .cols = all_of(c(motivo_cols, "Total")),
+    ~ as.numeric(.)
+  ))
+
+# Creating data for pie charts
+pies_peninsula <- peninsula_data |>
+  select(ine.prov.name, x, y, all_of(motivo_cols), Total) |>
+  pivot_longer(
+    cols      = all_of(motivo_cols),
+    names_to  = "motivo",             
+    values_to = "valor") |> 
+  mutate(
+    # recoding names to be shown in two lines
+    motivo = recode(
+      motivo,
+      "Contra medidas políticas y legislativas" = "Contra medidas políticas\ny legislativas",
+      "Contra la violencia de género" = "Contra la violencia\nde género"
+    ),
+    # converting into factor establishing the order 
+    motivo = factor(motivo, levels = orden_deseado)
+  ) |>
+  arrange(ine.prov.name, motivo) |>
+  group_by(ine.prov.name) |>             
+  mutate(
+    prop = valor / sum(valor, na.rm = TRUE),    
+    angle_end = cumsum(prop) * 2 * pi,         
+    angle_start = lag(angle_end, default = 0) 
+  ) |>
+  ungroup()
+
+# Pie proportion for each province
+max_total <- max(pies_peninsula$Total, na.rm = TRUE)
+factor_escala <- 0.9  
+
+pies_peninsula <- pies_peninsula %>%
+  mutate(
+    radius = sqrt(Total / max_total) * factor_escala
+  )
+```
+
+Then I did same process for Canary island pie charts:
+
+```{r}
+# Same process for canary island pies
+canarias_pies <- canarias_data |>
+  select(ine.prov.name, x, y, all_of(motivo_cols), Total) |>
+  pivot_longer(
+    cols      = all_of(motivo_cols),
+    names_to  = "motivo",             
+    values_to = "valor") |>
+  mutate(
+
+    motivo = recode(
+      motivo,
+      "Contra medidas políticas y legislativas" = "Contra medidas políticas\ny legislativas",
+      "Contra la violencia de género" = "Contra la violencia\nde género"
+    ),
+
+    motivo = factor(motivo, levels = orden_deseado)
+  ) |>
+  arrange(ine.prov.name, motivo) |>
+  group_by(ine.prov.name) |>             
+  mutate(
+    prop = valor / sum(valor, na.rm = TRUE),    
+    angle_end = cumsum(prop) * 2 * pi,         
+    angle_start = lag(angle_end, default = 0) 
+  ) |>
+  ungroup()
+
+max_total <- max(canarias_pies$Total, na.rm = TRUE)
+factor_escala <- 0.4
+
+canarias_pies <- canarias_pies %>%
+  mutate(
+    radius = sqrt(Total / max_total) * factor_escala
+  )
+```
+
+
+## Plotting Canary island Map
+
+### Map base creation
+
+```{r fig.width=12, fig.height=7, fig.showtext=TRUE}
+mapa_canarias <- ggplot() +
+  
+  geom_sf(
+    data = canarias_data,
+    fill = "#FEFAE0",   
+    color = "#4D5662",      
+    linewidth = 0.3
+  ) 
+```
+
+### Protest data pie-charts
+
+I added the proportional pie charts for protest data using canarias_pies data (specific to Canary Islands)
+
+```{r Canary Island Map, fig.width=12, fig.height=7, fig.showtext=TRUE}
+mapa_canarias <- mapa_canarias +
+  
+  ggforce::geom_arc_bar(
+    data = canarias_pies,
+    aes(
+      x0 = x,
+      y0 = y,
+      r0 = 0,
+      r = radius,
+      start = angle_start,
+      end = angle_end,
+      fill = motivo
+    ),
+    color = "black",
+    linewidth = 0.2,
+    alpha = 0.8
+  )
+```
+
+### Color Scale
+
+I added the previous made color scale for each protest motive.
+
+```{r}
+mapa_canarias <- mapa_canarias + scale_fill_manual(values = colores_motivos) 
+```
+
+### Coordinate system
+
+I used expand = FALSE for no extra space around the islands, focusing only on that specific area.
+
+```{r}
+ mapa_canarias <- mapa_canarias +
+  coord_sf(
+    expand = FALSE,   
+    clip = "off") 
+```
+
+### Theme Customization
+
+Custom theme settings: background colors (Light blue fill), white 5pt border (creates "frame" effect), custom margins as in the original graph.
+
+```{r}
+ mapa_canarias <- mapa_canarias +
+  
+  theme_void() +
+  theme(
+    legend.position = "none",
+    plot.background = element_rect(
+      fill = "#e6ffff",
+      color = "#ffffff",        
+      linewidth = 5 
+    ),
+    panel.background = element_blank(),
+     plot.margin = margin(3,3,8,33, "pt")
+  )
+```
+
+### Converting to graphical object
+
+I converted the canary island into a graphical object (grob) to be inserted in the final map.
+
+```{r}
+grob_canarias <- ggplotGrob(mapa_canarias)
+
+mapa_canarias
+```
+
+### Pie-charts size legend
+
+This chunk creates a size legend for proportional pie charts on a map. It defines seven size classes representing the total number of protests, ranging from 58 to 4,251. The legend uses circles whose areas are proportional to the values they represent, calculated using the formula sqrt(value / π) * scale_factor.
+
+The circles are vertically stacked at a fixed longitude (x = -11) with their Y-coordinates calculated to prevent overlapping. Display labels use thousand separators for readability (e.g., "1.000" instead of "949"). The final tibble contains all necessary positioning data, including circle centers, radios, and starting coordinates for plotting.
+
+```{r Pie-charts size Legend, fig.width=12, fig.height=7, fig.showtext=TRUE}
+
+valores_reales <- c(58, 252, 949, 1579, 2464, 3498, 4241)
+etiquetas_display <- c("58", "250", "1.000", "1.500", "2.500", "3.500", "4.251")
+
+max_total_peninsula <- 4251
+
+factor_escala_leyenda <- 0.020
+
+radios <- sqrt(valores_reales / pi) * factor_escala_leyenda
+
+y_base_comun <- 41.9 
+
+y_centers <- y_base_comun + radios 
+
+y_tops <- y_centers + radios
+
+# Tibble with all the data
+legend_data <- tibble(
+  manifestaciones = valores_reales,
+  etiqueta = etiquetas_display,
+  radius = radios,
+  x = -11,              # same X for every circle
+  y = y_centers           # Y go increasingly
+) |>
+  mutate(
+    x_start = x - radius,  # Left edge (instead of x + radius)
+    y_start = y
+  )
+
+```
+
+
+## Plotting final map
+
+This is final replication of the peninsula and Baleares islands map with the inserted Canary islands GROB I made before.
+
+### Map base layers
+
+First, I created the base map using ggplot2. The first layer are neighboring countries (light gray fill, dark gray borders). Second layer spanish mainland provinces (cream color fill). I used geom_sf() for spatial data visualization.
+
+```{r}
+final_map <- ggplot() +
+  
+      # Neighbor Countries
+        geom_sf(
+        data = neighbors,
+        fill = "#D6D6D6", 
+        color = "#4D5662",
+        linewidth = 0.3
+      ) +
+  
+      # Spanish provinces 
+      geom_sf(
+        data = peninsula_data,
+        fill = "#FEFAE0",   
+        color = "#4D5662",      
+        linewidth = 0.3
+      )
+```
+
+### Pie-charts for protest data
+
+Each pie chart location is determined by x and y coordinates. Each radius size represents total number of protests. Sectors/segments show distribution of protest motives.
+
+```{r}
+final_map <- final_map +
+      
+# Pie-charts
+      ggforce::geom_arc_bar(
+        data = pies_peninsula,
+        aes(
+          x0 = x,              
+          y0 = y,              
+          r0 = 0,             
+          r = radius,          
+          start = angle_start, 
+          end = angle_end,    
+          fill = motivo,
+          color = "black",
+        ),
+        color = "black",       
+        linewidth = 0.2,
+        alpha = 0.8
+      )
+```
+
+### Color scale for protest motives
+
+I applied custom colors to different protest motives through a predefined vector of colors.
+
+```{r}
+final_map <- final_map + scale_fill_manual(
+        values = colores_motivos)
+```
+
+### Legend customization
+
+```{r}
+# Protest motives guides legend  
+final_map <- final_map + guides(
+      fill = guide_legend(
+        override.aes = list(
+          shape = 24,     
+          size = 1.3, #2      
+          color = "black",  
+          stroke = 0.4       
+        ),
+        byrow = TRUE,        
+        spacing.y = unit(0.8, "cm")
+      ))
+```
+
+### Pie-chart sizes legend
+
+I created a custom size legend showing what different pie chart radii represent, using half-circles with dotted lines to labels. It was not easy to find start = and end =  values in order to create left semi-circles that start from the same y and finish in different increasingly y values. Finally it worked with start = -pi and end = 0 values. 
+
+Also I had to include inherit.aes = FALSE since I set coordinates before for creating the general map, so there were no crossing between both different aesthetics.  Geom_text() add value labels for each circle size, geom_segment() joins those labels with the semi-circles. Annotation adds the main title for the legend.
+
+```{r}
+final_map <- final_map + 
+  ggforce::geom_arc_bar(
+    data = legend_data,
+    aes(
+      x0 = x,
+      y0 = y,
+      r0 = 0,
+      r = radius,
+      start = -pi,      
+      end = 0,      
+      inherit.aes = FALSE  # No crossing with the aesthetics of coord_sf
+    ),
+    color = "black",
+    fill = NA,
+    linewidth = 0.4
+  ) +
+  
+  geom_segment(
+    data = legend_data,
+    aes(
+      x = x,                   
+      xend = x + max(radius) - 0.35,   
+      y = y_tops,                      
+      yend = y_tops           
+    ),
+    linetype = "dotted",
+    linewidth = 0.2,
+    color = "black"
+  ) +
+  
+  geom_text(
+    data = legend_data,
+    aes(
+      x = x + max(radius) - 0.15,     
+      y = y_tops,                      # Top part
+      label = etiqueta
+    ),
+    hjust = 1,                        # Right side
+    size = 2.5, # 4
+    family = "Lexend"
+  ) +
+  
+  annotate(
+    "text",
+    x = -11,  
+    y = 43.65,
+    label = "MANIFESTACIONES\n2022",
+    size = 3.5, # 6
+    hjust = 0.5,
+    vjust = 0,
+    lineheight = 0.8,
+    fontface = "plain",
+  )
+```
+
+### Map coordinates
+
+I set the map extent to focus on the Iberian Peninsula
+
+```{r}
+final_map <- final_map + coord_sf(xlim = c(-11.7, 3.8), ylim = c(35.2, 44))
+```
+
+### Text Annotations
+
+I used geom_text() to set all the written info and placed them through x = and y = values as in the original graph.
+
+```{r}
+final_map <- final_map + geom_text(
+        data = data.frame(
+          x = 4,
+          y = 44,
+          label = "MANIFESTACIONES SEGÚN MOTIVACIÓN"
+        ),
+        aes(x = x, y = y, label = label),
+        size = 5, # 8
+        fontface = "bold",
+        hjust = 1,           # Right side
+        vjust = 1,           # Top side
+        color = "black"
+      ) +
+      
+    geom_text(
+      data = data.frame(
+        x = 4.15,
+        y = 35.38,
+        label = "Fuente: Anuario estadístico del Ministerio del Interior 2022"
+      ),
+      aes(x = x, y = y, label = label),
+      size = 2.5, # 4                  
+      family = "Lexend",
+      hjust = 1,
+      vjust = 0,
+      color = "black"
+    ) +
+    
+    geom_text(
+      data = data.frame(
+        x = 4.15,
+        y = 34.99,              
+        label = "Atlas Nacional de España (ANE) CC BY 4.0 ign.es\n\nParticipantes:www.ign.es/resources/ane/participantes.pdf"
+      ),
+      aes(x = x, y = y, label = label),
+      size = 2.5, # 4
+      family = "Lexend",
+      hjust = 1,
+      vjust = 0,
+      color = "black",
+      lineheight = 0.4
+    ) +
+      geom_text(
+      data = data.frame(
+        x = -12.2,
+        y = 37,              
+        label = "*Incluye inmigración, droga y\n\ndelincuencia, apoyo a grupos\n\nterroristas, contra el terrorismo,\n\ntemas nacionalistas o 1ª de mayo\n\n\nCataluña y País Vasco sin datos"
+      ),
+      aes(x = x, y = y, label = label),
+      size = 2.5, # 4
+      family = "Lexend",
+      hjust = 0,
+      vjust = 0,
+      color = "black",
+      lineheight = 0.5, 
+    )
+```
+
+### Visual Theming
+
+The styling begins with theme_void(), which removes all default ggplot2 elements to provide a clean canvas, then adds a beige background to both the panel (where data is drawn) and plot areas (the entire graphic object).
+
+Custom theme settings are made: background colors (white plot, light blue panel), legend positioning (left side, vertically centered) and other settings (no title, transparent background), font family ("Lexend") and sizes. This code chunk applies comprehensive visual styling to the ggplot object g through the theme system. 
+
+```{r}
+    final_map <- final_map + theme_void() +
+    theme(
+      plot.background = element_rect(fill = "#ffffff", 
+                                     color = "#ffffff",
+                                     linewidth = 5),
+      panel.background = element_rect(fill = "#e6ffff" ),
+      plot.margin = margin(5),
+      
+      legend.spacing.y = unit(0.8, "cm"),
+      
+      legend.position = c(0.012, 0.52),
+      legend.justification = c(0, 0.5),
+      
+      legend.text = element_text(
+        size = 7.5, # 11.5 # hay que ajustar los valores a la escala de showtext() 
+        family = "Lexend",
+        lineheight = 0.9
+        ),
+      
+      legend.title = element_blank(),
+      legend.background = element_blank(),
+      
+      legend.key = element_rect(
+    fill = "#e6ffff",
+    color = NA )
+    ) 
+```
+
+### Canary Islands inset map
+
+I added the created canary islands map as a GROB (graphical object) in the bottom left corner of the general map. The chunk header specifies output parameters with fig.width=12, fig.height=7 and fig.showtext=TRUE to enable custom fonts.
+
+```{r final_map, fig.width=12, fig.height=7, fig.showtext=TRUE, preview=TRUE}
+# Adding Grob (Canary island map)
+final_map <- final_map + 
+annotation_custom(
+    grob = grob_canarias,
+    xmin = -12.87,   
+    xmax = -6.63,    
+    ymin = 34.47,    
+    ymax = 36.8)
+
+final_map
+```
+
+
+## Alternative graph version
+
+Through this alternative data visualization I focused on how the distribution of protest motives varies across Spanish regions by comparing each region's frequency percentage for a given motive to the national average. 
+
+I used data of the statistical yearbook on protest from the Spanish Ministry of Interior from 2024 instead of 2022 because of having more current relevance. 
+
+I also aggregated the data by autonomous community rather than province, re-grouped motives and focused only on the ten most frequent and relevant ones.
+
+### Fonts import
+
+```{r Fonts Import}
+showtext_auto()
+
+font_add_google(name = "Gravitas One", 
+                family = "Gravitas")
+
+font_add_google(name = "Lora", 
+                family = "Lora")
+```
+
+### Data Import
+
+I added the data, created a tibble and filtered only the autonomous communities. I did not include the autonomous cities Ceuta and Melilla to avoid small-sample distortions. As very small regions, these autonomous cities register far fewer protests in absolute terms than other territories (approximately 70 annually versus hundreds in larger communities). This creates a methodological problem: when small numbers dominate the denominator, any category can appear disproportionately important. For example, if 50 of 70 total protests address labor-economic issues, this motive would rank at the top—not because it reflects genuine regional prioritization, but because the small demographic base amplifies what would otherwise be modest variation. Including these cities would thus introduce a scale-driven bias that obscures meaningful geographic patterns.
+
+```{r Data}
+improvdata <- read_excel("ImprovementDataBase.xlsx", 
+                   sheet = "TABLA 1-3-7",
+                   skip = 1) # skipping the title
+
+
+improvdata <- improvdata |> rename(`Autonomous Communities` = `Comunidad autónoma y provincia`)
+
+improvdata <- improvdata |> filter(`Autonomous Communities` %in% c(
+    "Andalucía",
+    "Aragón",
+    "Asturias, Principado de",
+    "Balears, Illes",
+    "Canarias",
+    "Cantabria",
+    "Castilla y León",
+    "Castilla-La Mancha",
+    "Comunitat Valenciana",
+    "Extremadura",
+    "Galicia",
+    "Madrid, Comunidad de",
+    "Murcia, Región de",
+    "Navarra, Comunidad Foral de",
+    "Rioja, La"
+  ))
+```
+
+### Re-grouping protest motives
+
+I regrouped and re-write all the categories. I grouped together very similar motifs that could be more functional under a single motif that brings them together. For example, I joined “Climate change” and ‘Environmentalism’ under the single motive “Environmental matters”), or "Human rights", "Against hate, racism and xenophobia" and "Insubordination"  under the same category "Human Rights". Also there are categories that are not meaningful on their own; for example, the category “Insubordination” has only one registered protest, so that is why I also added it to “Human Rights.”
+
+```{r Re-grouping protest categories}
+improvdata <- improvdata |> rename(`Labour-Economic` = `Motivos laborales / económicos`,
+                                   `Political-Legislative` = `Contra medidas políticas / legislativas`,
+                                   `Healthcare` = `Motivos sanitarios`,
+                                   `Neighborhood Affairs` = `Movilizaciones vecinales`,
+                                   `Against Crime` = `Contra la droga / delincuencia`,
+                                   `Education` = `Movilizaciones enseñanza / educación`,
+                                   `Nationalism` = `Temas nacionalistas`,
+                                   `International Phenomena` = `Asuntos internacionales`,
+                                   `Commemorative Days` = `Conmemoración/ homenajes`,
+                                   `Religion` = `Temas religiosos`,
+                                   `Feminism` = `Contra violencia de género`,
+                                   `Other motives*` = `Otras`)
+
+improvdata <- improvdata |> 
+  mutate(across(
+    -`Autonomous Communities`,
+    as.numeric
+  ))
+
+improvdata <- improvdata |> 
+  mutate(`Enviromental Matters` = `Ecologismo` + `Cambio climático`,
+         `Human Rights` = `Derechos humanos` + `Contra el odio, racismo, xenofobia, etc.` + `Insumisión`,
+         `Terrorism`= Terrorismo + `Contra la radicalización violenta` ) |> 
+  select(-Ecologismo, -`Cambio climático`, -`Derechos humanos`, -`Contra el odio, racismo, xenofobia, etc.`, -`Insumisión`, -Terrorismo, -`Contra la radicalización violenta`) 
+
+improvdata <- improvdata |> relocate(Total, .after = everything()) |> relocate(`Other motives*`, .before = Total)
+```
+
+### Reshaping data and calculating percentages
+
+Transforms the data from wide to long format, where each row represents one CCAA-motive combination. Calculates the percentage of protests for each motive relative to the total protests in each autonomous community:
+
+```{r Relative Weights for each CCAA and Protest Motive}
+datos_graphs <- improvdata |>
+
+  pivot_longer(
+    cols = -c(`Autonomous Communities`, Total),  
+    names_to = "Motivo",
+    values_to = "Frecuencia"
+  ) |>
+
+  mutate(
+    Porcentaje = (Frecuencia / Total) * 100
+  ) |>
+  select(`Autonomous Communities`, Motivo, Porcentaje)
+```
+
+### Filtering and sorting top motives
+
+Filters the dataset to include only the 10 most relevant protest motives, excluding less frequent categories.
+
+```{r}
+datos_graphs <- datos_graphs |> filter(Motivo %in% c(
+  "Labour-Economic",
+  "Other motives*",
+  "Political-Legislative",
+  "Neighborhood Affairs",
+  "International Phenomena",
+  "Healthcare",
+  "Feminism",
+  "Human Rights",
+  "Education",
+  "Enviromental Matters"
+)) 
+
+# Ordering for most to least frequent
+datos_graphs <- datos_graphs |> select(Motivo, `Autonomous Communities`, Porcentaje) |> arrange(Motivo, `Autonomous Communities`) 
+```
+
+### Calculating national averages and Divergences
+
+I calculated the national average percentage for each protest motive by aggregating data across all autonomous communities. This serves as the baseline for comparing regional variations. Then I joined the regional percentages with national averages, adding the baseline comparison value to each row.
+
+```{r}
+national_average <- improvdata |>
+
+  pivot_longer(
+    cols = -c(`Autonomous Communities`, Total),
+    names_to = "Motivo",
+    values_to = "Frecuencia"
+  ) |>
+
+  group_by(Motivo) |>
+
+  summarise(
+    Frecuencia_Total = sum(Frecuencia),
+    Total_General = sum(Total)
+  ) |>
+
+  mutate(
+    Media_Nacional_pct = (Frecuencia_Total / Total_General) * 100
+  ) |>
+
+  select(Motivo, Media_Nacional_pct)
+
+# Joinning everything in the same dataframe
+datos_graphs <- datos_graphs |> left_join(national_average, by = "Motivo")
+
+# Creating divergence column and ordering its values
+datos_graphs <- datos_graphs |>
+  mutate(Divergencia = Porcentaje - Media_Nacional_pct,
+         CCAA_ordenada = reorder_within(`Autonomous Communities`, Divergencia, Motivo))
+```
+
+### Standardizing CCAA names
+
+```{r}
+datos_graphs <- datos_graphs |>
+  mutate(
+    `Autonomous Communities` = recode(
+      `Autonomous Communities`,
+      "Murcia, Región de" = "Murcia",
+      "Navarra, Comunidad Foral de" = "Navarra",
+      "Madrid, Comunidad de"    = "Madrid",
+      "Asturias, Principado de"  = "Asturias",
+      "Balears, Illes" = "Baleares",
+      "Rioja, La" = "La Rioja",
+      "Comunitat Valenciana" = "C. Valenciana",
+      "Castilla y León" = "C. y León",
+      "Castilla-La Mancha" = "C - La Mancha"
+    )
+  )
+```
+
+### Definning color palette
+
+```{r}
+colores_CCAA <- c(
+  "Andalucía" = "#EFCE7B",
+  "Aragón" = "#2B2B23",
+  "Asturias" = "#238BB0",
+  "Balears" = "#D8560E",
+  "Canarias" = "#B28622",
+  "Cantabria" = "#92A2A6",
+  "C. y León" = "#849E15",
+  "C - La Mancha" = "#6D1F42",
+  "C. Valenciana" = "#876929",
+  "Extremadura" = "#25533F",
+    "Galicia" = "#F4BEAE",
+    "Madrid" = "#105666",
+    "Navarra" = "#976D90",
+    "La Rioja" = "#D9CBC2",
+    "Murcia" = "#112250")
+```
+
+### Creating facet labels with average and ordering them by frequency
+
+```{r}
+# Creating text labels with national average value for each motive
+datos_graphs <- datos_graphs |>
+  mutate(
+    Motivo_label = paste0(Motivo, "\n(avg: ", 
+      round(Media_Nacional_pct, 1), 
+      "%)"))
+
+# Ordering graphs from highest to lowest national average
+datos_graphs <- datos_graphs |>
+  mutate(
+    Motivo_label = factor(
+      Motivo_label,
+      levels = unique(Motivo_label[order(-Media_Nacional_pct)])
+    )
+  )
+```
+
+## Plotting the graph
+
+This code creates a faceted bar chart displaying how each autonomous community's protest distribution deviates from the national average across different motives.
+
+### Base layer and geometries
+
+I created horizontal bars showing divergence values, colored by autonomous community. A vertical line at x=0 represents the national average baseline for each motive.
+
+```{r Plotting the final version, fig.width=16, fig.height=10, dpi=150, fig.showtext=TRUE}
+g <- ggplot(datos_graphs, aes(x = Divergencia, y = CCAA_ordenada))
+
+# Creating color-filled bars with CCAA categories
+g <- g + geom_col(aes(fill = `Autonomous Communities`), width = 0.85, alpha = 0.85)
+
+# Creating middle-line representing average values
+g <- g + geom_vline(xintercept = 0, linewidth = 0.3, color = "#6B6B6B")
+```
+
+### Faceting
+
+Splitted the visualization into separate panels (one per motive), arranged in 2 rows and 5 columns. Each panel has independent Y-axis ordering based on divergence values.
+
+```{r}
+g <- g + facet_wrap(~ Motivo_label, ncol = 5, scales = "free_y") 
+```
+
+### Color scales and axes
+
+I applied the custom CCAA color palette and I also created a second color scale for text labels, distinguishing values above (dark green) and below (dark red) the national average.
+
+```{r}
+g <- g + scale_fill_manual(values = colores_CCAA) + 
+  scale_x_continuous(labels = function(x) sprintf("%+.1f", x),
+                     expand = expansion(mult = -0.1)) +
+  scale_y_reordered()
+
+g <- g + scale_color_manual(
+  values = c("Above" = "#0B3D0B", "Below" = "#5C0000"),
+  labels = c("Above" = "Above avg", "Below" = "Below avg"),
+  name = "AVG Divergence"  # Nombre de la segunda leyenda
+)
+```
+
+### Labels and annotations
+
+```{r}
+# Labs 
+g <- g + labs(
+  title = "Divergences in Protest Activity and Motives Across Spanish Autonomous Communities, 2024", 
+  x = NULL, 
+  y = NULL) 
+
+# Text
+g <- g + geom_text(
+  aes(
+    label = paste0(
+    round(Porcentaje, 1), "%"),
+    x = 0,
+    hjust = if_else(Divergencia >= 0, 1.3, -0.3),  # Ajustar según lado
+    color = if_else(Divergencia >= 0, "Above", "Below")
+  ),
+  size = 2.5,
+  family = "Lora",
+  key_glyph = "point"
+) 
+```
+
+### Legend customization
+
+```{r}
+# Guides
+g <- g + guides(
+  fill = guide_legend(
+    nrow = 1, 
+    label.position = "bottom"),
+  color = guide_legend(
+    nrow = 1,
+    label.position = "bottom",
+    order = 2,  # Segunda leyenda
+    override.aes = list(
+      shape = c(24,25),          
+      size = 3.5,
+      fill = c("#0B3D0B", "#5C0000"))         
+  ))
+```
+
+### Theme and styling
+
+This code chunk applies comprehensive visual styling to the ggplot object g through the theme system. The chunk header specifies output parameters with fig.width=16, fig.height=10 for physical dimensions, dpi=150 for resolution, and fig.showtext=TRUE to enable custom fonts.
+
+The styling begins with theme_void(), which removes all default ggplot2 elements to provide a clean canvas, then adds a warm beige background (#EFE7DA) to both the panel (where data is drawn) and plot areas (the entire graphic object). Layout parameters include a 1.5 aspect ratio to maintain consistent panel proportions across facets, 0.25cm spacing between faceted panels, and margin padding (10 points on most sides, 15 on bottom) to create breathing room around content.
+
+The text hierarchy uses three distinct font families. The legend is configured horizontally at the bottom with centered alignment and no title. 
+
+```{r fig.width=16, fig.height=10, dpi=150, fig.showtext=TRUE}
+# Themes 
+g <- g + theme_void() +
+  theme(
+    panel.spacing = unit(0.25, "cm"),
+    plot.background = element_rect(fill = "#EFE7DA"),
+    panel.background = element_rect(fill = "#EFE7DA" ),
+    plot.margin = margin(10, 10, 15, 10),
+    aspect.ratio = 1.5,
+    plot.title = element_text(
+      size = 13.5, 
+      family = "Gravitas",
+      hjust = 0.5,        
+      margin = margin(b = 15)  
+    ),
+    strip.text = element_text(
+      size = 8.5,  
+      family = "Lora",
+      face = "bold",
+      hjust = 0.5,
+      margin = margin(b = 10),
+      color = "#3D211A",
+      ),
+    plot.caption = element_text(
+      hjust = -0.13,              
+      size = 10,              
+      family = "Mulish",
+      margin = margin(t = 18) 
+    ),
+    legend.position = "bottom",
+    legend.direction = "horizontal",
+    legend.box = "horizontal",
+    legend.justification = "center",  
+    legend.box.just = "center",
+    legend.title = element_blank(),
+    legend.spacing.x = unit(1, "cm"),
+    legend.key.spacing.x = unit(0.15, "cm"),
+    legend.margin = margin(t = 15),
+    legend.text = element_text(
+    size = 8,
+    face = "bold",
+    family = "Lora",
+    color = "black"
+  )
+  )
+
+g
+```
+
+## Limitations and conclusions
+
+The initial graph presented several visualization challenges: overlapping segmented pie charts made individual regions difficult to differentiate, while simultaneously attempting to convey multiple data dimensions (geographic location, protest volume, and categorical distribution) resulted in visual overload. The redesign aimed to address these issues by creating a more intuitive visualization featuring professional typography, harmonious colors, and clear visual hierarchy.
+
+Nevertheless, the "Other Motives" problem is a clear statistical limitation due to we can't fully understand the whole protest motive distribution along the country because we can't tell what type of protests do the second largest category nationwide includes. This limits motive distribution interpretation. Also not being able to access to Catalonia and Basque country data restricts the understanding of how protest motives vary across regions in the whole country.
+
+Overall, this data restructuring and categorical redefinition of protest activity aims to clarify patterns in Spanish civil mobilization, helping identify what concerns citizens most and how the country's cultural and geographic heterogeneity shapes regional variations in political behavior through a visually clearer and cleaner graph.
+
