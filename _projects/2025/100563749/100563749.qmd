@@ -205,7 +205,8 @@ Custom fonts were added to match those of the original graph. I believe FiveThir
 ```{r fonts}
 # Adding fonts
 font_add("LegendFont", "WorkSans-VariableFont_wght.ttf") 
-font_add("TitleFont", "Montserrat-VariableFont_wght.ttf")
+font_add("TitleFont", "Montserrat-Bold.ttf")
+font_add("SubtitleFont", "Montserrat-Regular.ttf")
 showtext_opts(dpi = 300)
 showtext_auto(enable = TRUE)
 ```
@@ -219,23 +220,32 @@ In addition, three explanatory legends were created that show separately the col
 Combined these legends help the reader to interpret the meaning of the map.
 
 ```{r legends}
+# Legend helper function
+create_bi_legend <- function(palette, xlab, ylab, arrows = FALSE, size = 7) {
+  bi_legend(
+    pal = palette,
+    dim = 3,
+    xlab = xlab,
+    ylab = ylab,
+    size = size,
+    base_family = "LegendFont",
+    arrows = arrows
+  )
+}
+
 # Main Legend
-legend <- bi_legend(pal = custom_palette, # Using custom colour palette
-                    dim = 3,
-                    xlab = "Congestion",  
-                    ylab = "Distance", 
-                    size = 9,
-                    base_family = "LegendFont", 
-                    arrows = TRUE) 
+legend <- create_bi_legend(custom_palette,
+                           "Congestion",
+                           "Distance",
+                           arrows = TRUE,
+                           size = 9)
 
 # Distance Legend
-distance_legend <- bi_legend(pal = distance_palette,
-                    dim = 3,
-                    xlab = " ", 
-                    ylab = "LOW -----> HIGH", 
-                    size = 7,
-                    base_family = "LegendFont", 
-                    arrows = FALSE) 
+distance_legend <- create_bi_legend(distance_palette,
+                                    " ",
+                                    "LOW -----> HIGH",
+                                    size = 7,
+                                    arrows = FALSE)
 
 # Congestion Legend
 congestion_legend <- bi_legend(pal = congestion_palette,
@@ -267,8 +277,8 @@ legend_with_title <- function(legend_plot, title_text) {
     ggdraw() +
       draw_label(
         title_text,               # Adding title 
-        fontfamily = "TitleFont",
-        size = 12,
+        fontfamily = "SubtitleFont",
+        size = 10,
         hjust = 0.5),             # Centring
     legend_plot,                  # Adding legend 
     ncol = 1,                     # One column (vertical alignment)
@@ -332,11 +342,26 @@ how_to_read_full <- plot_grid(
 )
 ```
 
-### Map
+### Replication Map
 
 The main map was created using ggplot2 where geom_sf() draws the counties and colours them according to their bivariate class, adding state boundaries over the top. The map projection used was Alber's Equal Area, which, with some trial and error, was found to curve the map identically to the original graphic. A minimal theme was used and margin were adjusted to assist with later formatting.
 
 ```{r feb2023-map}
+# Theme
+base_map_theme <- theme_minimal() + 
+  theme(
+    plot.margin = margin( # Removing the extra margin space
+      t = 0,    # Top
+      r = 0,    # Right
+      b = 0,    # Bottom
+      l = 0),   # Left
+    plot.title = element_text(
+      family = "TitleFont", 
+      size = 14, 
+      hjust = 0.5)
+  )
+
+# Map
 map_feb2023 <- ggplot() + 
   # Counties, fill and borders 
   geom_sf(data = map_data,
@@ -357,14 +382,7 @@ map_feb2023 <- ggplot() +
   coord_sf(crs = st_crs(5070), 
            datum = NA) + # Removing latitude/ longitude lines
   # Theme 
-  theme_minimal() + 
-  theme(
-    plot.margin = margin( # Removing the extra margin space
-      t = 0, # Top
-      r = 0, # Right
-      b = 0, # Bottom
-      l = 0) # Left
-  )
+  base_map_theme
 ```
 
 ### Final Graph
@@ -442,7 +460,7 @@ improved_map_data |>
   nrow()
 ```
 
-### Map 
+### Updated Map 
 
 ```{r aug2025-map}
 # Map dataset
@@ -459,13 +477,13 @@ map_data_aug2025 <- improved_map_data |>
 map_aug2025 <- ggplot() + 
   # Counties, fill and borders 
   geom_sf(data = map_data_aug2025,
-          mapping = aes(fill = bi_class), # Bi-class crafted earlier of distance and asp 
+          mapping = aes(fill = bi_class), # Bi-class crafted earlier
           colour = "white",               # County lines 
           size = 0.0005,                  # Width of county lines 
           show.legend = FALSE) +
   # State lines
   geom_sf(data = states,
-          fill = NA,        # States are transparent - filled by county above 
+          fill = NA,        # States are transparent
           colour = "white", # State lines
           size = 0.2,
           show.legend = FALSE) + 
@@ -481,28 +499,14 @@ map_aug2025 <- ggplot() +
 
 ### Then and Now Comparison
 
-```{r feb23aug25-comparison}
+```{r feb23aug25-compariso, fig.width = 14, fig.height = 10}
 map_feb2023 <- map_feb2023 +
   labs(title = "February 2023") +
-  theme(
-    plot.title = element_text(
-      family = "TitleFont",
-      face = "bold",
-      size = 14,
-      hjust = 0.5
-    )
-  )
+  base_maps_theme
 
 map_aug2025 <- map_aug2025 +
   labs(title = "August 2025") +
-  theme(
-    plot.title = element_text(
-      family = "TitleFont",
-      face = "bold",
-      size = 14,
-      hjust = 0.5
-    )
-  )
+  base_map_theme
 
 # Combining the February 2023 and August 2025 maps 
 maps_comparison <- plot_grid(
@@ -614,11 +618,14 @@ improved_map_data <- counties |>
 padd_mapping <- tibble(
   State_Name = c(
     # PADD 1A (New England) - 6 states
-    "Connecticut", "Maine", "Massachusetts", "New Hampshire", "Rhode Island", "Vermont",
+    "Connecticut", "Maine", "Massachusetts", "New Hampshire", "Rhode Island", 
+    "Vermont",
     # PADD 1B (Central Atlantic) - 6 states
-    "Delaware", "District of Columbia", "Maryland", "New Jersey", "New York", "Pennsylvania",
+    "Delaware", "District of Columbia", "Maryland", "New Jersey", "New York", 
+    "Pennsylvania",
     # PADD 1C (Lower Atlantic) - 6 states
-    "Florida", "Georgia", "North Carolina", "South Carolina", "Virginia", "West Virginia",
+    "Florida", "Georgia", "North Carolina", "South Carolina", "Virginia", 
+    "West Virginia",
     # PADD 2 (Midwest) - 15 states
     "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Michigan", "Minnesota", 
     "Missouri", "Nebraska", "North Dakota", "Ohio", "Oklahoma", "South Dakota", 
@@ -638,7 +645,8 @@ padd_mapping <- tibble(
     # PADD 1C
     "FL", "GA", "NC", "SC", "VA", "WV",
     # PADD 2
-    "IL", "IN", "IA", "KS", "KY", "MI", "MN", "MO", "NE", "ND", "OH", "OK", "SD", "TN", "WI",
+    "IL", "IN", "IA", "KS", "KY", "MI", "MN", "MO", "NE", "ND", "OH", "OK", 
+    "SD", "TN", "WI",
     # PADD 3
     "AL", "AR", "LA", "MS", "NM", "TX",
     # PADD 4
@@ -648,19 +656,26 @@ padd_mapping <- tibble(
   ),
   Area = c(
     # PADD 1A 
-    rep("Weekly New England (PADD 1A) Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)", 6),
+    rep("Weekly New England (PADD 1A) Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)",
+      6),
     # PADD 1B 
-    rep("Weekly Central Atlantic (PADD 1B) Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)", 6),
+    rep("Weekly Central Atlantic (PADD 1B) Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)",
+      6),
     # PADD 1C
-    rep("Weekly Lower Atlantic (PADD 1C) Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)", 6),
+    rep("Weekly Lower Atlantic (PADD 1C) Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)",
+        6),
     # PADD 2 
-    rep("Weekly Midwest Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)", 15),
+    rep("Weekly Midwest Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)",
+        15),
     # PADD 3 
-    rep("Weekly Gulf Coast Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)", 6),
+    rep("Weekly Gulf Coast Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)",
+        6),
     # PADD 4 
-    rep("Weekly Rocky Mountain Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)", 5),
+    rep("Weekly Rocky Mountain Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)",
+        5),
     # PADD 5 
-    rep("Weekly West Coast Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)", 7)
+    rep("Weekly West Coast Regular Conventional Retail Gasoline Prices  (Dollars per Gallon)",
+        7)
   )
 )
 
@@ -679,7 +694,7 @@ income_and_fuel <- income_and_fuel |>
     names_from = Attribute
   ) |> 
   mutate(
-    FIPS_Code = str_pad(as.character(FIPS_Code), # Changing to character to match map_data
+    FIPS_Code = str_pad(as.character(FIPS_Code), # To match map_data
                         width = 5, # Padding with zeros to match map_data
                         side = "left", 
                         pad = "0"))
@@ -693,17 +708,18 @@ improved_map_data <- improved_map_data |>
 
 ### Calculating Cost of Travel
 
-To calculate the cost of travel, the distance to the nearest clinic was multiplied by 2 to account for the return journey and fuel efficiency was assumed to be 25 miles per gallon. The total gasoline cost for the trip was calculated using the average regional gas price, divided by the county's median monthly household income to produce a travel cost ratio. This represents the the proportion of a household's monthly income required to travel to the nearest abortion clinic. 
+To calculate the cost of travel, the distance to the nearest clinic was multiplied by 2 to account for the return journey and fuel efficiency was assumed to be on average 25 miles per gallon. The total gasoline cost for the trip was calculated using the average regional gas price, divided by the county's median monthly household income to produce a travel cost ratio. This represents the the proportion of a household's monthly income required to travel to the nearest abortion clinic. 
 
 This metric captures the economic burden of accessing abortion care, rather than just the physical distance. 
 
 ```{r travelcost}
 improved_map_data <- improved_map_data |> 
   mutate(
-    mpg = 25,                                                           # Using 25 m/g as an average
-    gallons_needed = (distance_origintodest * 2) / mpg,                 # Multiplying by 2 for a round trip
+    mpg = 25,                                                 # 25 m/g average
+    gallons_needed = (distance_origintodest * 2) / mpg,       # Round trip
     total_gas_cost = gallons_needed * Avg_Gas_Price_Aug2025, 
-    travel_cost = total_gas_cost / (Median_Household_Income_2022 / 12)  # Dividing by 12 for monthly income
+    travel_cost = total_gas_cost / 
+      (Median_Household_Income_2022 / 12)  # Monthly income
     ) 
 ```
 
@@ -711,7 +727,7 @@ improved_map_data <- improved_map_data |>
 
 A similar process to the graph replication of February 2023 and the updated August 2025 graphs was undertaken. Please refer to the replication above for further explanation of the methods. 
 
-Checking if variables are numeric (necessary for bivariate analysis)
+Checking if variables are numeric
 ```{r TC-numeric-check}
 class(improved_map_data$distance_origintodest)
 class(improved_map_data$dest_asp)
@@ -757,38 +773,47 @@ improved_map <- ggplot() +
                 dim = 3) + 
   coord_sf(crs = st_crs(5070),
            datum = NA) + # Removing latitude/ longitude lines
-  theme_minimal() + 
-  theme(
-    plot.margin = margin( # Removing white space around the map for formatting
-      t = 0, 
-      r = 0, 
-      b = 0, 
-      l = 0)) 
+  base_map_theme
 ```
 
-```{r TC-comparison}
+```{r TC-comparison, fig.width = 14, fig.height = 10}
 # Map titles
 map_distance_aug2025 <- map_aug2025 +
   labs(title = "August 2025 (Distance)") +
-  theme(
-    plot.title = element_text(
-      family = "TitleFont",
-      face = "bold",
-      size = 14,
-      hjust = 0.5
-    )
-  )
+  base_map_theme
 
 map_travelcost_aug2025 <- improved_map +
   labs(title = "August 2025 (Travel Cost)") +
-  theme(
-    plot.title = element_text(
-      family = "TitleFont",
-      face = "bold",
-      size = 14,
-      hjust = 0.5
-    )
-  )
+  base_map_theme
+
+# Updating distance title for explanatory legend
+distance_tc_block <- legend_with_title(
+  distance_legend,
+  "Distance /\ntravel cost increases"  
+)
+
+# Updated explanatory legend
+explanatory_legends <- plot_grid(
+  NULL,                 
+  distance_tc_block,
+  congestion_block,
+  both_block,
+  NULL,                 
+  nrow = 1,
+  rel_widths = c(2, 1, 1, 1, 2),
+  align = "h"
+)
+
+# Updated main legend label 
+legend <- bi_legend(
+  pal = custom_palette,
+  dim = 3,
+  xlab = "Congestion",    
+  ylab = "Dist. / travel $", 
+  size = 7,
+  base_family = "LegendFont", 
+  arrows = TRUE
+)
 
 # Placing maps side by side
 maps_comparison_distance_cost <- plot_grid(
@@ -798,7 +823,7 @@ maps_comparison_distance_cost <- plot_grid(
   align = "hv"
 )
 
-# Legends + explanatory block (reuse your existing legends)
+# Legends + explanatory block 
 how_to_read_comparison_distance_cost <- plot_grid(
   ggdraw() +
     draw_label(
@@ -817,17 +842,17 @@ how_to_read_comparison_distance_cost <- plot_grid(
     ),
   ncol = 1,
   rel_heights = c(
-    0.35, # top subtitle
-    1,    # mini-legends
-    0.4   # main title
+    0.35, 
+    1,    
+    0.4   
   )
 )
 
-# Combine legend/title block, main legend, and side-by-side maps
+# Combine 
 final_distance_vs_cost_plot <- plot_grid(
   how_to_read_comparison_distance_cost,  # Title + explanatory legends
-  legend,                                # Main bivariate legend (distance vs congestion or travel cost?)
-  maps_comparison_distance_cost,         # the two maps side by side
+  legend,                                # Main bivariate legend
+  maps_comparison_distance_cost,         # Maps side by side
   ncol = 1,
   rel_heights = c(
     0.28,  # How-to-read block
@@ -838,6 +863,7 @@ final_distance_vs_cost_plot <- plot_grid(
 
 final_distance_vs_cost_plot
 ```
+
 Comparing the distance and travel cost maps, there is almost no difference in the bivariate patterns. Minor differences are visible in Wyoming and Idaho as well as in eastern North and South Dakota, where travel costs aren't as high as you might expect based solely on distance. This is likely due to higher median household incomes or lower regional gas prices. Overall, the strong resemblance between the two maps reflects the high correlation between distance and travel cost, and indicates that distance alone is a reasonable proxy for assessing access. 
 
 ## Alternative Representation 
@@ -858,16 +884,18 @@ clinic_service_areas <- improved_map_data |>
   filter(!is.na(dest_loc_id)) |> 
   group_by(dest_loc_id, dest_fips_code) |>  # Grouping by location and county
   summarise(
-    total_women_served = sum(origin_population, na.rm = TRUE),  # Number of women served by the clinic 
-    avg_service_pop = (first(dest_asp)),                        # Average service population of each clinic 
-    counties_served = n(),                                      # Number of counties the clinic serves 
+    total_women_served = sum(
+      origin_population, na.rm = TRUE),  # Number of women served by the clinic 
+    avg_service_pop = (first(dest_asp)), # Average service population 
+    counties_served = n(),               # Number of counties the clinic serves 
     .groups = "drop"
   )
 
 # Geographic coordinates of clinic locations
 clinic_locations <- counties |> 
-  filter(GEOID %in% clinic_service_areas$dest_fips_code) |> # Keeping only those counties containing clinics 
-  st_centroid() |>                                          # Getting the central point of each county
+  filter(                         # Keeping only counties containing clinics 
+    GEOID %in% clinic_service_areas$dest_fips_code) |> 
+  st_centroid() |>                # Getting the central point of each county
   left_join(
     clinic_service_areas,
     by = c("GEOID" = "dest_fips_code")
@@ -884,7 +912,7 @@ Like the bivariate map, the bubble map presents two variables simultaneously.
 
 The bubble map uses the Conus Albers projection as in the bivariate maps 
 
-```{r bubble-map}
+```{r bubble-map, fig.width = 14, fig.height = 10}
 improved_bubble_map <- ggplot() + 
   # Base map, with travel cost as a gradient colour
   geom_sf(data = improved_map_data,
@@ -898,11 +926,12 @@ improved_bubble_map <- ggplot() +
           size = 0.3) +
   # Bubbles
   geom_sf(data = clinic_locations,
-          mapping = aes(size = total_women_served), # Bubble size proportional to the serviced population
-          shape = 21,                               # Shape: circle with border
-          fill = alpha("#dec4d8", 0.6),             # Fill colour, 60% opaque 
-          colour = "#cb96c0",                       # Edge colour 
-          stroke = 0.5) +                           # Edge size
+          mapping = aes(
+            size = total_women_served),     # Bubble proportional to service pop
+          shape = 21,                       # Circle with border
+          fill = alpha("#dec4d8", 0.6),     # Fill colour, 60% opaque 
+          colour = "#cb96c0",               # Edge colour 
+          stroke = 0.5) +                   # Edge size
   # Gradient for travel cost
   scale_fill_gradientn(
   colours = c(
@@ -914,43 +943,43 @@ improved_bubble_map <- ggplot() +
     "#295f5c"   # very high
   ),
   name = "Travel Cost\n(% of median county\nhousehold income)",
-  labels = scales::percent_format(accuracy = 0.001)
+  labels = scales::percent_format(accuracy = 1)
   ) +
   # Bubble size
   scale_size_continuous(
-    name = "Women Served\nper Clinic",
-    range = c(1, 30),                                   # Minimum and maximum bubble sizes
-    labels = scales::comma,                             # Formatting the legend with commas for readability 
-    breaks = c(25000, 100000, 500000, 1500000, 3500000) # Values shown in legend
+    name = "Women Served per Clinic",
+    range = c(1, 30),                          # Minimum and maximum bubble sizes
+    labels = scales::comma,                    # Formatting with commas
+    breaks = c(
+      25000, 100000, 500000, 1500000, 3500000) # Values shown in legend
   ) +
   # Coordinate system
   coord_sf(crs = st_crs(5070), # EPSG code for Conus Albers projection
-           datum = NA) +       # Removing grid lines 
+           datum = NA,         # Removing grid lines 
+           clip = "off") +
   # Labels
   labs(
     title = "Abortion Access in the USA:\nTravel Cost and Clinic Service Areas"
-    # subtitle = "Background color = travel cost burden\nBubble size = total women served by each clinic location"
   ) +
   # Theme
   theme_minimal() +
   theme(
-    legend.position = c(0.97, # (0 = left, 1 = right)
-                        0.3), # (0 = bottom, 1 = top)
-    legend.title = element_text(size = 8),
-    legend.text  = element_text(size = 5),
+    legend.position = c(1.1, # (0 = left, 1 = right)
+                        0.5), # (0 = bottom, 1 = top)
+    legend.title = element_text(size = 10),
+    legend.text  = element_text(size = 8),
     legend.key.size = unit(0.8, "cm"),
     plot.title = element_text(size = 30, 
                               face = "bold",
                               hjust = 0.5),
-    plot.subtitle = element_text(size = 15,
-                                 hjust = 0.5)
+    plot.margin = margin(
+      t = 0, 
+      r = 200, 
+      b = 0, 
+      l = 5)
   )
 
-min(clinic_service_areas$total_women_served)
-max(clinic_service_areas$total_women_served)
-
 improved_bubble_map
-
 ```
 
 ### Analysis
